@@ -6308,19 +6308,19 @@ public:
                         (const VkDescriptorImageInfo*)(userBuffer + offset + j * stride);
 
                     memcpy(((uint8_t*)imageInfos) + currImageInfoOffset,
-                           userBuffer + offset + j * stride,
-                           sizeof(VkDescriptorImageInfo));
+                           user, sizeof(VkDescriptorImageInfo));
                     currImageInfoOffset += sizeof(VkDescriptorImageInfo);
                 }
 
-                if (batched) doEmulatedDescriptorImageInfoWriteFromTemplate(
+                if (batched) {
+                  doEmulatedDescriptorImageInfoWriteFromTemplate(
                         descType,
                         dstBinding,
                         dstArrayElement,
                         descCount,
                         currImageInfoBegin,
                         reified);
-
+                }
             } else if (isDescriptorTypeBufferInfo(descType)) {
 
 
@@ -6334,18 +6334,19 @@ public:
                         (const VkDescriptorBufferInfo*)(userBuffer + offset + j * stride);
 
                     memcpy(((uint8_t*)bufferInfos) + currBufferInfoOffset,
-                           userBuffer + offset + j * stride,
-                           sizeof(VkDescriptorBufferInfo));
+                           user, sizeof(VkDescriptorBufferInfo));
                     currBufferInfoOffset += sizeof(VkDescriptorBufferInfo);
                 }
 
-                if (batched) doEmulatedDescriptorBufferInfoWriteFromTemplate(
+                if (batched) {
+                  doEmulatedDescriptorBufferInfoWriteFromTemplate(
                         descType,
                         dstBinding,
                         dstArrayElement,
                         descCount,
                         currBufferInfoBegin,
                         reified);
+                }
 
             } else if (isDescriptorTypeBufferView(descType)) {
                 if (!stride) stride = sizeof(VkBufferView);
@@ -6354,19 +6355,23 @@ public:
                     (const VkBufferView*)((uint8_t*)bufferViews + currBufferViewOffset);
 
                 for (uint32_t j = 0; j < descCount; ++j) {
+                  const VkBufferView* user =
+                        (const VkBufferView*)(userBuffer + offset + j * stride);
+
                     memcpy(((uint8_t*)bufferViews) + currBufferViewOffset,
-                           userBuffer + offset + j * stride,
-                           sizeof(VkBufferView));
+                           user, sizeof(VkBufferView));
                     currBufferViewOffset += sizeof(VkBufferView);
                 }
 
-                if (batched) doEmulatedDescriptorBufferViewWriteFromTemplate(
+                if (batched) {
+                  doEmulatedDescriptorBufferViewWriteFromTemplate(
                         descType,
                         dstBinding,
                         dstArrayElement,
                         descCount,
                         currBufferViewBegin,
                         reified);
+                }
             } else {
                 ALOGE("%s: FATAL: Unknown descriptor type %d\n", __func__, descType);
                 abort();
@@ -6852,6 +6857,19 @@ public:
         return res;
     }
 
+    VkResult on_vkQueueSignalReleaseImageANDROID(
+        void* context,
+        VkResult input_result,
+        VkQueue queue,
+        uint32_t waitSemaphoreCount,
+        const VkSemaphore* pWaitSemaphores,
+        VkImage image,
+        int* pNativeFenceFd) {
+        (void)input_result;
+        VkEncoder* enc = (VkEncoder*)context;
+        return enc->vkQueueSignalReleaseImageANDROID(queue, waitSemaphoreCount, pWaitSemaphores, image, pNativeFenceFd, true /* lock */);
+    }
+
     uint32_t getApiVersionFromInstance(VkInstance instance) const {
         AutoLock lock(mLock);
         uint32_t api = kDefaultApiVersion;
@@ -6898,7 +6916,8 @@ public:
     }
 
     // Resets staging stream for this command buffer and primary command buffers
-    // where this command buffer has been recorded.
+    // where this command buffer has been recorded. If requested, also clears the pending
+    // descriptor sets.
     void resetCommandBufferStagingInfo(VkCommandBuffer commandBuffer, bool alsoResetPrimaries, bool alsoClearPendingDescriptorSets) {
         struct goldfish_VkCommandBuffer* cb = as_goldfish_VkCommandBuffer(commandBuffer);
         if (!cb) {
@@ -8077,6 +8096,17 @@ VkResult ResourceTracker::on_vkAllocateCommandBuffers(
     const VkCommandBufferAllocateInfo* pAllocateInfo,
     VkCommandBuffer* pCommandBuffers) {
     return mImpl->on_vkAllocateCommandBuffers(context, input_result, device, pAllocateInfo, pCommandBuffers);
+}
+
+VkResult ResourceTracker::on_vkQueueSignalReleaseImageANDROID(
+    void* context,
+    VkResult input_result,
+    VkQueue queue,
+    uint32_t waitSemaphoreCount,
+    const VkSemaphore* pWaitSemaphores,
+    VkImage image,
+    int* pNativeFenceFd) {
+    return mImpl->on_vkQueueSignalReleaseImageANDROID(context, input_result, queue, waitSemaphoreCount, pWaitSemaphores, image, pNativeFenceFd);
 }
 
 void ResourceTracker::deviceMemoryTransform_tohost(

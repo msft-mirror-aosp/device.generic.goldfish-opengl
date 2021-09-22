@@ -26,6 +26,8 @@
 namespace android {
 namespace {
 
+using android::hardware::graphics::common::V1_0::ColorTransform;
+
 std::atomic<hwc2_config_t> sNextConfigId{0};
 
 bool IsValidColorMode(android_color_mode_t mode) {
@@ -68,29 +70,34 @@ Display::Display(Device& device, Composer* composer, hwc2_display_t id)
 
 Display::~Display() {}
 
-HWC2::Error Display::init(uint32_t width, uint32_t height, uint32_t dpiX,
-                          uint32_t dpiY, uint32_t refreshRateHz,
+HWC2::Error Display::init(const std::vector<DisplayConfig>& configs,
+                          int activeConfig,
                           const std::optional<std::vector<uint8_t>>& edid) {
   ALOGD("%s initializing display:%" PRIu64
         " width:%d height:%d dpiX:%d dpiY:%d refreshRateHz:%d",
-        __FUNCTION__, mId, width, height, dpiX, dpiY, refreshRateHz);
+        __FUNCTION__, mId, configs[activeConfig].width,
+        configs[activeConfig].height,
+        configs[activeConfig].dpiX,
+        configs[activeConfig].dpiY,
+        configs[activeConfig].refreshRateHz);
 
   std::unique_lock<std::recursive_mutex> lock(mStateMutex);
 
-  mVsyncPeriod = 1000 * 1000 * 1000 / refreshRateHz;
+  mVsyncPeriod = 1000 * 1000 * 1000 / configs[activeConfig].refreshRateHz;
   mVsyncThread->run("", ANDROID_PRIORITY_URGENT_DISPLAY);
 
-  hwc2_config_t configId = sNextConfigId++;
+  for (hwc2_config_t id = 0; id < configs.size(); id++) {
+    Config config(id);
+    config.setAttribute(HWC2::Attribute::VsyncPeriod,
+                        1000 * 1000 * 1000 / configs[id].refreshRateHz);
+    config.setAttribute(HWC2::Attribute::Width, configs[id].width);
+    config.setAttribute(HWC2::Attribute::Height, configs[id].height);
+    config.setAttribute(HWC2::Attribute::DpiX, configs[id].dpiX * 1000);
+    config.setAttribute(HWC2::Attribute::DpiY, configs[id].dpiY * 1000);
+    mConfigs.emplace(id, config);
+  }
+  mActiveConfigId = activeConfig;
 
-  Config config(configId);
-  config.setAttribute(HWC2::Attribute::VsyncPeriod, mVsyncPeriod);
-  config.setAttribute(HWC2::Attribute::Width, width);
-  config.setAttribute(HWC2::Attribute::Height, height);
-  config.setAttribute(HWC2::Attribute::DpiX, dpiX * 1000);
-  config.setAttribute(HWC2::Attribute::DpiY, dpiY * 1000);
-  mConfigs.emplace(configId, config);
-
-  mActiveConfigId = configId;
   mActiveColorMode = HAL_COLOR_MODE_NATIVE;
   mColorModes.emplace((android_color_mode_t)HAL_COLOR_MODE_NATIVE);
   mEdid = edid;
@@ -505,7 +512,14 @@ HWC2::Error Display::setActiveConfig(hwc2_config_t configId) {
     return HWC2::Error::BadConfig;
   }
 
-  mActiveConfigId = configId;
+  if (mActiveConfigId != configId) {
+    if (mComposer == nullptr) {
+      ALOGE("%s: display:%" PRIu64 " missing composer", __FUNCTION__, mId);
+      return HWC2::Error::NoResources;
+    }
+    mActiveConfigId = configId;
+    return mComposer->onActiveConfigChange(this);
+  }
   return HWC2::Error::None;
 }
 
@@ -544,17 +558,38 @@ HWC2::Error Display::setColorMode(int32_t intMode) {
   return HWC2::Error::None;
 }
 
-HWC2::Error Display::setColorTransform(const float* /*matrix*/, int32_t hint) {
-  DEBUG_LOG("%s: display:%" PRIu64 " setting hint to %d", __FUNCTION__, mId,
-            hint);
+HWC2::Error Display::setColorTransform(const float* transformMatrix,
+                                       int transformTypeRaw) {
+  const auto transformType = static_cast<ColorTransform>(transformTypeRaw);
+  return setColorTransformEnum(transformMatrix, transformType);
+}
+
+HWC2::Error Display::setColorTransformEnum(const float* transformMatrix,
+                                           ColorTransform transformType) {
+  const auto transformTypeString = toString(transformType);
+  DEBUG_LOG("%s: display:%" PRIu64 " color transform type %s", __FUNCTION__,
+            mId, transformTypeString.c_str());
+
+  if (transformType == ColorTransform::ARBITRARY_MATRIX &&
+      transformMatrix == nullptr) {
+    return HWC2::Error::BadParameter;
+  }
 
   std::unique_lock<std::recursive_mutex> lock(mStateMutex);
-  // we force client composition if this is set
-  if (hint == 0) {
-    mSetColorTransform = false;
+
+  if (transformType == ColorTransform::IDENTITY) {
+    mColorTransform.reset();
   } else {
-    mSetColorTransform = true;
+    ColorTransformWithMatrix& colorTransform = mColorTransform.emplace();
+    colorTransform.transformType = transformType;
+
+    if (transformType == ColorTransform::ARBITRARY_MATRIX) {
+      auto& colorTransformMatrix = colorTransform.transformMatrixOpt.emplace();
+      std::copy_n(transformMatrix, colorTransformMatrix.size(),
+                  colorTransformMatrix.begin());
+    }
   }
+
   return HWC2::Error::None;
 }
 
@@ -759,6 +794,13 @@ static const uint8_t sEDID2[] = {
     0x70, 0x6c, 0x61, 0x79, 0x5f, 0x32, 0x00, 0x49};
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
+
+HWC2::Error Display::setEdid(std::vector<uint8_t> edid) {
+  DEBUG_LOG("%s: display:%" PRIu64, __FUNCTION__, mId);
+
+  mEdid = edid;
+  return HWC2::Error::None;
+}
 
 HWC2::Error Display::getDisplayIdentificationData(uint8_t* outPort,
                                                   uint32_t* outDataSize,

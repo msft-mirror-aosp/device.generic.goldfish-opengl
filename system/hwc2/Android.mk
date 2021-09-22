@@ -60,11 +60,13 @@ emulator_hwcomposer_relative_path := hw
 emulator_hwcomposer2_src_files := \
     Device.cpp \
     Display.cpp \
+    DisplayFinder.cpp \
     Drm.cpp \
     DrmPresenter.cpp \
     Gralloc.cpp \
     GuestComposer.cpp \
     HostComposer.cpp \
+    HostUtils.cpp \
     Layer.cpp \
 
 include $(CLEAR_VARS)
@@ -76,7 +78,6 @@ LOCAL_SHARED_LIBRARIES += libOpenglSystemCommon lib_renderControl_enc
 LOCAL_SHARED_LIBRARIES += libui
 LOCAL_SRC_FILES := $(emulator_hwcomposer2_src_files)
 LOCAL_C_INCLUDES := $(emulator_hwcomposer_c_includes)
-LOCAL_C_INCLUDES += external/drm_hwcomposer
 LOCAL_C_INCLUDES += external/minigbm/cros_gralloc
 LOCAL_MODULE_RELATIVE_PATH := $(emulator_hwcomposer_relative_path)
 
@@ -97,7 +98,6 @@ LOCAL_SHARED_LIBRARIES += libui
 LOCAL_SHARED_LIBRARIES += libdrm
 LOCAL_C_INCLUDES := $(emulator_hwcomposer_c_includes)
 LOCAL_C_INCLUDES += external/libdrm
-LOCAL_C_INCLUDES += external/drm_hwcomposer
 LOCAL_C_INCLUDES += external/minigbm/cros_gralloc
 LOCAL_MODULE := emulatorDrmTest
 LOCAL_LICENSE_KINDS := SPDX-license-identifier-Apache-2.0

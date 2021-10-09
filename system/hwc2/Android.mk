@@ -58,6 +58,7 @@ emulator_hwcomposer_c_includes += \
 emulator_hwcomposer_relative_path := hw
 
 emulator_hwcomposer2_src_files := \
+    Common.cpp \
     Device.cpp \
     Display.cpp \
     DisplayFinder.cpp \
@@ -84,6 +85,7 @@ LOCAL_MODULE_RELATIVE_PATH := $(emulator_hwcomposer_relative_path)
 LOCAL_MODULE := hwcomposer.ranchu
 LOCAL_LICENSE_KINDS := SPDX-license-identifier-Apache-2.0
 LOCAL_LICENSE_CONDITIONS := notice
+LOCAL_VINTF_FRAGMENTS := android.hardware.graphics.composer@2.3.xml
 LOCAL_NOTICE_FILE := $(LOCAL_PATH)/../../LICENSE
 LOCAL_MODULE_TAGS := optional
 

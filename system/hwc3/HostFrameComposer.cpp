@@ -99,21 +99,6 @@ static bool isMinigbmFromProperty() {
   }
 }
 
-static bool useAngleFromProperty() {
-  static constexpr const auto kEglProp = "ro.hardware.egl";
-
-  const auto eglProp = ::android::base::GetProperty(kEglProp, "");
-  DEBUG_LOG("%s: prop value is: %s", __FUNCTION__, eglProp.c_str());
-
-  if (eglProp == "angle") {
-    DEBUG_LOG("%s: Using ANGLE.\n", __FUNCTION__);
-    return true;
-  } else {
-    DEBUG_LOG("%s: Not using ANGLE.\n", __FUNCTION__);
-    return false;
-  }
-}
-
 typedef struct compose_layer {
   uint32_t cbHandle;
   hwc2_composition_t composeMode;
@@ -184,7 +169,6 @@ void FreeDisplayColorBuffer(const native_handle_t* h) {
 
 HWC3::Error HostFrameComposer::init() {
   mIsMinigbm = isMinigbmFromProperty();
-  mUseAngle = useAngleFromProperty();
 
   if (mIsMinigbm) {
     mDrmClient.emplace();
@@ -688,9 +672,9 @@ HWC3::Error HostFrameComposer::presentDisplay(
 
     uint64_t sync_handle, thread_handle;
 
-    // We don't use rc command to sync if we are using ANGLE on the guest with
-    // virtio-gpu.
-    bool useRcCommandToSync = !(mUseAngle && mIsMinigbm);
+    // We don't use rc command to sync if we are using virtio-gpu, which is
+    // proxied by minigbm.
+    bool useRcCommandToSync = !mIsMinigbm;
 
     if (useRcCommandToSync) {
       hostCon->lock();

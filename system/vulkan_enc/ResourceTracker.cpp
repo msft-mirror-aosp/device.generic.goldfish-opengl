@@ -68,11 +68,6 @@ void zx_event_create(int, zx_handle_t*) { }
 #include "../egl/goldfish_sync.h"
 #include "AndroidHardwareBuffer.h"
 
-#ifndef HOST_BUILD
-#include "virtgpu_drm.h"
-#include <xf86drm.h>
-#endif
-
 #else
 
 #include <android/hardware_buffer.h>
@@ -144,13 +139,17 @@ VkResult getMemoryAndroidHardwareBufferANDROID(struct AHardwareBuffer **) { retu
 #include <stdlib.h>
 #include <sync/sync.h>
 
-#ifdef VK_USE_PLATFORM_ANDROID_KHR
+#if defined(__ANDROID__) || defined(__linux__) || defined(__APPLE__)
 
 #include <sys/mman.h>
+#include <unistd.h>
 #include <sys/syscall.h>
 
 #ifdef HOST_BUILD
 #include "android/utils/tempfile.h"
+#else
+#include "virtgpu_drm.h"
+#include <xf86drm.h>
 #endif
 
 static inline int
@@ -163,8 +162,9 @@ inline_memfd_create(const char *name, unsigned int flags) {
     return syscall(SYS_memfd_create, name, flags);
 #endif
 }
+
 #define memfd_create inline_memfd_create
-#endif // !VK_USE_PLATFORM_ANDROID_KHR
+#endif
 
 #define RESOURCE_TRACKER_DEBUG 0
 
@@ -1048,7 +1048,7 @@ public:
         if (mFeatureInfo->hasVulkanQueueSubmitWithCommands) {
             ResourceTracker::streamFeatureBits |= VULKAN_STREAM_FEATURE_QUEUE_SUBMIT_WITH_COMMANDS_BIT;
         }
-#if !defined(HOST_BUILD) && defined(VK_USE_PLATFORM_ANDROID_KHR)
+#if !defined(HOST_BUILD) && defined(VIRTIO_GPU)
         if (mFeatureInfo->hasVirtioGpuNext) {
             ALOGD("%s: has virtio-gpu-next; create auxiliary rendernode\n", __func__);
             mRendernodeFd = drmOpenRender(128 /* RENDERNODE_MINOR */);
@@ -1390,6 +1390,17 @@ public:
             "VK_EXT_subgroup_size_control",
             "VK_EXT_provoking_vertex",
             "VK_EXT_line_rasterization",
+            "VK_KHR_shader_terminate_invocation",
+            "VK_EXT_transform_feedback",
+            "VK_EXT_primitive_topology_list_restart",
+            "VK_EXT_index_type_uint8",
+            "VK_EXT_load_store_op_none",
+            "VK_EXT_swapchain_colorspace",
+            "VK_EXT_image_robustness",
+            "VK_EXT_custom_border_color",
+            "VK_EXT_shader_stencil_export",
+            "VK_KHR_image_format_list",
+            "VK_KHR_incremental_present",
             "VK_KHR_pipeline_executable_properties",
 #ifdef VK_USE_PLATFORM_ANDROID_KHR
             "VK_KHR_external_semaphore",
@@ -3704,11 +3715,8 @@ public:
                       (unsigned long long)directMappedAddr);
                 mLock.lock();
             } else if (mFeatureInfo->hasVirtioGpuNext) {
-#if !defined(HOST_BUILD) && defined(VK_USE_PLATFORM_ANDROID_KHR)
+#if !defined(HOST_BUILD) && defined(VIRTIO_GPU)
                 uint64_t hvaSizeId[3];
-
-                int rendernodeFdForMem = drmOpenRender(128 /* RENDERNODE_MINOR */);
-                ALOGE("%s: render fd = %d\n", __func__, rendernodeFdForMem);
 
                 mLock.unlock();
                 enc->vkGetMemoryHostAddressInfoGOOGLE(
@@ -3727,19 +3735,21 @@ public:
                 drm_rc_blob.size = hvaSizeId[1];
 
                 int res = drmIoctl(
-                    rendernodeFdForMem, DRM_IOCTL_VIRTGPU_RESOURCE_CREATE_BLOB, &drm_rc_blob);
+                    mRendernodeFd, DRM_IOCTL_VIRTGPU_RESOURCE_CREATE_BLOB, &drm_rc_blob);
 
                 if (res) {
-                    ALOGE("%s: Failed to resource create v2: sterror: %s errno: %d\n", __func__,
+                    ALOGE("%s: Failed to resource create blob: sterror: %s errno: %d\n", __func__,
                             strerror(errno), errno);
                     abort();
                 }
+                hostMemAlloc.boCreated = true;
+                hostMemAlloc.boHandle = drm_rc_blob.bo_handle;
 
                 drm_virtgpu_map map_info;
                 memset(&map_info, 0, sizeof(map_info));
                 map_info.handle = drm_rc_blob.bo_handle;
 
-                res = drmIoctl(rendernodeFdForMem, DRM_IOCTL_VIRTGPU_MAP, &map_info);
+                res = drmIoctl(mRendernodeFd, DRM_IOCTL_VIRTGPU_MAP, &map_info);
                 if (res) {
                     ALOGE("%s: Failed to virtgpu map: sterror: %s errno: %d\n", __func__,
                             strerror(errno), errno);
@@ -3747,21 +3757,22 @@ public:
                 }
 
                 directMappedAddr = (uint64_t)(uintptr_t)
-                    mmap64(0, hvaSizeId[1], PROT_WRITE, MAP_SHARED, rendernodeFdForMem, map_info.offset);
+                    mmap64(0, hvaSizeId[1], PROT_WRITE, MAP_SHARED, mRendernodeFd, map_info.offset);
 
                 if ((void*)directMappedAddr == MAP_FAILED) {
                     ALOGE("%s: mmap of virtio gpu resource failed\n", __func__);
                     abort();
                 }
 
+                // Does not take  ownership for the device.
+                hostMemAlloc.rendernodeFd = mRendernodeFd;
                 hostMemAlloc.memoryAddr = directMappedAddr;
                 hostMemAlloc.memorySize = hvaSizeId[1];
 
                 // add the host's page offset
                 directMappedAddr += (uint64_t)(uintptr_t)(hvaSizeId[0]) & (PAGE_SIZE - 1);
-				directMapResult = VK_SUCCESS;
+                directMapResult = VK_SUCCESS;
 
-                hostMemAlloc.fd = rendernodeFdForMem;
 #endif // VK_USE_PLATFORM_ANDROID_KHR
             }
 
@@ -7899,9 +7910,7 @@ private:
     std::vector<VkExtensionProperties> mHostDeviceExtensions;
 
     int mSyncDeviceFd = -1;
-#ifdef VK_USE_PLATFORM_ANDROID_KHR
     int mRendernodeFd = -1;
-#endif
 
 #ifdef VK_USE_PLATFORM_FUCHSIA
     fidl::WireSyncClient<fuchsia_hardware_goldfish::ControlDevice>

@@ -85,7 +85,7 @@ using goldfish_vk::VkEncoder;
 #include "VirtioGpuPipeStream.h"
 
 #include <cros_gralloc_handle.h>
-#include <drm/virtgpu_drm.h>
+#include <virtgpu_drm.h>
 #include <xf86drm.h>
 
 #endif
@@ -104,7 +104,7 @@ using goldfish_vk::VkEncoder;
 static HostConnectionType getConnectionTypeFromProperty() {
 #ifdef __Fuchsia__
     return HOST_CONNECTION_ADDRESS_SPACE;
-#else
+#elif defined(__ANDROID__) || defined(HOST_BUILD)
     char transportValue[PROPERTY_VALUE_MAX] = "";
 
     do {
@@ -127,6 +127,8 @@ static HostConnectionType getConnectionTypeFromProperty() {
     if (!strcmp("virtio-gpu-asg", transportValue)) return HOST_CONNECTION_VIRTIO_GPU_ADDRESS_SPACE;
 
     return HOST_CONNECTION_QEMU_PIPE;
+#else
+    return HOST_CONNECTION_VIRTIO_GPU_ADDRESS_SPACE;
 #endif
 }
 
@@ -182,7 +184,7 @@ static inline uint32_t align_up(uint32_t n, uint32_t a) {
     return ((n + a - 1) / a) * a;
 }
 
-#ifdef VIRTIO_GPU
+#if defined(VIRTIO_GPU)
 
 class MinigbmGralloc : public Gralloc {
 public:
@@ -432,8 +434,8 @@ std::unique_ptr<HostConnection> HostConnection::connect() {
             break;
         }
         case HOST_CONNECTION_TCP: {
-#ifdef __Fuchsia__
-            ALOGE("Fuchsia doesn't support HOST_CONNECTION_TCP!!!\n");
+#ifndef __ANDROID__
+            ALOGE("Failed to create TCP connection on non-Android guest\n");
             return nullptr;
             break;
 #else

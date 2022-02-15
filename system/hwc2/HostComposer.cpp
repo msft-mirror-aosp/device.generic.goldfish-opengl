@@ -40,36 +40,6 @@
 namespace android {
 namespace {
 
-static bool isMinigbmFromProperty() {
-  static constexpr const auto kGrallocProp = "ro.hardware.gralloc";
-
-  const auto grallocProp = android::base::GetProperty(kGrallocProp, "");
-  DEBUG_LOG("%s: prop value is: %s", __FUNCTION__, grallocProp.c_str());
-
-  if (grallocProp == "minigbm") {
-    ALOGD("%s: Using minigbm, in minigbm mode.\n", __FUNCTION__);
-    return true;
-  } else {
-    ALOGD("%s: Is not using minigbm, in goldfish mode.\n", __FUNCTION__);
-    return false;
-  }
-}
-
-static bool useAngleFromProperty() {
-  static constexpr const auto kEglProp = "ro.hardware.egl";
-
-  const auto eglProp = android::base::GetProperty(kEglProp, "");
-  DEBUG_LOG("%s: prop value is: %s", __FUNCTION__, eglProp.c_str());
-
-  if (eglProp == "angle") {
-    ALOGD("%s: Using ANGLE.\n", __FUNCTION__);
-    return true;
-  } else {
-    ALOGD("%s: Not using ANGLE.\n", __FUNCTION__);
-    return false;
-  }
-}
-
 typedef struct compose_layer {
   uint32_t cbHandle;
   hwc2_composition_t composeMode;
@@ -154,16 +124,13 @@ void FreeDisplayColorBuffer(const native_handle_t* h) {
 
 }  // namespace
 
-HWC2::Error HostComposer::init(const HotplugCallback& cb) {
-  mIsMinigbm = isMinigbmFromProperty();
-  mUseAngle = useAngleFromProperty();
+HostComposer::HostComposer(DrmPresenter* drmPresenter,
+                           bool isMinigbm) :
+        mDrmPresenter(drmPresenter),
+        mIsMinigbm(isMinigbm) {}
 
-  if (mIsMinigbm) {
-    if (!mDrmPresenter.init(cb)) {
-      ALOGE("%s: failed to initialize DrmPresenter", __FUNCTION__);
-      return HWC2::Error::NoResources;
-    }
-  } else {
+HWC2::Error HostComposer::init() {
+  if (!mIsMinigbm) {
     mSyncDeviceFd = goldfish_sync_open();
   }
 
@@ -316,7 +283,7 @@ HWC2::Error HostComposer::onDisplayCreate(Display* display) {
 
   std::optional<std::vector<uint8_t>> edid;
   if (mIsMinigbm) {
-    edid = mDrmPresenter.getEdid(displayId);
+    edid = mDrmPresenter->getEdid(displayId);
     if (edid) {
       display->setEdid(*edid);
     }
@@ -634,9 +601,9 @@ std::tuple<HWC2::Error, base::unique_fd> HostComposer::presentDisplay(
 
     uint64_t sync_handle, thread_handle;
 
-    // We don't use rc command to sync if we are using ANGLE on the guest with
-    // virtio-gpu.
-    bool useRcCommandToSync = !(mUseAngle && mIsMinigbm);
+    // We don't use rc command to sync if we are using virtio-gpu, which is
+    // proxied by minigbm.
+    bool useRcCommandToSync = !mIsMinigbm;
 
     if (useRcCommandToSync) {
       hostCon->lock();

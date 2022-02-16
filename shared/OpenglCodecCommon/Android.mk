@@ -4,7 +4,6 @@
 LOCAL_PATH := $(call my-dir)
 
 commonSources := \
-        EncoderDebug.cpp \
         GLClientState.cpp \
         GLESTextureUtils.cpp \
         ChecksumCalculator.cpp \

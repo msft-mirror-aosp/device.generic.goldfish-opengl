@@ -85,7 +85,7 @@ using goldfish_vk::VkEncoder;
 #include "VirtioGpuPipeStream.h"
 
 #include <cros_gralloc_handle.h>
-#include <virtgpu_drm.h>
+#include <drm/virtgpu_drm.h>
 #include <xf86drm.h>
 
 #endif
@@ -104,7 +104,7 @@ using goldfish_vk::VkEncoder;
 static HostConnectionType getConnectionTypeFromProperty() {
 #ifdef __Fuchsia__
     return HOST_CONNECTION_ADDRESS_SPACE;
-#elif defined(__ANDROID__) || defined(HOST_BUILD)
+#else
     char transportValue[PROPERTY_VALUE_MAX] = "";
 
     do {
@@ -127,8 +127,6 @@ static HostConnectionType getConnectionTypeFromProperty() {
     if (!strcmp("virtio-gpu-asg", transportValue)) return HOST_CONNECTION_VIRTIO_GPU_ADDRESS_SPACE;
 
     return HOST_CONNECTION_QEMU_PIPE;
-#else
-    return HOST_CONNECTION_VIRTIO_GPU_ADDRESS_SPACE;
 #endif
 }
 
@@ -184,7 +182,7 @@ static inline uint32_t align_up(uint32_t n, uint32_t a) {
     return ((n + a - 1) / a) * a;
 }
 
-#if defined(VIRTIO_GPU)
+#ifdef VIRTIO_GPU
 
 class MinigbmGralloc : public Gralloc {
 public:
@@ -434,8 +432,8 @@ std::unique_ptr<HostConnection> HostConnection::connect() {
             break;
         }
         case HOST_CONNECTION_TCP: {
-#ifndef __ANDROID__
-            ALOGE("Failed to create TCP connection on non-Android guest\n");
+#ifdef __Fuchsia__
+            ALOGE("Fuchsia doesn't support HOST_CONNECTION_TCP!!!\n");
             return nullptr;
             break;
 #else
@@ -674,9 +672,7 @@ ExtendedRCEncoderContext *HostConnection::rcEncoder()
         queryAndSetVulkanQueueSubmitWithCommandsSupport(rcEnc);
         queryAndSetVulkanBatchedDescriptorSetUpdateSupport(rcEnc);
         queryAndSetSyncBufferData(rcEnc);
-        queryAndSetVulkanAsyncQsri(rcEnc);
         queryAndSetReadColorBufferDma(rcEnc);
-        queryAndSetHWCMultiConfigs(rcEnc);
         queryVersion(rcEnc);
         if (m_processPipe) {
             m_processPipe->processPipeInit(m_connectionType, rcEnc);
@@ -976,24 +972,10 @@ void HostConnection::queryAndSetSyncBufferData(ExtendedRCEncoderContext* rcEnc) 
     }
 }
 
-void HostConnection::queryAndSetVulkanAsyncQsri(ExtendedRCEncoderContext* rcEnc) {
-    std::string glExtensions = queryGLExtensions(rcEnc);
-    if (glExtensions.find(kVulkanAsyncQsri) != std::string::npos) {
-        rcEnc->featureInfo()->hasVulkanAsyncQsri = true;
-    }
-}
-
 void HostConnection::queryAndSetReadColorBufferDma(ExtendedRCEncoderContext* rcEnc) {
     std::string glExtensions = queryGLExtensions(rcEnc);
     if (glExtensions.find(kReadColorBufferDma) != std::string::npos) {
         rcEnc->featureInfo()->hasReadColorBufferDma = true;
-    }
-}
-
-void HostConnection::queryAndSetHWCMultiConfigs(ExtendedRCEncoderContext* rcEnc) {
-    std::string glExtensions = queryGLExtensions(rcEnc);
-    if (glExtensions.find(kHWCMultiConfigs) != std::string::npos) {
-        rcEnc->featureInfo()->hasHWCMultiConfigs = true;
     }
 }
 

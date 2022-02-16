@@ -154,12 +154,16 @@ void doEmulatedDescriptorWrite(const VkWriteDescriptorSet* write, ReifiedDescrip
             entry.type = DescriptorWriteType::BufferView;
             entry.descriptorType = descType;
         }
-    } else if (isDescriptorTypeInlineUniformBlock(descType) ||
-               isDescriptorTypeAccelerationStructure(descType)) {
+    } else if (isDescriptorTypeInlineUniformBlock(descType)) {
         // TODO
-        // Look for pNext inline uniform block or acceleration structure.
+        // Look for pNext inline uniform block
         // Append new DescriptorWrite entry that holds the buffer
-        ALOGW("%s: Ignoring emulated write for descriptor type 0x%x\n", __func__, descType);
+    } else if (isDescriptorTypeAccelerationStructure(descType)) {
+        // TODO
+        // Look for pNext acceleration structure
+        // Append new DescriptorWrite entry that holds it
+    } else {
+        return;
     }
 }
 

@@ -13,9 +13,6 @@
 #include <stdio.h>
 
 #include "android/base/Tracing.h"
-
-#include "EncoderDebug.h"
-
 namespace {
 
 void enc_unsupported()
@@ -25,7 +22,6 @@ void enc_unsupported()
 
 GLint rcGetRendererVersion_enc(void *self )
 {
-	ENCODER_DEBUG_LOG("rcGetRendererVersion()");
 	AEMU_SCOPED_TRACE("rcGetRendererVersion encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -66,7 +62,6 @@ GLint rcGetRendererVersion_enc(void *self )
 
 EGLint rcGetEGLVersion_enc(void *self , EGLint* major, EGLint* minor)
 {
-	ENCODER_DEBUG_LOG("rcGetEGLVersion(major:0x%08x, minor:0x%08x)", major, minor);
 	AEMU_SCOPED_TRACE("rcGetEGLVersion encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -115,7 +110,6 @@ EGLint rcGetEGLVersion_enc(void *self , EGLint* major, EGLint* minor)
 
 EGLint rcQueryEGLString_enc(void *self , EGLenum name, void* buffer, EGLint bufferSize)
 {
-	ENCODER_DEBUG_LOG("rcQueryEGLString(name:0x%08x, buffer:0x%08x, bufferSize:0x%08x)", name, buffer, bufferSize);
 	AEMU_SCOPED_TRACE("rcQueryEGLString encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -162,7 +156,6 @@ EGLint rcQueryEGLString_enc(void *self , EGLenum name, void* buffer, EGLint buff
 
 EGLint rcGetGLString_enc(void *self , EGLenum name, void* buffer, EGLint bufferSize)
 {
-	ENCODER_DEBUG_LOG("rcGetGLString(name:0x%08x, buffer:0x%08x, bufferSize:0x%08x)", name, buffer, bufferSize);
 	AEMU_SCOPED_TRACE("rcGetGLString encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -209,7 +202,6 @@ EGLint rcGetGLString_enc(void *self , EGLenum name, void* buffer, EGLint bufferS
 
 EGLint rcGetNumConfigs_enc(void *self , uint32_t* numAttribs)
 {
-	ENCODER_DEBUG_LOG("rcGetNumConfigs(numAttribs:0x%08x)", numAttribs);
 	AEMU_SCOPED_TRACE("rcGetNumConfigs encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -254,7 +246,6 @@ EGLint rcGetNumConfigs_enc(void *self , uint32_t* numAttribs)
 
 EGLint rcGetConfigs_enc(void *self , uint32_t bufSize, GLuint* buffer)
 {
-	ENCODER_DEBUG_LOG("rcGetConfigs(bufSize:0x%08x, buffer:0x%08x)", bufSize, buffer);
 	AEMU_SCOPED_TRACE("rcGetConfigs encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -300,7 +291,6 @@ EGLint rcGetConfigs_enc(void *self , uint32_t bufSize, GLuint* buffer)
 
 EGLint rcChooseConfig_enc(void *self , EGLint* attribs, uint32_t attribs_size, uint32_t* configs, uint32_t configs_size)
 {
-	ENCODER_DEBUG_LOG("rcChooseConfig(attribs:0x%08x, attribs_size:0x%08x, configs:0x%08x, configs_size:0x%08x)", attribs, attribs_size, configs, configs_size);
 	AEMU_SCOPED_TRACE("rcChooseConfig encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -352,7 +342,6 @@ EGLint rcChooseConfig_enc(void *self , EGLint* attribs, uint32_t attribs_size, u
 
 EGLint rcGetFBParam_enc(void *self , EGLint param)
 {
-	ENCODER_DEBUG_LOG("rcGetFBParam(param:0x%08x)", param);
 	AEMU_SCOPED_TRACE("rcGetFBParam encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -394,7 +383,6 @@ EGLint rcGetFBParam_enc(void *self , EGLint param)
 
 uint32_t rcCreateContext_enc(void *self , uint32_t config, uint32_t share, uint32_t glVersion)
 {
-	ENCODER_DEBUG_LOG("rcCreateContext(config:0x%08x, share:0x%08x, glVersion:0x%08x)", config, share, glVersion);
 	AEMU_SCOPED_TRACE("rcCreateContext encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -438,7 +426,6 @@ uint32_t rcCreateContext_enc(void *self , uint32_t config, uint32_t share, uint3
 
 void rcDestroyContext_enc(void *self , uint32_t context)
 {
-	ENCODER_DEBUG_LOG("rcDestroyContext(context:0x%08x)", context);
 	AEMU_SCOPED_TRACE("rcDestroyContext encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -465,7 +452,6 @@ void rcDestroyContext_enc(void *self , uint32_t context)
 
 uint32_t rcCreateWindowSurface_enc(void *self , uint32_t config, uint32_t width, uint32_t height)
 {
-	ENCODER_DEBUG_LOG("rcCreateWindowSurface(config:0x%08x, width:0x%08x, height:0x%08x)", config, width, height);
 	AEMU_SCOPED_TRACE("rcCreateWindowSurface encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -509,7 +495,6 @@ uint32_t rcCreateWindowSurface_enc(void *self , uint32_t config, uint32_t width,
 
 void rcDestroyWindowSurface_enc(void *self , uint32_t windowSurface)
 {
-	ENCODER_DEBUG_LOG("rcDestroyWindowSurface(windowSurface:0x%08x)", windowSurface);
 	AEMU_SCOPED_TRACE("rcDestroyWindowSurface encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -536,7 +521,6 @@ void rcDestroyWindowSurface_enc(void *self , uint32_t windowSurface)
 
 uint32_t rcCreateColorBuffer_enc(void *self , uint32_t width, uint32_t height, GLenum internalFormat)
 {
-	ENCODER_DEBUG_LOG("rcCreateColorBuffer(width:0x%08x, height:0x%08x, internalFormat:0x%08x)", width, height, internalFormat);
 	AEMU_SCOPED_TRACE("rcCreateColorBuffer encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -580,7 +564,6 @@ uint32_t rcCreateColorBuffer_enc(void *self , uint32_t width, uint32_t height, G
 
 void rcOpenColorBuffer_enc(void *self , uint32_t colorbuffer)
 {
-	ENCODER_DEBUG_LOG("rcOpenColorBuffer(colorbuffer:0x%08x)", colorbuffer);
 	AEMU_SCOPED_TRACE("rcOpenColorBuffer encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -607,7 +590,6 @@ void rcOpenColorBuffer_enc(void *self , uint32_t colorbuffer)
 
 void rcCloseColorBuffer_enc(void *self , uint32_t colorbuffer)
 {
-	ENCODER_DEBUG_LOG("rcCloseColorBuffer(colorbuffer:0x%08x)", colorbuffer);
 	AEMU_SCOPED_TRACE("rcCloseColorBuffer encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -635,7 +617,6 @@ void rcCloseColorBuffer_enc(void *self , uint32_t colorbuffer)
 
 void rcSetWindowColorBuffer_enc(void *self , uint32_t windowSurface, uint32_t colorBuffer)
 {
-	ENCODER_DEBUG_LOG("rcSetWindowColorBuffer(windowSurface:0x%08x, colorBuffer:0x%08x)", windowSurface, colorBuffer);
 	AEMU_SCOPED_TRACE("rcSetWindowColorBuffer encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -663,7 +644,6 @@ void rcSetWindowColorBuffer_enc(void *self , uint32_t windowSurface, uint32_t co
 
 int rcFlushWindowColorBuffer_enc(void *self , uint32_t windowSurface)
 {
-	ENCODER_DEBUG_LOG("rcFlushWindowColorBuffer(windowSurface:0x%08x)", windowSurface);
 	AEMU_SCOPED_TRACE("rcFlushWindowColorBuffer encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -705,7 +685,6 @@ int rcFlushWindowColorBuffer_enc(void *self , uint32_t windowSurface)
 
 EGLint rcMakeCurrent_enc(void *self , uint32_t context, uint32_t drawSurf, uint32_t readSurf)
 {
-	ENCODER_DEBUG_LOG("rcMakeCurrent(context:0x%08x, drawSurf:0x%08x, readSurf:0x%08x)", context, drawSurf, readSurf);
 	AEMU_SCOPED_TRACE("rcMakeCurrent encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -749,7 +728,6 @@ EGLint rcMakeCurrent_enc(void *self , uint32_t context, uint32_t drawSurf, uint3
 
 void rcFBPost_enc(void *self , uint32_t colorBuffer)
 {
-	ENCODER_DEBUG_LOG("rcFBPost(colorBuffer:0x%08x)", colorBuffer);
 	AEMU_SCOPED_TRACE("rcFBPost encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -776,7 +754,6 @@ void rcFBPost_enc(void *self , uint32_t colorBuffer)
 
 void rcFBSetSwapInterval_enc(void *self , EGLint interval)
 {
-	ENCODER_DEBUG_LOG("rcFBSetSwapInterval(interval:0x%08x)", interval);
 	AEMU_SCOPED_TRACE("rcFBSetSwapInterval encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -803,7 +780,6 @@ void rcFBSetSwapInterval_enc(void *self , EGLint interval)
 
 void rcBindTexture_enc(void *self , uint32_t colorBuffer)
 {
-	ENCODER_DEBUG_LOG("rcBindTexture(colorBuffer:0x%08x)", colorBuffer);
 	AEMU_SCOPED_TRACE("rcBindTexture encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -830,7 +806,6 @@ void rcBindTexture_enc(void *self , uint32_t colorBuffer)
 
 void rcBindRenderbuffer_enc(void *self , uint32_t colorBuffer)
 {
-	ENCODER_DEBUG_LOG("rcBindRenderbuffer(colorBuffer:0x%08x)", colorBuffer);
 	AEMU_SCOPED_TRACE("rcBindRenderbuffer encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -857,7 +832,6 @@ void rcBindRenderbuffer_enc(void *self , uint32_t colorBuffer)
 
 EGLint rcColorBufferCacheFlush_enc(void *self , uint32_t colorbuffer, EGLint postCount, int forRead)
 {
-	ENCODER_DEBUG_LOG("rcColorBufferCacheFlush(colorbuffer:0x%08x, postCount:0x%08x, forRead:%d)", colorbuffer, postCount, forRead);
 	AEMU_SCOPED_TRACE("rcColorBufferCacheFlush encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -901,7 +875,6 @@ EGLint rcColorBufferCacheFlush_enc(void *self , uint32_t colorbuffer, EGLint pos
 
 void rcReadColorBuffer_enc(void *self , uint32_t colorbuffer, GLint x, GLint y, GLint width, GLint height, GLenum format, GLenum type, void* pixels)
 {
-	ENCODER_DEBUG_LOG("rcReadColorBuffer(colorbuffer:0x%08x, x:0x%08x, y:0x%08x, width:0x%08x, height:0x%08x, format:0x%08x, type:0x%08x, pixels:0x%08x)", colorbuffer, x, y, width, height, format, type, pixels);
 	AEMU_SCOPED_TRACE("rcReadColorBuffer encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -948,7 +921,6 @@ void rcReadColorBuffer_enc(void *self , uint32_t colorbuffer, GLint x, GLint y, 
 
 int rcUpdateColorBuffer_enc(void *self , uint32_t colorbuffer, GLint x, GLint y, GLint width, GLint height, GLenum format, GLenum type, void* pixels)
 {
-	ENCODER_DEBUG_LOG("rcUpdateColorBuffer(colorbuffer:0x%08x, x:0x%08x, y:0x%08x, width:0x%08x, height:0x%08x, format:0x%08x, type:0x%08x, pixels:0x%08x)", colorbuffer, x, y, width, height, format, type, pixels);
 	AEMU_SCOPED_TRACE("rcUpdateColorBuffer encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1003,7 +975,6 @@ int rcUpdateColorBuffer_enc(void *self , uint32_t colorbuffer, GLint x, GLint y,
 
 int rcOpenColorBuffer2_enc(void *self , uint32_t colorbuffer)
 {
-	ENCODER_DEBUG_LOG("rcOpenColorBuffer2(colorbuffer:0x%08x)", colorbuffer);
 	AEMU_SCOPED_TRACE("rcOpenColorBuffer2 encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1045,7 +1016,6 @@ int rcOpenColorBuffer2_enc(void *self , uint32_t colorbuffer)
 
 uint32_t rcCreateClientImage_enc(void *self , uint32_t context, EGLenum target, GLuint buffer)
 {
-	ENCODER_DEBUG_LOG("rcCreateClientImage(context:0x%08x, target:0x%08x, buffer:0x%08x)", context, target, buffer);
 	AEMU_SCOPED_TRACE("rcCreateClientImage encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1089,7 +1059,6 @@ uint32_t rcCreateClientImage_enc(void *self , uint32_t context, EGLenum target, 
 
 int rcDestroyClientImage_enc(void *self , uint32_t image)
 {
-	ENCODER_DEBUG_LOG("rcDestroyClientImage(image:0x%08x)", image);
 	AEMU_SCOPED_TRACE("rcDestroyClientImage encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1131,7 +1100,6 @@ int rcDestroyClientImage_enc(void *self , uint32_t image)
 
 void rcSelectChecksumHelper_enc(void *self , uint32_t newProtocol, uint32_t reserved)
 {
-	ENCODER_DEBUG_LOG("rcSelectChecksumHelper(newProtocol:0x%08x, reserved:0x%08x)", newProtocol, reserved);
 	AEMU_SCOPED_TRACE("rcSelectChecksumHelper encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1159,7 +1127,6 @@ void rcSelectChecksumHelper_enc(void *self , uint32_t newProtocol, uint32_t rese
 
 void rcCreateSyncKHR_enc(void *self , EGLenum type, EGLint* attribs, uint32_t num_attribs, int destroy_when_signaled, uint64_t* glsync_out, uint64_t* syncthread_out)
 {
-	ENCODER_DEBUG_LOG("rcCreateSyncKHR(type:0x%08x, attribs:0x%08x, num_attribs:0x%08x, destroy_when_signaled:%d, glsync_out:0x%08x, syncthread_out:0x%08x)", type, attribs, num_attribs, destroy_when_signaled, glsync_out, syncthread_out);
 	AEMU_SCOPED_TRACE("rcCreateSyncKHR encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1209,7 +1176,6 @@ void rcCreateSyncKHR_enc(void *self , EGLenum type, EGLint* attribs, uint32_t nu
 
 EGLint rcClientWaitSyncKHR_enc(void *self , uint64_t sync, EGLint flags, uint64_t timeout)
 {
-	ENCODER_DEBUG_LOG("rcClientWaitSyncKHR(sync:0x%016lx, flags:0x%08x, timeout:0x%016lx)", sync, flags, timeout);
 	AEMU_SCOPED_TRACE("rcClientWaitSyncKHR encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1253,7 +1219,6 @@ EGLint rcClientWaitSyncKHR_enc(void *self , uint64_t sync, EGLint flags, uint64_
 
 void rcFlushWindowColorBufferAsync_enc(void *self , uint32_t windowSurface)
 {
-	ENCODER_DEBUG_LOG("rcFlushWindowColorBufferAsync(windowSurface:0x%08x)", windowSurface);
 	AEMU_SCOPED_TRACE("rcFlushWindowColorBufferAsync encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1280,7 +1245,6 @@ void rcFlushWindowColorBufferAsync_enc(void *self , uint32_t windowSurface)
 
 int rcDestroySyncKHR_enc(void *self , uint64_t sync)
 {
-	ENCODER_DEBUG_LOG("rcDestroySyncKHR(sync:0x%016lx)", sync);
 	AEMU_SCOPED_TRACE("rcDestroySyncKHR encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1322,7 +1286,6 @@ int rcDestroySyncKHR_enc(void *self , uint64_t sync)
 
 void rcSetPuid_enc(void *self , uint64_t puid)
 {
-	ENCODER_DEBUG_LOG("rcSetPuid(puid:0x%016lx)", puid);
 	AEMU_SCOPED_TRACE("rcSetPuid encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1349,7 +1312,6 @@ void rcSetPuid_enc(void *self , uint64_t puid)
 
 int rcUpdateColorBufferDMA_enc(void *self , uint32_t colorbuffer, GLint x, GLint y, GLint width, GLint height, GLenum format, GLenum type, void* pixels, uint32_t pixels_size)
 {
-	ENCODER_DEBUG_LOG("rcUpdateColorBufferDMA(colorbuffer:0x%08x, x:0x%08x, y:0x%08x, width:0x%08x, height:0x%08x, format:0x%08x, type:0x%08x, pixels:0x%08x, pixels_size:0x%08x)", colorbuffer, x, y, width, height, format, type, pixels, pixels_size);
 	AEMU_SCOPED_TRACE("rcUpdateColorBufferDMA encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1400,7 +1362,6 @@ int rcUpdateColorBufferDMA_enc(void *self , uint32_t colorbuffer, GLint x, GLint
 
 uint32_t rcCreateColorBufferDMA_enc(void *self , uint32_t width, uint32_t height, GLenum internalFormat, int frameworkFormat)
 {
-	ENCODER_DEBUG_LOG("rcCreateColorBufferDMA(width:0x%08x, height:0x%08x, internalFormat:0x%08x, frameworkFormat:%d)", width, height, internalFormat, frameworkFormat);
 	AEMU_SCOPED_TRACE("rcCreateColorBufferDMA encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1445,7 +1406,6 @@ uint32_t rcCreateColorBufferDMA_enc(void *self , uint32_t width, uint32_t height
 
 void rcWaitSyncKHR_enc(void *self , uint64_t sync, EGLint flags)
 {
-	ENCODER_DEBUG_LOG("rcWaitSyncKHR(sync:0x%016lx, flags:0x%08x)", sync, flags);
 	AEMU_SCOPED_TRACE("rcWaitSyncKHR encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1473,7 +1433,6 @@ void rcWaitSyncKHR_enc(void *self , uint64_t sync, EGLint flags)
 
 GLint rcCompose_enc(void *self , uint32_t bufferSize, void* buffer)
 {
-	ENCODER_DEBUG_LOG("rcCompose(bufferSize:0x%08x, buffer:0x%08x)", bufferSize, buffer);
 	AEMU_SCOPED_TRACE("rcCompose encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1518,7 +1477,6 @@ GLint rcCompose_enc(void *self , uint32_t bufferSize, void* buffer)
 
 int rcCreateDisplay_enc(void *self , uint32_t* displayId)
 {
-	ENCODER_DEBUG_LOG("rcCreateDisplay(displayId:0x%08x)", displayId);
 	AEMU_SCOPED_TRACE("rcCreateDisplay encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1563,7 +1521,6 @@ int rcCreateDisplay_enc(void *self , uint32_t* displayId)
 
 int rcDestroyDisplay_enc(void *self , uint32_t displayId)
 {
-	ENCODER_DEBUG_LOG("rcDestroyDisplay(displayId:0x%08x)", displayId);
 	AEMU_SCOPED_TRACE("rcDestroyDisplay encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1605,7 +1562,6 @@ int rcDestroyDisplay_enc(void *self , uint32_t displayId)
 
 int rcSetDisplayColorBuffer_enc(void *self , uint32_t displayId, uint32_t colorBuffer)
 {
-	ENCODER_DEBUG_LOG("rcSetDisplayColorBuffer(displayId:0x%08x, colorBuffer:0x%08x)", displayId, colorBuffer);
 	AEMU_SCOPED_TRACE("rcSetDisplayColorBuffer encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1648,7 +1604,6 @@ int rcSetDisplayColorBuffer_enc(void *self , uint32_t displayId, uint32_t colorB
 
 int rcGetDisplayColorBuffer_enc(void *self , uint32_t displayId, uint32_t* colorBuffer)
 {
-	ENCODER_DEBUG_LOG("rcGetDisplayColorBuffer(displayId:0x%08x, colorBuffer:0x%08x)", displayId, colorBuffer);
 	AEMU_SCOPED_TRACE("rcGetDisplayColorBuffer encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1694,7 +1649,6 @@ int rcGetDisplayColorBuffer_enc(void *self , uint32_t displayId, uint32_t* color
 
 int rcGetColorBufferDisplay_enc(void *self , uint32_t colorBuffer, uint32_t* displayId)
 {
-	ENCODER_DEBUG_LOG("rcGetColorBufferDisplay(colorBuffer:0x%08x, displayId:0x%08x)", colorBuffer, displayId);
 	AEMU_SCOPED_TRACE("rcGetColorBufferDisplay encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1740,7 +1694,6 @@ int rcGetColorBufferDisplay_enc(void *self , uint32_t colorBuffer, uint32_t* dis
 
 int rcGetDisplayPose_enc(void *self , uint32_t displayId, GLint* x, GLint* y, uint32_t* w, uint32_t* h)
 {
-	ENCODER_DEBUG_LOG("rcGetDisplayPose(displayId:0x%08x, x:0x%08x, y:0x%08x, w:0x%08x, h:0x%08x)", displayId, x, y, w, h);
 	AEMU_SCOPED_TRACE("rcGetDisplayPose encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1798,7 +1751,6 @@ int rcGetDisplayPose_enc(void *self , uint32_t displayId, GLint* x, GLint* y, ui
 
 int rcSetDisplayPose_enc(void *self , uint32_t displayId, GLint x, GLint y, uint32_t w, uint32_t h)
 {
-	ENCODER_DEBUG_LOG("rcSetDisplayPose(displayId:0x%08x, x:0x%08x, y:0x%08x, w:0x%08x, h:0x%08x)", displayId, x, y, w, h);
 	AEMU_SCOPED_TRACE("rcSetDisplayPose encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1844,7 +1796,6 @@ int rcSetDisplayPose_enc(void *self , uint32_t displayId, GLint x, GLint y, uint
 
 GLint rcSetColorBufferVulkanMode_enc(void *self , uint32_t colorBuffer, uint32_t mode)
 {
-	ENCODER_DEBUG_LOG("rcSetColorBufferVulkanMode(colorBuffer:0x%08x, mode:0x%08x)", colorBuffer, mode);
 	AEMU_SCOPED_TRACE("rcSetColorBufferVulkanMode encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1887,7 +1838,6 @@ GLint rcSetColorBufferVulkanMode_enc(void *self , uint32_t colorBuffer, uint32_t
 
 void rcReadColorBufferYUV_enc(void *self , uint32_t colorbuffer, GLint x, GLint y, GLint width, GLint height, void* pixels, uint32_t pixels_size)
 {
-	ENCODER_DEBUG_LOG("rcReadColorBufferYUV(colorbuffer:0x%08x, x:0x%08x, y:0x%08x, width:0x%08x, height:0x%08x, pixels:0x%08x, pixels_size:0x%08x)", colorbuffer, x, y, width, height, pixels, pixels_size);
 	AEMU_SCOPED_TRACE("rcReadColorBufferYUV encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1933,7 +1883,6 @@ void rcReadColorBufferYUV_enc(void *self , uint32_t colorbuffer, GLint x, GLint 
 
 int rcIsSyncSignaled_enc(void *self , uint64_t sync)
 {
-	ENCODER_DEBUG_LOG("rcIsSyncSignaled(sync:0x%016lx)", sync);
 	AEMU_SCOPED_TRACE("rcIsSyncSignaled encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -1975,7 +1924,6 @@ int rcIsSyncSignaled_enc(void *self , uint64_t sync)
 
 void rcCreateColorBufferWithHandle_enc(void *self , uint32_t width, uint32_t height, GLenum internalFormat, uint32_t handle)
 {
-	ENCODER_DEBUG_LOG("rcCreateColorBufferWithHandle(width:0x%08x, height:0x%08x, internalFormat:0x%08x, handle:0x%08x)", width, height, internalFormat, handle);
 	AEMU_SCOPED_TRACE("rcCreateColorBufferWithHandle encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -2005,7 +1953,6 @@ void rcCreateColorBufferWithHandle_enc(void *self , uint32_t width, uint32_t hei
 
 uint32_t rcCreateBuffer_enc(void *self , uint32_t size)
 {
-	ENCODER_DEBUG_LOG("rcCreateBuffer(size:0x%08x)", size);
 	AEMU_SCOPED_TRACE("rcCreateBuffer encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -2047,7 +1994,6 @@ uint32_t rcCreateBuffer_enc(void *self , uint32_t size)
 
 void rcCloseBuffer_enc(void *self , uint32_t buffer)
 {
-	ENCODER_DEBUG_LOG("rcCloseBuffer(buffer:0x%08x)", buffer);
 	AEMU_SCOPED_TRACE("rcCloseBuffer encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -2074,7 +2020,6 @@ void rcCloseBuffer_enc(void *self , uint32_t buffer)
 
 GLint rcSetColorBufferVulkanMode2_enc(void *self , uint32_t colorBuffer, uint32_t mode, uint32_t memoryProperty)
 {
-	ENCODER_DEBUG_LOG("rcSetColorBufferVulkanMode2(colorBuffer:0x%08x, mode:0x%08x, memoryProperty:0x%08x)", colorBuffer, mode, memoryProperty);
 	AEMU_SCOPED_TRACE("rcSetColorBufferVulkanMode2 encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -2118,7 +2063,6 @@ GLint rcSetColorBufferVulkanMode2_enc(void *self , uint32_t colorBuffer, uint32_
 
 int rcMapGpaToBufferHandle_enc(void *self , uint32_t bufferHandle, uint64_t gpa)
 {
-	ENCODER_DEBUG_LOG("rcMapGpaToBufferHandle(bufferHandle:0x%08x, gpa:0x%016lx)", bufferHandle, gpa);
 	AEMU_SCOPED_TRACE("rcMapGpaToBufferHandle encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -2161,7 +2105,6 @@ int rcMapGpaToBufferHandle_enc(void *self , uint32_t bufferHandle, uint64_t gpa)
 
 uint32_t rcCreateBuffer2_enc(void *self , uint64_t size, uint32_t memoryProperty)
 {
-	ENCODER_DEBUG_LOG("rcCreateBuffer2(size:0x%016lx, memoryProperty:0x%08x)", size, memoryProperty);
 	AEMU_SCOPED_TRACE("rcCreateBuffer2 encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -2204,7 +2147,6 @@ uint32_t rcCreateBuffer2_enc(void *self , uint64_t size, uint32_t memoryProperty
 
 int rcMapGpaToBufferHandle2_enc(void *self , uint32_t bufferHandle, uint64_t gpa, uint64_t size)
 {
-	ENCODER_DEBUG_LOG("rcMapGpaToBufferHandle2(bufferHandle:0x%08x, gpa:0x%016lx, size:0x%016lx)", bufferHandle, gpa, size);
 	AEMU_SCOPED_TRACE("rcMapGpaToBufferHandle2 encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -2248,7 +2190,6 @@ int rcMapGpaToBufferHandle2_enc(void *self , uint32_t bufferHandle, uint64_t gpa
 
 void rcFlushWindowColorBufferAsyncWithFrameNumber_enc(void *self , uint32_t windowSurface, uint32_t frameNumber)
 {
-	ENCODER_DEBUG_LOG("rcFlushWindowColorBufferAsyncWithFrameNumber(windowSurface:0x%08x, frameNumber:0x%08x)", windowSurface, frameNumber);
 	AEMU_SCOPED_TRACE("rcFlushWindowColorBufferAsyncWithFrameNumber encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -2276,7 +2217,6 @@ void rcFlushWindowColorBufferAsyncWithFrameNumber_enc(void *self , uint32_t wind
 
 void rcSetTracingForPuid_enc(void *self , uint64_t puid, uint32_t enable, uint64_t guestTime)
 {
-	ENCODER_DEBUG_LOG("rcSetTracingForPuid(puid:0x%016lx, enable:0x%08x, guestTime:0x%016lx)", puid, enable, guestTime);
 	AEMU_SCOPED_TRACE("rcSetTracingForPuid encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -2305,7 +2245,6 @@ void rcSetTracingForPuid_enc(void *self , uint64_t puid, uint32_t enable, uint64
 
 void rcMakeCurrentAsync_enc(void *self , uint32_t context, uint32_t drawSurf, uint32_t readSurf)
 {
-	ENCODER_DEBUG_LOG("rcMakeCurrentAsync(context:0x%08x, drawSurf:0x%08x, readSurf:0x%08x)", context, drawSurf, readSurf);
 	AEMU_SCOPED_TRACE("rcMakeCurrentAsync encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -2335,7 +2274,6 @@ void rcMakeCurrentAsync_enc(void *self , uint32_t context, uint32_t drawSurf, ui
 
 void rcComposeAsync_enc(void *self , uint32_t bufferSize, void* buffer)
 {
-	ENCODER_DEBUG_LOG("rcComposeAsync(bufferSize:0x%08x, buffer:0x%08x)", bufferSize, buffer);
 	AEMU_SCOPED_TRACE("rcComposeAsync encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -2366,7 +2304,6 @@ void rcComposeAsync_enc(void *self , uint32_t bufferSize, void* buffer)
 
 void rcDestroySyncKHRAsync_enc(void *self , uint64_t sync)
 {
-	ENCODER_DEBUG_LOG("rcDestroySyncKHRAsync(sync:0x%016lx)", sync);
 	AEMU_SCOPED_TRACE("rcDestroySyncKHRAsync encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -2394,7 +2331,6 @@ void rcDestroySyncKHRAsync_enc(void *self , uint64_t sync)
 
 GLint rcComposeWithoutPost_enc(void *self , uint32_t bufferSize, void* buffer)
 {
-	ENCODER_DEBUG_LOG("rcComposeWithoutPost(bufferSize:0x%08x, buffer:0x%08x)", bufferSize, buffer);
 	AEMU_SCOPED_TRACE("rcComposeWithoutPost encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -2439,7 +2375,6 @@ GLint rcComposeWithoutPost_enc(void *self , uint32_t bufferSize, void* buffer)
 
 void rcComposeAsyncWithoutPost_enc(void *self , uint32_t bufferSize, void* buffer)
 {
-	ENCODER_DEBUG_LOG("rcComposeAsyncWithoutPost(bufferSize:0x%08x, buffer:0x%08x)", bufferSize, buffer);
 	AEMU_SCOPED_TRACE("rcComposeAsyncWithoutPost encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -2470,7 +2405,6 @@ void rcComposeAsyncWithoutPost_enc(void *self , uint32_t bufferSize, void* buffe
 
 int rcCreateDisplayById_enc(void *self , uint32_t displayId)
 {
-	ENCODER_DEBUG_LOG("rcCreateDisplayById(displayId:0x%08x)", displayId);
 	AEMU_SCOPED_TRACE("rcCreateDisplayById encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -2512,7 +2446,6 @@ int rcCreateDisplayById_enc(void *self , uint32_t displayId)
 
 int rcSetDisplayPoseDpi_enc(void *self , uint32_t displayId, GLint x, GLint y, uint32_t w, uint32_t h, uint32_t dpi)
 {
-	ENCODER_DEBUG_LOG("rcSetDisplayPoseDpi(displayId:0x%08x, x:0x%08x, y:0x%08x, w:0x%08x, h:0x%08x, dpi:0x%08x)", displayId, x, y, w, h, dpi);
 	AEMU_SCOPED_TRACE("rcSetDisplayPoseDpi encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -2559,7 +2492,6 @@ int rcSetDisplayPoseDpi_enc(void *self , uint32_t displayId, GLint x, GLint y, u
 
 int rcReadColorBufferDMA_enc(void *self , uint32_t colorbuffer, GLint x, GLint y, GLint width, GLint height, GLenum format, GLenum type, void* pixels, uint32_t pixels_size)
 {
-	ENCODER_DEBUG_LOG("rcReadColorBufferDMA(colorbuffer:0x%08x, x:0x%08x, y:0x%08x, width:0x%08x, height:0x%08x, format:0x%08x, type:0x%08x, pixels:0x%08x, pixels_size:0x%08x)", colorbuffer, x, y, width, height, format, type, pixels, pixels_size);
 	AEMU_SCOPED_TRACE("rcReadColorBufferDMA encode");
 
 	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
@@ -2591,8 +2523,8 @@ int rcReadColorBufferDMA_enc(void *self , uint32_t colorbuffer, GLint x, GLint y
 	if (useChecksum) checksumCalculator->addBuffer(buf, ptr-buf);
 	if (useChecksum) checksumCalculator->writeChecksum(ptr, checksumSize); ptr += checksumSize;
 
-	// Skip readback for var pixels as it's DMA
-	// Skip checksum for var pixels as it's DMA
+	// stream->readback(pixels, __size_pixels);
+	// if (useChecksum) checksumCalculator->addBuffer(pixels, __size_pixels);
 
 	int retval;
 	stream->readback(&retval, 4);
@@ -2604,131 +2536,6 @@ int rcReadColorBufferDMA_enc(void *self , uint32_t colorbuffer, GLint x, GLint y
 		stream->readback(checksumBufPtr, checksumSize);
 		if (!checksumCalculator->validate(checksumBufPtr, checksumSize)) {
 			ALOGE("rcReadColorBufferDMA: GL communication error, please report this issue to b.android.com.\n");
-			abort();
-		}
-	}
-	return retval;
-}
-
-int rcGetFBDisplayConfigsCount_enc(void *self )
-{
-	ENCODER_DEBUG_LOG("rcGetFBDisplayConfigsCount()");
-	AEMU_SCOPED_TRACE("rcGetFBDisplayConfigsCount encode");
-
-	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
-	IOStream *stream = ctx->m_stream;
-	ChecksumCalculator *checksumCalculator = ctx->m_checksumCalculator;
-	bool useChecksum = checksumCalculator->getVersion() > 0;
-
-	 unsigned char *ptr;
-	 unsigned char *buf;
-	 const size_t sizeWithoutChecksum = 8;
-	 const size_t checksumSize = checksumCalculator->checksumByteSize();
-	 const size_t totalSize = sizeWithoutChecksum + checksumSize;
-	buf = stream->alloc(totalSize);
-	ptr = buf;
-	int tmp = OP_rcGetFBDisplayConfigsCount;memcpy(ptr, &tmp, 4); ptr += 4;
-	memcpy(ptr, &totalSize, 4);  ptr += 4;
-
-
-	if (useChecksum) checksumCalculator->addBuffer(buf, ptr-buf);
-	if (useChecksum) checksumCalculator->writeChecksum(ptr, checksumSize); ptr += checksumSize;
-
-
-	int retval;
-	stream->readback(&retval, 4);
-	if (useChecksum) checksumCalculator->addBuffer(&retval, 4);
-	if (useChecksum) {
-		unsigned char *checksumBufPtr = NULL;
-		unsigned char checksumBuf[ChecksumCalculator::kMaxChecksumSize];
-		if (checksumSize > 0) checksumBufPtr = &checksumBuf[0];
-		stream->readback(checksumBufPtr, checksumSize);
-		if (!checksumCalculator->validate(checksumBufPtr, checksumSize)) {
-			ALOGE("rcGetFBDisplayConfigsCount: GL communication error, please report this issue to b.android.com.\n");
-			abort();
-		}
-	}
-	return retval;
-}
-
-int rcGetFBDisplayConfigsParam_enc(void *self , int configId, EGLint param)
-{
-	ENCODER_DEBUG_LOG("rcGetFBDisplayConfigsParam(configId:%d, param:0x%08x)", configId, param);
-	AEMU_SCOPED_TRACE("rcGetFBDisplayConfigsParam encode");
-
-	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
-	IOStream *stream = ctx->m_stream;
-	ChecksumCalculator *checksumCalculator = ctx->m_checksumCalculator;
-	bool useChecksum = checksumCalculator->getVersion() > 0;
-
-	 unsigned char *ptr;
-	 unsigned char *buf;
-	 const size_t sizeWithoutChecksum = 8 + 4 + 4;
-	 const size_t checksumSize = checksumCalculator->checksumByteSize();
-	 const size_t totalSize = sizeWithoutChecksum + checksumSize;
-	buf = stream->alloc(totalSize);
-	ptr = buf;
-	int tmp = OP_rcGetFBDisplayConfigsParam;memcpy(ptr, &tmp, 4); ptr += 4;
-	memcpy(ptr, &totalSize, 4);  ptr += 4;
-
-		memcpy(ptr, &configId, 4); ptr += 4;
-		memcpy(ptr, &param, 4); ptr += 4;
-
-	if (useChecksum) checksumCalculator->addBuffer(buf, ptr-buf);
-	if (useChecksum) checksumCalculator->writeChecksum(ptr, checksumSize); ptr += checksumSize;
-
-
-	int retval;
-	stream->readback(&retval, 4);
-	if (useChecksum) checksumCalculator->addBuffer(&retval, 4);
-	if (useChecksum) {
-		unsigned char *checksumBufPtr = NULL;
-		unsigned char checksumBuf[ChecksumCalculator::kMaxChecksumSize];
-		if (checksumSize > 0) checksumBufPtr = &checksumBuf[0];
-		stream->readback(checksumBufPtr, checksumSize);
-		if (!checksumCalculator->validate(checksumBufPtr, checksumSize)) {
-			ALOGE("rcGetFBDisplayConfigsParam: GL communication error, please report this issue to b.android.com.\n");
-			abort();
-		}
-	}
-	return retval;
-}
-
-int rcGetFBDisplayActiveConfig_enc(void *self )
-{
-	ENCODER_DEBUG_LOG("rcGetFBDisplayActiveConfig()");
-	AEMU_SCOPED_TRACE("rcGetFBDisplayActiveConfig encode");
-
-	renderControl_encoder_context_t *ctx = (renderControl_encoder_context_t *)self;
-	IOStream *stream = ctx->m_stream;
-	ChecksumCalculator *checksumCalculator = ctx->m_checksumCalculator;
-	bool useChecksum = checksumCalculator->getVersion() > 0;
-
-	 unsigned char *ptr;
-	 unsigned char *buf;
-	 const size_t sizeWithoutChecksum = 8;
-	 const size_t checksumSize = checksumCalculator->checksumByteSize();
-	 const size_t totalSize = sizeWithoutChecksum + checksumSize;
-	buf = stream->alloc(totalSize);
-	ptr = buf;
-	int tmp = OP_rcGetFBDisplayActiveConfig;memcpy(ptr, &tmp, 4); ptr += 4;
-	memcpy(ptr, &totalSize, 4);  ptr += 4;
-
-
-	if (useChecksum) checksumCalculator->addBuffer(buf, ptr-buf);
-	if (useChecksum) checksumCalculator->writeChecksum(ptr, checksumSize); ptr += checksumSize;
-
-
-	int retval;
-	stream->readback(&retval, 4);
-	if (useChecksum) checksumCalculator->addBuffer(&retval, 4);
-	if (useChecksum) {
-		unsigned char *checksumBufPtr = NULL;
-		unsigned char checksumBuf[ChecksumCalculator::kMaxChecksumSize];
-		if (checksumSize > 0) checksumBufPtr = &checksumBuf[0];
-		stream->readback(checksumBufPtr, checksumSize);
-		if (!checksumCalculator->validate(checksumBufPtr, checksumSize)) {
-			ALOGE("rcGetFBDisplayActiveConfig: GL communication error, please report this issue to b.android.com.\n");
 			abort();
 		}
 	}
@@ -2807,8 +2614,5 @@ renderControl_encoder_context_t::renderControl_encoder_context_t(IOStream *strea
 	this->rcCreateDisplayById = &rcCreateDisplayById_enc;
 	this->rcSetDisplayPoseDpi = &rcSetDisplayPoseDpi_enc;
 	this->rcReadColorBufferDMA = &rcReadColorBufferDMA_enc;
-	this->rcGetFBDisplayConfigsCount = &rcGetFBDisplayConfigsCount_enc;
-	this->rcGetFBDisplayConfigsParam = &rcGetFBDisplayConfigsParam_enc;
-	this->rcGetFBDisplayActiveConfig = &rcGetFBDisplayActiveConfig_enc;
 }
 

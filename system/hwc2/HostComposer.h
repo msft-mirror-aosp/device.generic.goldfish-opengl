@@ -17,9 +17,6 @@
 #ifndef ANDROID_HWC_HOSTCOMPOSER_H
 #define ANDROID_HWC_HOSTCOMPOSER_H
 
-#include <android-base/unique_fd.h>
-#include <tuple>
-
 #include "Common.h"
 #include "Composer.h"
 #include "DrmPresenter.h"
@@ -29,7 +26,7 @@ namespace android {
 
 class HostComposer : public Composer {
  public:
-  HostComposer(DrmPresenter* drmPresenter, bool isMinigbm);
+  HostComposer() = default;
 
   HostComposer(const HostComposer&) = delete;
   HostComposer& operator=(const HostComposer&) = delete;
@@ -37,9 +34,16 @@ class HostComposer : public Composer {
   HostComposer(HostComposer&&) = delete;
   HostComposer& operator=(HostComposer&&) = delete;
 
-  HWC2::Error init() override;
+  HWC2::Error init(const HotplugCallback& cb) override;
 
-  HWC2::Error onDisplayCreate(Display* display) override;
+  HWC2::Error createDisplays(
+      Device* device,
+      const AddDisplayToDeviceFunction& addDisplayToDeviceFn) override;
+
+  HWC2::Error createDisplay(
+      Device* device, uint32_t displayId, uint32_t width, uint32_t height,
+      uint32_t dpiX, uint32_t dpiY, uint32_t refreshRateHz,
+      const AddDisplayToDeviceFunction& addDisplayToDeviceFn) override;
 
   HWC2::Error onDisplayDestroy(Display* display) override;
 
@@ -53,12 +57,16 @@ class HostComposer : public Composer {
 
   // Performs the actual composition of layers and presents the composed result
   // to the display.
-  std::tuple<HWC2::Error, base::unique_fd> presentDisplay(
-      Display* display) override;
-
-  HWC2::Error onActiveConfigChange(Display* display) override;
+  HWC2::Error presentDisplay(Display* display,
+                             int32_t* outPresentFence) override;
 
  private:
+  HWC2::Error createPrimaryDisplay(
+      Device* device, const AddDisplayToDeviceFunction& addDisplayToDeviceFn);
+
+  HWC2::Error createSecondaryDisplays(
+      Device* device, const AddDisplayToDeviceFunction& addDisplayToDeviceFn);
+
   HWC2::Error createHostComposerDisplayInfo(Display* display,
                                             uint32_t hostDisplayId);
 
@@ -83,7 +91,8 @@ class HostComposer : public Composer {
   };
 
   std::unordered_map<hwc2_display_t, HostComposerDisplayInfo> mDisplayInfos;
-  DrmPresenter* mDrmPresenter;
+
+  DrmPresenter mDrmPresenter;
 };
 
 }  // namespace android

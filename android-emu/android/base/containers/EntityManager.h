@@ -121,6 +121,8 @@ public:
         reserve(initialItems);
     }
 
+    ~EntityManager() { clear(); }
+
     struct EntityEntry {
         EntityHandle handle = 0;
         size_t nextFreeIndex = 0;

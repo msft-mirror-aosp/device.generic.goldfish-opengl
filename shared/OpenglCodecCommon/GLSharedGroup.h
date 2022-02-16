@@ -37,12 +37,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "ErrorLog.h"
+#include <utils/threads.h>
 #include "auto_goldfish_dma_context.h"
 #include "IndexRangeCache.h"
 #include "StateTrackingSupport.h"
-
-using android::base::guest::AutoLock;
-using android::base::guest::Lock;
 
 struct BufferData {
     BufferData();
@@ -184,7 +182,7 @@ private:
     RenderbufferInfo m_renderbufferInfo;
     SamplerInfo m_samplerInfo;
 
-    Lock m_lock;
+    mutable android::Mutex m_lock;
 
     void refShaderDataLocked(GLuint shader);
     void unrefShaderDataLocked(GLuint shader);
@@ -223,7 +221,7 @@ public:
     void    setProgramIndexInfo(GLuint program, GLuint index, GLint base, GLint size, GLenum type, const char* name);
     void    setProgramAttribInfo(GLuint program, GLuint index, GLint attribLoc, GLint size, GLenum type, const char* name);
     GLenum  getProgramUniformType(GLuint program, GLint location);
-    GLint   getNextSamplerUniform(GLuint program, GLint index, GLint* val, GLenum* target);
+    GLint   getNextSamplerUniform(GLuint program, GLint index, GLint* val, GLenum* target) const;
     bool    setSamplerUniform(GLuint program, GLint appLoc, GLint val, GLenum* target);
     bool    isProgramUniformLocationValid(GLuint program, GLint location);
 

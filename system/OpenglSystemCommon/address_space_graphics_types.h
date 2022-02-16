@@ -16,7 +16,6 @@
 #include "android/base/ring_buffer.h"
 
 #include <functional>
-#include <cstddef>
 
 // This file defines common types for address space graphics and provides
 // documentation.

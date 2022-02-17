@@ -29,10 +29,9 @@ GOLDFISH_OPENGL_LIB_SUFFIX :=
 # See the definition of emugl-begin-module in common.mk
 EMUGL_COMMON_INCLUDES := $(GOLDFISH_OPENGL_PATH)/host/include/libOpenglRender $(GOLDFISH_OPENGL_PATH)/system/include
 
-# common cflags used by several modules
 # This is always set to a module's LOCAL_CFLAGS
 # See the definition of emugl-begin-module in common.mk
-EMUGL_COMMON_CFLAGS := -DWITH_GLES2
+EMUGL_COMMON_CFLAGS :=
 
 # Whether or not to build the Vulkan library.
 GFXSTREAM := false
@@ -173,6 +172,7 @@ endif
 ifeq ($(shell test $(PLATFORM_SDK_VERSION) -gt 28 -o $(IS_AT_LEAST_QPR1) = true && echo isApi29OrHigher),isApi29OrHigher)
     # HWC2 enabled after P
     include $(GOLDFISH_OPENGL_PATH)/system/hwc2/Android.mk
+    include $(GOLDFISH_OPENGL_PATH)/system/hwc3/Android.mk
     # hardware codecs enabled after P
     include $(GOLDFISH_OPENGL_PATH)/system/codecs/omx/common/Android.mk
     include $(GOLDFISH_OPENGL_PATH)/system/codecs/omx/plugin/Android.mk

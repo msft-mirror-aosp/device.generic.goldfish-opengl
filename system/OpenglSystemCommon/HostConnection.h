@@ -35,7 +35,7 @@ struct goldfish_dma_context;
 #endif
 
 #include <memory>
-#include <string>
+#include <cstring>
 
 class GLEncoder;
 struct gl_client_context_t;
@@ -77,6 +77,9 @@ public:
     }
     bool hasSyncBufferData() const {
         return m_featureInfo.hasSyncBufferData; }
+    bool hasHWCMultiConfigs() const {
+        return m_featureInfo.hasHWCMultiConfigs;
+    }
     DmaImpl getDmaVersion() const { return m_featureInfo.dmaImpl; }
     void bindDmaContext(struct goldfish_dma_context* cxt) { m_dmaCxt = cxt; }
     void bindDmaDirectly(void* dmaPtr, uint64_t dmaPhysAddr) {
@@ -136,7 +139,7 @@ private:
 class Gralloc {
 public:
     virtual uint32_t createColorBuffer(
-        ExtendedRCEncoderContext* rcEnc, int width, int height, uint32_t glformat);
+        ExtendedRCEncoderContext* rcEnc, int width, int height, uint32_t glformat) = 0;
     virtual uint32_t getHostHandle(native_handle_t const* handle) = 0;
     virtual int getFormat(native_handle_t const* handle) = 0;
     virtual size_t getAllocatedSize(native_handle_t const* handle) = 0;
@@ -244,7 +247,9 @@ private:
     void queryAndSetVulkanQueueSubmitWithCommandsSupport(ExtendedRCEncoderContext *rcEnc);
     void queryAndSetVulkanBatchedDescriptorSetUpdateSupport(ExtendedRCEncoderContext *rcEnc);
     void queryAndSetSyncBufferData(ExtendedRCEncoderContext *rcEnc);
+    void queryAndSetVulkanAsyncQsri(ExtendedRCEncoderContext *rcEnc);
     void queryAndSetReadColorBufferDma(ExtendedRCEncoderContext *rcEnc);
+    void queryAndSetHWCMultiConfigs(ExtendedRCEncoderContext* rcEnc);
     GLint queryVersion(ExtendedRCEncoderContext* rcEnc);
 
 private:

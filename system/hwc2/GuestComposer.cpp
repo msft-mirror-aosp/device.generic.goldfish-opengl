@@ -85,8 +85,8 @@ ConverterFunction GetConverterForDrmFormat(uint32_t drmFormat) {
     case DRM_FORMAT_YVU420:
       return &ConvertFromYV12;
   }
-  ALOGW("Unsupported drm format: %d(%s), returning null converter", drmFormat,
-        GetDrmFormatString(drmFormat));
+  DEBUG_LOG("Unsupported drm format: %d(%s), returning null converter",
+            drmFormat, GetDrmFormatString(drmFormat));
   return nullptr;
 }
 
@@ -398,8 +398,8 @@ std::optional<BufferSpec> GetBufferSpec(GrallocBuffer& buffer,
 
 }  // namespace
 
-GuestComposer::GuestComposer(DrmPresenter* drmPresenter) :
-        mDrmPresenter(drmPresenter) {}
+GuestComposer::GuestComposer(DrmPresenter* drmPresenter)
+    : mDrmPresenter(drmPresenter) {}
 
 HWC2::Error GuestComposer::init() {
   DEBUG_LOG("%s", __FUNCTION__);
@@ -594,18 +594,19 @@ HWC2::Error GuestComposer::validateDisplay(
         layerCompositionType == HWC2::Composition::Cursor ||
         layerCompositionType == HWC2::Composition::Sideband ||
         layerCompositionType == HWC2::Composition::SolidColor) {
-      ALOGW("%s: display:%" PRIu64 " layer:%" PRIu64
-            " has composition type %s, falling back to client composition",
-            __FUNCTION__, displayId, layerId,
-            layerCompositionTypeString.c_str());
+      DEBUG_LOG("%s: display:%" PRIu64 " layer:%" PRIu64
+                " has composition type %s, falling back to client composition",
+                __FUNCTION__, displayId, layerId,
+                layerCompositionTypeString.c_str());
       fallbackToClientComposition = true;
       break;
     }
 
     if (!canComposeLayer(layer)) {
-      ALOGW("%s: display:%" PRIu64 " layer:%" PRIu64
-            " composition not supported, falling back to client composition",
-            __FUNCTION__, displayId, layerId);
+      DEBUG_LOG(
+          "%s: display:%" PRIu64 " layer:%" PRIu64
+          " composition not supported, falling back to client composition",
+          __FUNCTION__, displayId, layerId);
       fallbackToClientComposition = true;
       break;
     }
@@ -905,7 +906,8 @@ HWC2::Error GuestComposer::composeLayerInto(
   BufferSpec srcLayerSpec = *srcLayerSpecOpt;
 
   // TODO(jemoreira): Remove the hardcoded fomat.
-  bool needsConversion = srcLayerSpec.drmFormat != DRM_FORMAT_XBGR8888;
+  bool needsConversion = srcLayerSpec.drmFormat != DRM_FORMAT_XBGR8888 &&
+                         srcLayerSpec.drmFormat != DRM_FORMAT_ABGR8888;
   bool needsScaling = LayerNeedsScaling(*srcLayer);
   bool needsRotation = rotation != libyuv::kRotate0;
   bool needsTranspose = needsRotation && rotation != libyuv::kRotate180;

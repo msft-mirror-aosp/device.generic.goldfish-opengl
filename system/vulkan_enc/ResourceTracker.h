@@ -619,7 +619,6 @@ public:
         VkImage image,
         int* pNativeFenceFd);
 
-    bool isMemoryTypeHostVisible(VkDevice device, uint32_t typeIndex) const;
     uint8_t* getMappedPointer(VkDeviceMemory memory);
     VkDeviceSize getMappedSize(VkDeviceMemory memory);
     VkDeviceSize getNonCoherentExtendedSize(VkDevice device, VkDeviceSize basicSize) const;
@@ -672,7 +671,8 @@ public:
     void transformImpl_VkExternalMemoryProperties_tohost(
         VkExternalMemoryProperties* pProperties,
         uint32_t);
-    void transformImpl_VkImageCreateInfo_tohost(VkImageCreateInfo*, uint32_t);
+    void transformImpl_VkImageCreateInfo_fromhost(const VkImageCreateInfo*, uint32_t);
+    void transformImpl_VkImageCreateInfo_tohost(const VkImageCreateInfo*, uint32_t);
 
 #define DEFINE_TRANSFORMED_TYPE_PROTOTYPE(type)          \
     void transformImpl_##type##_tohost(type*, uint32_t); \

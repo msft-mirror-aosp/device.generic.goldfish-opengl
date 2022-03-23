@@ -24,21 +24,16 @@
 #include <cstdlib>
 #include <errno.h>
 #include <memory>
-#include <cstring>
 
 #ifdef VIRTIO_GPU
+#include <drm/virtgpu_drm.h>
 #include <xf86drm.h>
 #endif
 
 #include <log/log.h>
 
 #include "goldfish_address_space.h"
-#include "virtgpu_drm.h"
-
-// See virgl_hw.h and p_defines.h
-#define VIRGL_FORMAT_R8_UNORM 64
-#define VIRGL_BIND_CUSTOM (1 << 17)
-#define PIPE_BUFFER 0
+#include "virtio_gpu_next.h"
 
 namespace {
 
@@ -547,52 +542,13 @@ bool goldfish_address_space_ping(
     return true;
 }
 
-#define CAPSET_GFXSTREAM 3
-
-// This is a no-op because virtgpu doesn't really use the GoldfishAddressSpaceBlockProvider
-address_space_handle_t open_virtgpu(uint32_t capset_id) {
-    int fd = drmOpenRender(128);
-    if (fd < 0) {
-        ALOGE("Failed to open rendernode: %s", strerror(errno));
-        return fd;
-    }
-
-    // Don't use capset id yet.  Not clear if we want just:
-    //   - one gfxstream capset
-    //   - a ranchu capset, a vulkan capset, or GLES capset
-    if (capset_id) {
-        int ret;
-        struct drm_virtgpu_context_init init = {0};
-        struct drm_virtgpu_context_set_param ctx_set_params[2] = {{0}};
-
-        ctx_set_params[0].param = VIRTGPU_CONTEXT_PARAM_NUM_RINGS;
-        ctx_set_params[0].value = 1;
-        init.num_params = 1;
-
-        // TODO(b/218538495): A KI in the 5.4 kernel will sometimes result in capsets not
-        // being properly queried.
-#if defined(__linux__) && !defined(__ANDROID__)
-        ctx_set_params[1].param = VIRTGPU_CONTEXT_PARAM_CAPSET_ID;
-        ctx_set_params[1].value = capset_id;
-        init.num_params++;
-#endif
-
-        init.ctx_set_params = (unsigned long long)&ctx_set_params[0];
-        ret = drmIoctl(fd, DRM_IOCTL_VIRTGPU_CONTEXT_INIT, &init);
-        if (ret) {
-            ALOGE("DRM_IOCTL_VIRTGPU_CONTEXT_INIT failed with %s, continuing without context...", strerror(errno));
-        }
-    }
-
-    return fd;
-}
-
+// virtio-gpu version
 address_space_handle_t virtgpu_address_space_open() {
-    return -EINVAL;
+return drmOpenRender(128);
 }
 
 void virtgpu_address_space_close(address_space_handle_t fd) {
-    close(fd);
+close(fd);
 }
 
 // kVirtioGpuAddressSpaceContextCreateWithSubdevice | subdeviceType
@@ -724,8 +680,8 @@ bool virtgpu_address_space_allocate_hostmem(
     struct address_space_virtgpu_hostmem_info* hostmem_info_out) {
 
     struct drm_virtgpu_resource_create_blob drm_rc_blob = {};
-    drm_rc_blob.blob_mem = VIRTGPU_BLOB_MEM_HOST3D;
-    drm_rc_blob.blob_flags = VIRTGPU_BLOB_FLAG_USE_MAPPABLE;
+    drm_rc_blob.blob_mem = VIRTGPU_BLOB_MEM_HOST;
+    drm_rc_blob.blob_flags = VIRTGPU_BLOB_FLAG_MAPPABLE;
     drm_rc_blob.blob_id = hostmem_id;
     drm_rc_blob.size = size;
 
@@ -751,7 +707,7 @@ bool virtgpu_address_space_allocate_hostmem(
 
     void* directMappedAddr = mmap64(0, size, PROT_WRITE, MAP_SHARED, fd, map.offset);
 
-    if (directMappedAddr == MAP_FAILED) {
+    if (!directMappedAddr) {
         ALOGE("%s: mmap of virtio gpu resource failed\n", __func__);
         abort();
     }

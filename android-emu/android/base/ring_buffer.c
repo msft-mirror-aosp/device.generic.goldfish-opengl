@@ -405,7 +405,7 @@ long ring_buffer_view_read(
     return (long)steps;
 }
 
-void ring_buffer_yield(void) { }
+void ring_buffer_yield() { }
 
 bool ring_buffer_wait_write(
     const struct ring_buffer* r,

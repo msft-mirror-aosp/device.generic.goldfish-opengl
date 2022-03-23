@@ -745,7 +745,6 @@ private:
     static int compareTexId(const void* pid, const void* prec);
     TextureRec* addTextureRec(GLuint id, GLenum target);
     TextureRec* getTextureRec(GLuint id) const;
-    TextureRec* getTextureRecLocked(GLuint id) const;
 
 public:
     bool isTexture(GLuint name) const;

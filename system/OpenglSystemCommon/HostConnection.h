@@ -35,7 +35,7 @@ struct goldfish_dma_context;
 #endif
 
 #include <memory>
-#include <cstring>
+#include <string>
 
 class GLEncoder;
 struct gl_client_context_t;
@@ -77,9 +77,6 @@ public:
     }
     bool hasSyncBufferData() const {
         return m_featureInfo.hasSyncBufferData; }
-    bool hasHWCMultiConfigs() const {
-        return m_featureInfo.hasHWCMultiConfigs;
-    }
     DmaImpl getDmaVersion() const { return m_featureInfo.dmaImpl; }
     void bindDmaContext(struct goldfish_dma_context* cxt) { m_dmaCxt = cxt; }
     void bindDmaDirectly(void* dmaPtr, uint64_t dmaPhysAddr) {
@@ -139,7 +136,7 @@ private:
 class Gralloc {
 public:
     virtual uint32_t createColorBuffer(
-        ExtendedRCEncoderContext* rcEnc, int width, int height, uint32_t glformat) = 0;
+        ExtendedRCEncoderContext* rcEnc, int width, int height, uint32_t glformat);
     virtual uint32_t getHostHandle(native_handle_t const* handle) = 0;
     virtual int getFormat(native_handle_t const* handle) = 0;
     virtual size_t getAllocatedSize(native_handle_t const* handle) = 0;
@@ -149,42 +146,39 @@ public:
 // Abstraction for process pipe helper
 class ProcessPipe {
 public:
-    virtual bool processPipeInit(int stream_handle, HostConnectionType connType, renderControl_encoder_context_t *rcEnc) = 0;
+    virtual bool processPipeInit(HostConnectionType connType, renderControl_encoder_context_t *rcEnc) = 0;
     virtual ~ProcessPipe() {}
 };
 
 struct EGLThreadInfo;
 
-// Rutabaga capsets.
-#define VIRTIO_GPU_CAPSET_NONE 0
-#define VIRTIO_GPU_CAPSET_VIRGL 1
-#define VIRTIO_GPU_CAPSET_VIRGL2 2
-#define VIRTIO_GPU_CAPSET_GFXSTREAM 3
-#define VIRTIO_GPU_CAPSET_VENUS 4
-#define VIRTIO_GPU_CAPSET_CROSS_DOMAIN 5
 
 class HostConnection
 {
 public:
     static HostConnection *get();
-    static HostConnection *getOrCreate(uint32_t capset_id);
-
-    static HostConnection *getWithThreadInfo(EGLThreadInfo* tInfo,
-                                             uint32_t capset_id = VIRTIO_GPU_CAPSET_NONE);
+    static HostConnection *getWithThreadInfo(EGLThreadInfo* tInfo);
     static void exit();
     static void exitUnclean(); // for testing purposes
 
-    static std::unique_ptr<HostConnection> createUnique(uint32_t capset_id = VIRTIO_GPU_CAPSET_NONE);
+    static std::unique_ptr<HostConnection> createUnique();
     HostConnection(const HostConnection&) = delete;
 
     ~HostConnection();
+
+    HostConnectionType connectionType() const {
+        return m_connectionType;
+    }
 
     GLEncoder *glEncoder();
     GL2Encoder *gl2Encoder();
     goldfish_vk::VkEncoder *vkEncoder();
     ExtendedRCEncoderContext *rcEncoder();
 
-    int getRendernodeFd() { return m_rendernodeFd; }
+    // Returns rendernode fd, in case the stream is virtio-gpu based.
+    // Otherwise, attempts to create a rendernode fd assuming
+    // virtio-gpu is available.
+    int getOrCreateRendernodeFd();
 
     ChecksumCalculator *checksumHelper() { return &m_checksumHelper; }
     Gralloc *grallocHelper() { return m_grallocHelper; }
@@ -216,7 +210,7 @@ public:
 private:
     // If the connection failed, |conn| is deleted.
     // Returns NULL if connection failed.
-    static std::unique_ptr<HostConnection> connect(uint32_t capset_id);
+    static std::unique_ptr<HostConnection> connect();
 
     HostConnection();
     static gl_client_context_t  *s_getGLContext();
@@ -250,9 +244,7 @@ private:
     void queryAndSetVulkanQueueSubmitWithCommandsSupport(ExtendedRCEncoderContext *rcEnc);
     void queryAndSetVulkanBatchedDescriptorSetUpdateSupport(ExtendedRCEncoderContext *rcEnc);
     void queryAndSetSyncBufferData(ExtendedRCEncoderContext *rcEnc);
-    void queryAndSetVulkanAsyncQsri(ExtendedRCEncoderContext *rcEnc);
     void queryAndSetReadColorBufferDma(ExtendedRCEncoderContext *rcEnc);
-    void queryAndSetHWCMultiConfigs(ExtendedRCEncoderContext* rcEnc);
     GLint queryVersion(ExtendedRCEncoderContext* rcEnc);
 
 private:
@@ -281,6 +273,7 @@ private:
     mutable android::Mutex m_lock;
 #endif
     int m_rendernodeFd;
+    bool m_rendernodeFdOwned;
 };
 
 #endif

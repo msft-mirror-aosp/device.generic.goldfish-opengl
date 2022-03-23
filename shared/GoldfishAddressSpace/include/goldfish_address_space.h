@@ -19,7 +19,7 @@
 #include <stddef.h>
 
 #ifdef __Fuchsia__
-#include <fidl/fuchsia.hardware.goldfish/cpp/wire.h>
+#include <fuchsia/hardware/goldfish/llcpp/fidl.h>
 #endif
 
 class GoldfishAddressSpaceBlock;
@@ -67,9 +67,11 @@ private:
     static void closeHandle(address_space_handle_t handle);
 
 #ifdef __Fuchsia__
-    ::fidl::WireSyncClient<fuchsia_hardware_goldfish::AddressSpaceDevice>
+    std::unique_ptr<
+        ::fidl::WireSyncClient<fuchsia_hardware_goldfish::AddressSpaceDevice>>
         m_device;
-    ::fidl::WireSyncClient<fuchsia_hardware_goldfish::AddressSpaceChildDriver>
+    std::unique_ptr<
+        ::fidl::WireSyncClient<fuchsia_hardware_goldfish::AddressSpaceChildDriver>>
         m_child_driver;
 #else // __Fuchsia__
     address_space_handle_t m_handle;
@@ -185,7 +187,6 @@ struct address_space_virtgpu_info {
     void* resp_mapped_ptr;
 };
 
-address_space_handle_t open_virtgpu(uint32_t capset_id);
 address_space_handle_t virtgpu_address_space_open();
 void virtgpu_address_space_close(address_space_handle_t);
 

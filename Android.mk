@@ -29,9 +29,10 @@ GOLDFISH_OPENGL_LIB_SUFFIX :=
 # See the definition of emugl-begin-module in common.mk
 EMUGL_COMMON_INCLUDES := $(GOLDFISH_OPENGL_PATH)/host/include/libOpenglRender $(GOLDFISH_OPENGL_PATH)/system/include
 
+# common cflags used by several modules
 # This is always set to a module's LOCAL_CFLAGS
 # See the definition of emugl-begin-module in common.mk
-EMUGL_COMMON_CFLAGS :=
+EMUGL_COMMON_CFLAGS := -DWITH_GLES2
 
 # Whether or not to build the Vulkan library.
 GFXSTREAM := false
@@ -56,6 +57,7 @@ EMUGL_COMMON_INCLUDES += $(HOST_EMUGL_PATH)/guest
 EMUGL_COMMON_CFLAGS += \
     -DPLATFORM_SDK_VERSION=29 \
     -DGOLDFISH_HIDL_GRALLOC \
+    -DEMULATOR_OPENGL_POST_O=1 \
     -DHOST_BUILD \
     -DANDROID \
     -DGL_GLEXT_PROTOTYPES \
@@ -78,6 +80,10 @@ endif
 
 ifeq ($(shell test $(PLATFORM_SDK_VERSION) -gt 25 && echo isApi26OrHigher),isApi26OrHigher)
 EMUGL_COMMON_CFLAGS += -DGOLDFISH_HIDL_GRALLOC
+endif
+
+ifdef IS_AT_LEAST_OPD1
+    EMUGL_COMMON_CFLAGS += -DEMULATOR_OPENGL_POST_O=1
 endif
 
 ifeq ($(shell test $(PLATFORM_SDK_VERSION) -lt 18 && echo PreJellyBeanMr2),PreJellyBeanMr2)
@@ -167,7 +173,6 @@ endif
 ifeq ($(shell test $(PLATFORM_SDK_VERSION) -gt 28 -o $(IS_AT_LEAST_QPR1) = true && echo isApi29OrHigher),isApi29OrHigher)
     # HWC2 enabled after P
     include $(GOLDFISH_OPENGL_PATH)/system/hwc2/Android.mk
-    include $(GOLDFISH_OPENGL_PATH)/system/hwc3/Android.mk
     # hardware codecs enabled after P
     include $(GOLDFISH_OPENGL_PATH)/system/codecs/omx/common/Android.mk
     include $(GOLDFISH_OPENGL_PATH)/system/codecs/omx/plugin/Android.mk

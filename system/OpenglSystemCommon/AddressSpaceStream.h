@@ -24,7 +24,7 @@
 class AddressSpaceStream;
 
 AddressSpaceStream* createAddressSpaceStream(size_t bufSize);
-AddressSpaceStream* createVirtioGpuAddressSpaceStream(size_t bufSize, uint32_t capset_id);
+AddressSpaceStream* createVirtioGpuAddressSpaceStream(size_t bufSize);
 
 class AddressSpaceStream : public IOStream {
 public:
@@ -100,8 +100,6 @@ private:
 
     uint64_t m_backoffIters;
     uint64_t m_backoffFactor;
-
-    size_t m_ringStorageSize;
 };
 
 #endif

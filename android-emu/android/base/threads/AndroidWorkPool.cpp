@@ -80,7 +80,7 @@ public:
 
     // broadcasts to all waiters that there has been a new job that has completed
     bool decrementBroadcast() {
-        AutoLock<Lock> lock(mLock);
+        AutoLock lock(mLock);
         bool done =
             (1 == mNumTasksRemaining.fetch_sub(1, std::memory_order_seq_cst));
         std::atomic_thread_fence(std::memory_order_acquire);
@@ -211,7 +211,7 @@ public:
     }
 
     bool acquire() {
-        AutoLock<Lock> lock(mLock);
+        AutoLock lock(mLock);
         switch (mState) {
             case State::Unacquired:
                 mState = State::Acquired;
@@ -224,7 +224,7 @@ public:
     }
 
     bool run(WorkPool::WaitGroupHandle waitGroupHandle, WaitGroup* waitGroup, WorkPool::Task task) {
-        AutoLock<Lock> lock(mLock);
+        AutoLock lock(mLock);
         switch (mState) {
             case State::Unacquired:
                 return false;
@@ -248,7 +248,7 @@ public:
     }
 
     bool shouldCleanupWaitGroup(WorkPool::WaitGroupHandle* waitGroupHandle, WaitGroup** waitGroup) {
-        AutoLock<Lock> lock(mLock);
+        AutoLock lock(mLock);
         bool res = mShouldCleanupWaitGroup;
         *waitGroupHandle = mToCleanupWaitGroupHandle;
         *waitGroup = mToCleanupWaitGroup;
@@ -269,7 +269,7 @@ private:
     };
 
     bool exit() {
-        AutoLock<Lock> lock(mLock);
+        AutoLock lock(mLock);
         TaskInfo msg { Command::Exit, };
         mRunMessages.send(msg);
         return true;
@@ -286,12 +286,12 @@ private:
                     doRun(taskInfo);
                     break;
                 case Command::Exit: {
-                    AutoLock<Lock> lock(mLock);
+                    AutoLock lock(mLock);
                     mState = State::Exiting;
                     break;
                 }
             }
-            AutoLock<Lock> lock(mLock);
+            AutoLock lock(mLock);
             done = mState == State::Exiting;
         }
     }
@@ -307,7 +307,7 @@ private:
         bool lastTask =
             waitGroup->decrementBroadcast();
 
-        AutoLock<Lock> lock(mLock);
+        AutoLock lock(mLock);
         mState = State::Unacquired;
 
         if (lastTask) {
@@ -340,7 +340,7 @@ public:
 
         if (tasks.empty()) abort();
 
-        AutoLock<Lock> lock(mLock);
+        AutoLock lock(mLock);
 
         // Sweep old wait groups
         for (size_t i = 0; i < mThreads.size(); ++i) {
@@ -382,7 +382,7 @@ public:
     }
 
     bool waitAny(WorkPool::WaitGroupHandle waitGroupHandle, WorkPool::TimeoutUs timeout) {
-        AutoLock<Lock> lock(mLock);
+        AutoLock lock(mLock);
         auto it = mWaitGroups.find(waitGroupHandle);
         if (it == mWaitGroups.end()) return true;
 
@@ -393,7 +393,7 @@ public:
         bool waitRes = false;
 
         {
-            AutoLock<Lock> waitGroupLock(waitGroup->getLock());
+            AutoLock waitGroupLock(waitGroup->getLock());
             waitRes = waitGroup->waitAnyLocked(timeout);
         }
 
@@ -409,7 +409,7 @@ public:
         bool waitRes = false;
 
         {
-            AutoLock<Lock> waitGroupLock(waitGroup->getLock());
+            AutoLock waitGroupLock(waitGroup->getLock());
             waitRes = waitGroup->waitAllLocked(timeout);
         }
 
@@ -421,7 +421,7 @@ public:
 private:
     // Increments wait group refcount by 1.
     WaitGroup* acquireWaitGroupFromHandle(WorkPool::WaitGroupHandle waitGroupHandle) {
-        AutoLock<Lock> lock(mLock);
+        AutoLock lock(mLock);
         auto it = mWaitGroups.find(waitGroupHandle);
         if (it == mWaitGroups.end()) return nullptr;
 

@@ -79,7 +79,6 @@ bool isEtc2Format(GLenum internalformat);
 bool isAstcFormat(GLenum internalformat);
 bool isBptcFormat(GLenum internalformat);
 bool isS3tcFormat(GLenum internalformat);
-bool isRgtcFormat(GLenum internalformat);
 
 } // namespace GLESTextureUtils
 #endif

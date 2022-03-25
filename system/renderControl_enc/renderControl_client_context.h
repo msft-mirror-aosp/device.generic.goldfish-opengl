@@ -75,13 +75,16 @@ struct renderControl_client_context_t {
 	rcCreateDisplayById_client_proc_t rcCreateDisplayById;
 	rcSetDisplayPoseDpi_client_proc_t rcSetDisplayPoseDpi;
 	rcReadColorBufferDMA_client_proc_t rcReadColorBufferDMA;
+	rcGetFBDisplayConfigsCount_client_proc_t rcGetFBDisplayConfigsCount;
+	rcGetFBDisplayConfigsParam_client_proc_t rcGetFBDisplayConfigsParam;
+	rcGetFBDisplayActiveConfig_client_proc_t rcGetFBDisplayActiveConfig;
 	virtual ~renderControl_client_context_t() {}
 
 	typedef renderControl_client_context_t *CONTEXT_ACCESSOR_TYPE(void);
 	static void setContextAccessor(CONTEXT_ACCESSOR_TYPE *f);
 	int initDispatchByName( void *(*getProc)(const char *name, void *userData), void *userData);
-	virtual void setError(unsigned int  error){ (void)error; };
-	virtual unsigned int getError(){ return 0; };
+	virtual void setError(unsigned int  error){ (void)error; }
+	virtual unsigned int getError(){ return 0; }
 };
 
 #endif

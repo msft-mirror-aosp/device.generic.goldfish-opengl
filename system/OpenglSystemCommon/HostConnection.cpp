@@ -421,6 +421,42 @@ HostConnection::~HostConnection()
     }
 }
 
+#if defined(VIRTIO_GPU) && !defined(HOST_BUILD)
+int virtgpuOpen(uint32_t capset_id) {
+    int fd = drmOpenRender(128);
+    if (fd < 0) {
+        ALOGE("Failed to open rendernode: %s", strerror(errno));
+        return fd;
+    }
+
+    if (capset_id) {
+        int ret;
+        struct drm_virtgpu_context_init init = {0};
+        struct drm_virtgpu_context_set_param ctx_set_params[2] = {{0}};
+
+        ctx_set_params[0].param = VIRTGPU_CONTEXT_PARAM_NUM_RINGS;
+        ctx_set_params[0].value = 1;
+        init.num_params = 1;
+
+        // TODO(b/218538495): A KI in the 5.4 kernel will sometimes result in capsets not
+        // being properly queried.
+#if defined(__linux__) && !defined(__ANDROID__)
+        ctx_set_params[1].param = VIRTGPU_CONTEXT_PARAM_CAPSET_ID;
+        ctx_set_params[1].value = capset_id;
+        init.num_params++;
+#endif
+
+        init.ctx_set_params = (unsigned long long)&ctx_set_params[0];
+        ret = drmIoctl(fd, DRM_IOCTL_VIRTGPU_CONTEXT_INIT, &init);
+        if (ret) {
+            ALOGE("DRM_IOCTL_VIRTGPU_CONTEXT_INIT failed with %s, continuing without context...", strerror(errno));
+        }
+    }
+
+    return fd;
+}
+#endif
+
 // static
 std::unique_ptr<HostConnection> HostConnection::connect(uint32_t capset_id) {
     const enum HostConnectionType connType = getConnectionTypeFromProperty();
@@ -482,7 +518,7 @@ std::unique_ptr<HostConnection> HostConnection::connect(uint32_t capset_id) {
             break;
 #endif
         }
-#ifdef VIRTIO_GPU
+#if defined(VIRTIO_GPU) && !defined(HOST_BUILD)
         case HOST_CONNECTION_VIRTIO_GPU: {
             auto stream = new VirtioGpuStream(STREAM_BUFFER_SIZE);
             if (!stream) {
@@ -536,11 +572,17 @@ std::unique_ptr<HostConnection> HostConnection::connect(uint32_t capset_id) {
             con->m_processPipe = &m_goldfishProcessPipe;
             break;
         }
-#if !defined(HOST_BUILD) && !defined(__Fuchsia__)
         case HOST_CONNECTION_VIRTIO_GPU_ADDRESS_SPACE: {
-            auto stream = createVirtioGpuAddressSpaceStream(STREAM_BUFFER_SIZE, capset_id);
+            struct StreamCreate streamCreate = {0};
+            streamCreate.streamHandle = virtgpuOpen(capset_id);
+            if (streamCreate.streamHandle < 0) {
+                ALOGE("Failed to open virtgpu for ASG host connection\n");
+                return nullptr;
+            }
+
+            auto stream = createVirtioGpuAddressSpaceStream(streamCreate);
             if (!stream) {
-                ALOGE("Failed to create virtgpu AddressSpaceStream for host connection\n");
+                ALOGE("Failed to create virtgpu AddressSpaceStream\n");
                 return nullptr;
             }
             con->m_connectionType = HOST_CONNECTION_VIRTIO_GPU_ADDRESS_SPACE;
@@ -565,11 +607,9 @@ std::unique_ptr<HostConnection> HostConnection::connect(uint32_t capset_id) {
             con->m_processPipe = &m_goldfishProcessPipe;
             break;
         }
-#endif // !HOST_BUILD && !__Fuchsia__
-#else
+#endif // !VIRTIO_GPU && !HOST_BUILD_
         default:
             break;
-#endif
     }
 
     // send zero 'clientFlags' to the host.

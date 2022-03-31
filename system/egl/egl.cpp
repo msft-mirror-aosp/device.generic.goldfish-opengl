@@ -48,9 +48,11 @@
 #include <GLES3/gl31.h>
 
 #ifdef VIRTIO_GPU
-#include <drm/virtgpu_drm.h>
 #include <xf86drm.h>
 #include <poll.h>
+
+#include "virtgpu_drm.h"
+
 #endif // VIRTIO_GPU
 
 #ifdef GFXSTREAM
@@ -659,7 +661,7 @@ static uint64_t createNativeSync_virtioGpu(
 
         int queue_work_err =
             drmIoctl(
-                hostCon->getOrCreateRendernodeFd(),
+                hostCon->getRendernodeFd(),
                 DRM_IOCTL_VIRTGPU_EXECBUFFER, &createSyncExport);
 
         if (queue_work_err) {

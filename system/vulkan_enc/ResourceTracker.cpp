@@ -2580,18 +2580,20 @@ public:
         }
 
         // Get row alignment from host GPU.
-        VkDeviceSize offset;
-        VkDeviceSize rowPitchAlignment;
+        VkDeviceSize offset = 0;
+        VkDeviceSize rowPitchAlignment = 1u;
 
-        VkImageCreateInfo createInfoDup = *createInfo;
-        createInfoDup.pNext = nullptr;
-        enc->vkGetLinearImageLayout2GOOGLE(device, &createInfoDup, &offset,
-                                           &rowPitchAlignment,
-                                           true /* do lock */);
-        ALOGD(
-            "vkGetLinearImageLayout2GOOGLE: format %d offset %lu "
-            "rowPitchAlignment = %lu",
-            (int)createInfo->format, offset, rowPitchAlignment);
+        if (tiling == VK_IMAGE_TILING_LINEAR) {
+            VkImageCreateInfo createInfoDup = *createInfo;
+            createInfoDup.pNext = nullptr;
+            enc->vkGetLinearImageLayout2GOOGLE(device, &createInfoDup, &offset,
+                                            &rowPitchAlignment,
+                                            true /* do lock */);
+            ALOGD(
+                "vkGetLinearImageLayout2GOOGLE: format %d offset %lu "
+                "rowPitchAlignment = %lu",
+                (int)createInfo->format, offset, rowPitchAlignment);
+        }
 
         imageConstraints.min_coded_width = createInfo->extent.width;
         imageConstraints.max_coded_width = 0xfffffff;
@@ -5167,7 +5169,6 @@ public:
         const VkSamplerCreateInfo* pCreateInfo,
         const VkAllocationCallbacks* pAllocator,
         VkSampler* pSampler) {
-
         VkSamplerCreateInfo localCreateInfo = vk_make_orphan_copy(*pCreateInfo);
         vk_struct_chain_iterator structChainIter = vk_make_chain_iterator(&localCreateInfo);
 
@@ -5180,6 +5181,15 @@ public:
                 localVkSamplerYcbcrConversionInfo = vk_make_orphan_copy(*samplerYcbcrConversionInfo);
                 vk_append_struct(&structChainIter, &localVkSamplerYcbcrConversionInfo);
             }
+        }
+
+        VkSamplerCustomBorderColorCreateInfoEXT localVkSamplerCustomBorderColorCreateInfo;
+        const VkSamplerCustomBorderColorCreateInfoEXT* samplerCustomBorderColorCreateInfo =
+            vk_find_struct<VkSamplerCustomBorderColorCreateInfoEXT>(pCreateInfo);
+        if (samplerCustomBorderColorCreateInfo) {
+            localVkSamplerCustomBorderColorCreateInfo =
+                vk_make_orphan_copy(*samplerCustomBorderColorCreateInfo);
+            vk_append_struct(&structChainIter, &localVkSamplerCustomBorderColorCreateInfo);
         }
 #endif
 

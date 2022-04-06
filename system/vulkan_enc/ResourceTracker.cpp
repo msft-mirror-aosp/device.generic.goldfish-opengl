@@ -937,17 +937,6 @@ public:
         info.createInfo = *pCreateInfo;
     }
 
-    bool isMemoryTypeHostVisible(VkDevice device, uint32_t typeIndex) const {
-        AutoLock<RecursiveLock> lock(mLock);
-        const auto it = info_VkDevice.find(device);
-
-        if (it == info_VkDevice.end()) return false;
-
-        const auto& info = it->second;
-        return info.memProps.memoryTypes[typeIndex].propertyFlags &
-               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-    }
-
     uint8_t* getMappedPointer(VkDeviceMemory memory) {
         AutoLock<RecursiveLock> lock(mLock);
         const auto it = info_VkDeviceMemory.find(memory);
@@ -1493,6 +1482,14 @@ public:
                 VkExtensionProperties { "VK_FUCHSIA_buffer_collection", 1 });
             filteredExts.push_back(
                 VkExtensionProperties { "VK_FUCHSIA_buffer_collection_x", 1});
+#endif
+#if !defined(VK_USE_PLATFORM_ANDROID_KHR) && defined(__linux__)
+            filteredExts.push_back(
+                VkExtensionProperties {
+                   "VK_KHR_external_memory_fd", 1
+                });
+            filteredExts.push_back(
+                VkExtensionProperties { "VK_EXT_external_memory_dma_buf", 1 });
 #endif
         }
 
@@ -2583,18 +2580,20 @@ public:
         }
 
         // Get row alignment from host GPU.
-        VkDeviceSize offset;
-        VkDeviceSize rowPitchAlignment;
+        VkDeviceSize offset = 0;
+        VkDeviceSize rowPitchAlignment = 1u;
 
-        VkImageCreateInfo createInfoDup = *createInfo;
-        createInfoDup.pNext = nullptr;
-        enc->vkGetLinearImageLayout2GOOGLE(device, &createInfoDup, &offset,
-                                           &rowPitchAlignment,
-                                           true /* do lock */);
-        ALOGD(
-            "vkGetLinearImageLayout2GOOGLE: format %d offset %lu "
-            "rowPitchAlignment = %lu",
-            (int)createInfo->format, offset, rowPitchAlignment);
+        if (tiling == VK_IMAGE_TILING_LINEAR) {
+            VkImageCreateInfo createInfoDup = *createInfo;
+            createInfoDup.pNext = nullptr;
+            enc->vkGetLinearImageLayout2GOOGLE(device, &createInfoDup, &offset,
+                                            &rowPitchAlignment,
+                                            true /* do lock */);
+            ALOGD(
+                "vkGetLinearImageLayout2GOOGLE: format %d offset %lu "
+                "rowPitchAlignment = %lu",
+                (int)createInfo->format, offset, rowPitchAlignment);
+        }
 
         imageConstraints.min_coded_width = createInfo->extent.width;
         imageConstraints.max_coded_width = 0xfffffff;
@@ -5170,7 +5169,6 @@ public:
         const VkSamplerCreateInfo* pCreateInfo,
         const VkAllocationCallbacks* pAllocator,
         VkSampler* pSampler) {
-
         VkSamplerCreateInfo localCreateInfo = vk_make_orphan_copy(*pCreateInfo);
         vk_struct_chain_iterator structChainIter = vk_make_chain_iterator(&localCreateInfo);
 
@@ -5183,6 +5181,15 @@ public:
                 localVkSamplerYcbcrConversionInfo = vk_make_orphan_copy(*samplerYcbcrConversionInfo);
                 vk_append_struct(&structChainIter, &localVkSamplerYcbcrConversionInfo);
             }
+        }
+
+        VkSamplerCustomBorderColorCreateInfoEXT localVkSamplerCustomBorderColorCreateInfo;
+        const VkSamplerCustomBorderColorCreateInfoEXT* samplerCustomBorderColorCreateInfo =
+            vk_find_struct<VkSamplerCustomBorderColorCreateInfoEXT>(pCreateInfo);
+        if (samplerCustomBorderColorCreateInfo) {
+            localVkSamplerCustomBorderColorCreateInfo =
+                vk_make_orphan_copy(*samplerCustomBorderColorCreateInfo);
+            vk_append_struct(&structChainIter, &localVkSamplerCustomBorderColorCreateInfo);
         }
 #endif
 
@@ -7950,11 +7957,6 @@ ResourceTracker* ResourceTracker::get() {
     } \
 
 GOLDFISH_VK_LIST_HANDLE_TYPES(HANDLE_REGISTER_IMPL)
-
-bool ResourceTracker::isMemoryTypeHostVisible(
-    VkDevice device, uint32_t typeIndex) const {
-    return mImpl->isMemoryTypeHostVisible(device, typeIndex);
-}
 
 uint8_t* ResourceTracker::getMappedPointer(VkDeviceMemory memory) {
     return mImpl->getMappedPointer(memory);

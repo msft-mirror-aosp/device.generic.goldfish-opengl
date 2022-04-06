@@ -55,7 +55,7 @@ using ::android::hardware::graphics::common::V1_2::PixelFormat;
 namespace android {
 
 namespace {
-constexpr size_t kMinInputBufferSize = 2 * 1024 * 1024;
+constexpr size_t kMinInputBufferSize = 6 * 1024 * 1024;
 constexpr char COMPONENT_NAME[] = "c2.goldfish.h264.decoder";
 constexpr uint32_t kDefaultOutputDelay = 8;
 /* avc specification allows for a maximum delay of 16 frames.
@@ -643,7 +643,7 @@ C2GoldfishAvcDec::ensureDecoderState(const std::shared_ptr<C2BlockPool> &pool) {
         uint32_t format = HAL_PIXEL_FORMAT_YCBCR_420_888;
         C2MemoryUsage usage = {C2MemoryUsage::CPU_READ,
                                C2MemoryUsage::CPU_WRITE};
-        usage.expected = (uint64_t)(BufferUsage::GPU_DATA_BUFFER);
+        usage.expected = (uint64_t)(BufferUsage::VIDEO_DECODER);
         // C2MemoryUsage usage = {(unsigned
         // int)(BufferUsage::GPU_DATA_BUFFER)};// { C2MemoryUsage::CPU_READ,
         // C2MemoryUsage::CPU_WRITE };
@@ -676,7 +676,7 @@ void C2GoldfishAvcDec::checkMode(const std::shared_ptr<C2BlockPool> &pool) {
         std::shared_ptr<C2GraphicBlock> block;
         C2MemoryUsage usage = {C2MemoryUsage::CPU_READ,
                                C2MemoryUsage::CPU_WRITE};
-        usage.expected = (uint64_t)(BufferUsage::GPU_DATA_BUFFER);
+        usage.expected = (uint64_t)(BufferUsage::VIDEO_DECODER);
 
         c2_status_t err = pool->fetchGraphicBlock(align(mWidth, 16), mHeight,
                                                   format, usage, &block);

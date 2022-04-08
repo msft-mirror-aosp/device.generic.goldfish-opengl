@@ -7,7 +7,7 @@ $(call emugl-import,libGoldfishAddressSpace$(GOLDFISH_OPENGL_LIB_SUFFIX))
 $(call emugl-import,libqemupipe$(GOLDFISH_OPENGL_LIB_SUFFIX))
 $(call emugl-import,libgralloc_cb$(GOLDFISH_OPENGL_LIB_SUFFIX))
 else
-$(call emugl-export,STATIC_LIBRARIES,libGoldfishAddressSpace libringbuffer)
+$(call emugl-export,STATIC_LIBRARIES,libGoldfishAddressSpace)
 $(call emugl-export,STATIC_LIBRARIES,libqemupipe.ranchu)
 $(call emugl-export,HEADER_LIBRARIES,libgralloc_cb.ranchu)
 endif
@@ -17,22 +17,24 @@ LOCAL_SRC_FILES := \
     HostConnection.cpp \
     QemuPipeStream.cpp \
     ProcessPipe.cpp    \
-    ThreadInfo.cpp \
 
-ifeq (true,$(GFXSTREAM))
+ifeq (true,$(BUILD_EMULATOR_VULKAN))
 $(call emugl-import,libvulkan_enc)
 
 LOCAL_SRC_FILES += AddressSpaceStream.cpp
 
 endif
 
-LOCAL_CFLAGS += -Wno-unused-variable -Wno-unused-parameter -fno-emulated-tls
+LOCAL_CFLAGS += -Wno-unused-variable -Wno-unused-parameter
 
 ifeq (true,$(GOLDFISH_OPENGL_BUILD_FOR_HOST))
 
+LOCAL_SRC_FILES += \
+    ThreadInfo_host.cpp \
+
 else
 
-ifeq (true,$(GFXSTREAM))
+ifeq (true,$(BUILD_EMULATOR_VULKAN))
 
 LOCAL_HEADER_LIBRARIES += vulkan_headers
 
@@ -45,6 +47,9 @@ LOCAL_C_INCLUDES += external/libdrm external/minigbm/cros_gralloc
 LOCAL_SHARED_LIBRARIES += libdrm
 
 endif
+
+LOCAL_SRC_FILES += \
+    ThreadInfo.cpp \
 
 endif
 

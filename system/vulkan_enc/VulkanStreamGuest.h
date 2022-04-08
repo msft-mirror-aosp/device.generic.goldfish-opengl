@@ -20,17 +20,7 @@
 
 #include "VulkanHandleMapping.h"
 
-#include "IOStream.h"
-#include "ResourceTracker.h"
-
-#include "android/base/BumpPool.h"
-#include "android/base/Tracing.h"
-
-#include <vector>
 #include <memory>
-
-#include <log/log.h>
-#include <inttypes.h>
 
 class IOStream;
 
@@ -52,14 +42,8 @@ public:
     void loadStringInPlace(char** forOutput);
     void loadStringArrayInPlace(char*** forOutput);
 
-    // When we load a string and are using a reserved pointer.
-    void loadStringInPlaceWithStreamPtr(char** forOutput, uint8_t** streamPtr);
-    void loadStringArrayInPlaceWithStreamPtr(char*** forOutput, uint8_t** streamPtr);
-
     ssize_t read(void *buffer, size_t size) override;
     ssize_t write(const void *buffer, size_t size) override;
-    
-    void writeLarge(const void* buffer, size_t size);
 
     // Frees everything that got alloc'ed.
     void clearPool();
@@ -72,17 +56,9 @@ public:
 
     uint32_t getFeatureBits() const;
 
-    void incStreamRef();
-    bool decStreamRef();
-
-    uint8_t* reserve(size_t size);
 private:
-    android::base::BumpPool mPool;
-    std::vector<uint8_t> mWriteBuffer;
-    IOStream* mStream = nullptr;
-    DefaultHandleMapping mDefaultHandleMapping;
-    VulkanHandleMapping* mCurrentHandleMapping;
-    uint32_t mFeatureBits = 0;
+    class Impl;
+    std::unique_ptr<Impl> mImpl;
 };
 
 class VulkanCountingStream : public VulkanStreamGuest {

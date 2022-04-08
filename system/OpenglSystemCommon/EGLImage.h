@@ -36,8 +36,6 @@ struct EGLImage_t
 {
     EGLDisplay dpy;
     EGLenum target;
-    int width;
-    int height;
 
     union
     {

@@ -19,9 +19,6 @@
 #include "GLClientState.h"
 #include "GLSharedGroup.h"
 
-#include <string>
-#include <vector>
-
 struct EGLContext_t {
 
     enum {
@@ -47,7 +44,6 @@ struct EGLContext_t {
     const char*         rendererString;
     const char*         shaderVersionString;
     const char*         extensionString;
-    std::vector<std::string> extensionStringArray;
     EGLint              deletePending;
     GLClientState * getClientState(){ return clientState; }
     GLSharedGroupPtr getSharedGroup(){ return sharedGroup; }

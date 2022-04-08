@@ -25,12 +25,6 @@
 
 #include <set>
 
-#ifdef ANDROID
-#include <unistd.h>
-#include <errno.h>
-#endif
-#include <sys/mman.h>
-
 using android::base::guest::SubAllocator;
 
 namespace goldfish_vk {
@@ -264,28 +258,10 @@ void destroyHostMemAlloc(
     if (toDestroy->initResult != VK_SUCCESS) return;
     if (!toDestroy->initialized) return;
 
-#ifdef ANDROID
-    if (toDestroy->fd > 0) {
-
-        if (toDestroy->memoryAddr) {
-            int ret = munmap((void*)toDestroy->memoryAddr, toDestroy->memorySize);
-            ALOGE("%s: trying to unmap addr = 0x%" PRIx64", size = %d, ret = %d, errno = %d\n", __func__, toDestroy->memoryAddr, (int32_t)toDestroy->memorySize, ret, errno);
-        }
-
-        ALOGE("%s: trying to close fd = %d\n", __func__, toDestroy->fd);
-        int ret = close(toDestroy->fd);
-        if (ret != 0) {
-            ALOGE("%s: fail to close fd = %d, ret = %d, errno = %d\n", __func__, toDestroy->fd, ret, errno);
-        } else {
-            ALOGE("%s: successfully close fd = %d, ret = %d\n", __func__, toDestroy->fd, ret);
-        }
-    }
-#endif
-
     if (freeMemorySyncSupported) {
-        enc->vkFreeMemorySyncGOOGLE(device, toDestroy->memory, nullptr, false /* no lock */);
+        enc->vkFreeMemorySyncGOOGLE(device, toDestroy->memory, nullptr);
     } else {
-        enc->vkFreeMemory(device, toDestroy->memory, nullptr, false /* no lock */);
+        enc->vkFreeMemory(device, toDestroy->memory, nullptr);
     }
 
     delete toDestroy->subAlloc;
@@ -318,19 +294,12 @@ void subAllocHostMemory(
 
     out->subMemory = new_from_host_VkDeviceMemory(VK_NULL_HANDLE);
     out->subAlloc = alloc->subAlloc;
-    out->isDeviceAddressMemoryAllocation = alloc->isDeviceAddressMemoryAllocation;
-    out->memoryTypeIndex = alloc->memoryTypeIndex;
 }
 
-bool subFreeHostMemory(SubAlloc* toFree) {
+void subFreeHostMemory(SubAlloc* toFree) {
     delete_goldfish_VkDeviceMemory(toFree->subMemory);
     toFree->subAlloc->free(toFree->mappedPtr);
-    bool nowEmpty = toFree->subAlloc->empty();
-    if (nowEmpty) {
-        ALOGV("%s: We have an empty suballoc, time to free the block perhaps?\n", __func__);
-    }
     memset(toFree, 0x0, sizeof(SubAlloc));
-    return nowEmpty;
 }
 
 bool canSubAlloc(android::base::guest::SubAllocator* subAlloc, VkDeviceSize size) {

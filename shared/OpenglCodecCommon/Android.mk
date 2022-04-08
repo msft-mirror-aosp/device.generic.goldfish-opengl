@@ -13,7 +13,6 @@ commonSources := \
         SocketStream.cpp \
         TcpStream.cpp \
         auto_goldfish_dma_context.cpp \
-        etc.cpp \
 
 ifeq (true,$(GOLDFISH_OPENGL_BUILD_FOR_HOST))
 
@@ -41,16 +40,10 @@ LOCAL_SRC_FILES := $(commonSources)
 LOCAL_CFLAGS += -DLOG_TAG=\"eglCodecCommon\"
 LOCAL_CFLAGS += -Wno-unused-private-field
 
+$(call emugl-export,SHARED_LIBRARIES,libcutils libutils liblog)
 
 ifeq (true,$(GOLDFISH_OPENGL_BUILD_FOR_HOST))
-$(call emugl-import,libandroidemu)
-$(call emugl-export,SHARED_LIBRARIES,libcutils libutils liblog)
-else
-ifeq (true,$(GFXSTREAM))
-$(call emugl-export,SHARED_LIBRARIES,libcutils libutils liblog libandroidemu)
-else
-$(call emugl-export,SHARED_LIBRARIES,libcutils libutils liblog)
-endif
+$(call emugl-export,SHARED_LIBRARIES,android-emu-shared)
 endif
 
 $(call emugl-export,C_INCLUDES,$(LOCAL_PATH))

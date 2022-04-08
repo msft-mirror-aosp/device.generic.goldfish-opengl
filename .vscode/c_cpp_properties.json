@@ -10,7 +10,7 @@
             ],
             "defines": [
                 "HOST_BUILD",
-                "GFXSTREAM"
+                "GOLDFISH_VULKAN"
             ],
             "macFrameworkPath": [
                 "/System/Library/Frameworks",

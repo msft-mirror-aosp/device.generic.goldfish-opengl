@@ -13,12 +13,10 @@
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-
 #include "ThreadInfo.h"
+#include "cutils/threads.h"
 
-#include <pthread.h>
-
-static pthread_key_t s_tls;
+thread_store_t s_tls = THREAD_STORE_INITIALIZER;
 
 static void tlsDestruct(void *ptr)
 {
@@ -29,16 +27,13 @@ static void tlsDestruct(void *ptr)
     }
 }
 
-static void init_key()
-{
-    pthread_key_create(&s_tls, tlsDestruct);
-    pthread_setspecific(s_tls, new EGLThreadInfo);
-}
-
 EGLThreadInfo *getEGLThreadInfo()
 {
-    static pthread_once_t once = PTHREAD_ONCE_INIT;
-    pthread_once(&once, init_key);
+    EGLThreadInfo *ti = (EGLThreadInfo *)thread_store_get(&s_tls);
+    if (ti) return ti;
 
-    return (EGLThreadInfo *) pthread_getspecific(s_tls);
+    ti = new EGLThreadInfo();
+    thread_store_set(&s_tls, ti, tlsDestruct);
+
+    return ti;
 }

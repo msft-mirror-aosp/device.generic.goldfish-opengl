@@ -37,22 +37,16 @@ namespace android {
 namespace base {
 namespace guest {
 
-template <class Lockable>
 class AutoLock;
-
 class AutoWriteLock;
 class AutoReadLock;
 
 // A wrapper class for mutexes only suitable for using in static context,
-// where it's OK to leak the underlying system object.
-// Use Lock / RecursiveLock for scoped or member locks.
-template <bool IsRecursive>
-class StaticLock;
-
-template <>
-class StaticLock<false> {
+// where it's OK to leak the underlying system object. Use Lock for scoped or
+// member locks.
+class StaticLock {
 public:
-    using AutoLock = android::base::guest::AutoLock<StaticLock>;
+    using AutoLock = android::base::guest::AutoLock;
 
     constexpr StaticLock() = default;
 
@@ -106,72 +100,8 @@ protected:
     AEMU_IF_DEBUG(bool mIsLocked = false;)
 };
 
-template <>
-class StaticLock<true> {
-public:
-    using AutoLock = android::base::guest::AutoLock<StaticLock>;
-
-    StaticLock() {
-#ifdef _WIN32
-        ::InitializeCriticalSectionAndSpinCount(&mLock, 0x400);
-#else
-        pthread_mutexattr_t attr;
-        pthread_mutexattr_init(&attr);
-        pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-        pthread_mutex_init(&mLock, &attr);
-#endif
-    }
-
-    // Acquire the lock.
-    void lock() {
-#ifdef _WIN32
-        ::EnterCriticalSection(&mLock);
-#else
-        ::pthread_mutex_lock(&mLock);
-#endif
-        AEMU_IF_DEBUG(mIsLocked = true;)
-    }
-
-    bool tryLock() {
-        bool ret = false;
-#ifdef _WIN32
-        ret = ::TryEnterCriticalSection(&mLock);
-#else
-        ret = ::pthread_mutex_trylock(&mLock) == 0;
-#endif
-        AEMU_IF_DEBUG(mIsLocked = ret;)
-        return ret;
-    }
-
-    AEMU_IF_DEBUG(bool isLocked() const { return mIsLocked; })
-
-    // Release the lock.
-    void unlock() {
-        AEMU_IF_DEBUG(mIsLocked = false;)
-#ifdef _WIN32
-        ::LeaveCriticalSection(&mLock);
-#else
-        ::pthread_mutex_unlock(&mLock);
-#endif
-    }
-
-protected:
-    friend class ConditionVariable;
-
-#ifdef _WIN32
-    // We use CRITICAL_SECTION since it always allow recursive access.
-    CRITICAL_SECTION mLock;
-#else
-    pthread_mutex_t mLock = PTHREAD_MUTEX_INITIALIZER;
-#endif
-    // Both POSIX threads and WinAPI don't allow move (undefined behavior).
-    DISALLOW_COPY_ASSIGN_AND_MOVE(StaticLock);
-
-    AEMU_IF_DEBUG(bool mIsLocked = false;)
-};
-
 // Simple wrapper class for mutexes used in non-static context.
-class Lock : public StaticLock<false> {
+class Lock : public StaticLock {
 public:
     using StaticLock::AutoLock;
 
@@ -181,22 +111,6 @@ public:
     // for its mutexes.
     ~Lock() { ::pthread_mutex_destroy(&mLock); }
 #endif
-};
-
-// Simple wrapper class for mutexes used in non-static context.
-class RecursiveLock : public StaticLock<true> {
-public:
-    using StaticLock::AutoLock;
-
-    RecursiveLock() = default;
-
-    ~RecursiveLock() {
-#ifdef _WIN32
-        ::DeleteCriticalSection(&mLock);
-#else
-        ::pthread_mutex_destroy(&mLock);
-#endif
-    }
 };
 
 class ReadWriteLock {
@@ -233,12 +147,11 @@ private:
 // Helper class to lock / unlock a mutex automatically on scope
 // entry and exit.
 // NB: not thread-safe (as opposed to the Lock class)
-template <class Lockable>
 class AutoLock {
 public:
-    AutoLock(Lockable& lock) : mLock(lock) { mLock.lock(); }
+    AutoLock(StaticLock& lock) : mLock(lock) { mLock.lock(); }
 
-    AutoLock(AutoLock<Lockable>&& other) : mLock(other.mLock), mLocked(other.mLocked) {
+    AutoLock(AutoLock&& other) : mLock(other.mLock), mLocked(other.mLocked) {
         other.mLocked = false;
     }
 
@@ -263,7 +176,7 @@ public:
     }
 
 private:
-    Lockable& mLock;
+    StaticLock& mLock;
     bool mLocked = true;
 
     friend class ConditionVariable;

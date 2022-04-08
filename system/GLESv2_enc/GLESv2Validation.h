@@ -33,7 +33,6 @@ namespace GLESv2Validation {
 extern GLbitfield allBufferMapAccessFlags;
 bool bufferTarget(GL2Encoder* ctx, GLenum target);
 bool bufferParam(GL2Encoder* ctx, GLenum param);
-bool bufferUsage(GL2Encoder* ctx, GLenum usage);
 
 bool pixelStoreParam(GL2Encoder* ctx, GLenum param);
 bool pixelStoreValue(GLenum param, GLint value);
@@ -45,7 +44,6 @@ bool framebufferAttachment(GL2Encoder* ctx, GLenum attachment);
 
 bool readPixelsFormat(GLenum format);
 bool readPixelsType(GLenum type);
-bool pixelOp(GLenum format, GLenum type);
 
 bool vertexAttribType(GL2Encoder* ctx, GLenum type);
 
@@ -53,11 +51,9 @@ bool readPixelsFboFormatMatch(GLenum format, GLenum type, GLenum fboTexType);
 bool blitFramebufferFormat(GLenum readFormat, GLenum drawFormat);
 
 bool textureTarget(GL2Encoder* ctx, GLenum target);
-bool textureParams(GL2Encoder* ctx, GLenum pname);
-bool samplerParams(GL2Encoder* ctx, GLenum pname);
-bool textureParamValue(GL2Encoder* ctx, GLenum pname, GLint intval, GLfloat floatval, GLenum enumval);
 
-bool isIntegerFormat(GLenum format);
+GLsizei compressedTexImageSize(GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth);
+
 bool isCompressedFormat(GLenum internalformat);
 bool supportedCompressedFormat(GL2Encoder* ctx, GLenum internalformat);
 
@@ -74,48 +70,12 @@ bool pixelType(GL2Encoder* ctx, GLenum type);
 bool pixelFormat(GL2Encoder* ctx, GLenum format);
 
 bool pixelInternalFormat(GLenum internalformat);
-bool pixelSizedFormat(GL2Encoder* ctx, GLenum internalformat, GLenum format, GLenum type);
-void getCompatibleFormatTypeForInternalFormat(GLenum internalformat, GLenum* format_out, GLenum* type_out);
 
 bool shaderType(GL2Encoder* ctx, GLenum type);
 
 bool internalFormatTarget(GL2Encoder* ctx, GLenum target);
 
 std::string vertexAttribIndexRangeErrorMsg(GL2Encoder* ctx, GLuint index);
-
-bool allowedFace(GLenum face);
-bool allowedFunc(GLenum func);
-bool allowedStencilOp(GLenum op);
-bool allowedBlendEquation(GLenum eq);
-bool allowedBlendFunc(GLenum func);
-
-bool allowedCullFace(GLenum mode);
-bool allowedFrontFace(GLenum mode);
-
-bool allowedEnable(int majorVersion, int minorVersion, GLenum mode);
-
-bool allowedGetShader(GLenum pname);
-
-bool allowedShaderType(GLenum shadertype);
-bool allowedPrecisionType(GLenum precisiontype);
-
-bool allowedGetProgram(int majorVersion, int minorVersion, GLenum pname);
-
-bool allowedGetActiveUniforms(GLenum pname) ;
-bool allowedGetActiveUniformBlock(GLenum pname) ;
-
-bool allowedGetVertexAttrib(GLenum pname) ;
-
-bool allowedGetRenderbufferParameter(GLenum pname);
-
-bool allowedQueryTarget(GLenum target);
-bool allowedQueryParam(GLenum pname);
-bool allowedQueryObjectParam(GLenum pname);
-
-bool allowedGetSyncParam(GLenum pname);
-
-bool allowedHintTarget(GLenum target);
-bool allowedHintMode(GLenum pname);
 
 } // namespace GLESv2Validation
 

@@ -53,7 +53,6 @@ class MediaH264Decoder {
 
     bool mHasAddressSpaceMemory = false;
     uint64_t mAddressOffSet = 0;
-    int mSlot = -1;
 
 public:
     MediaH264Decoder(RenderMode renderMode);

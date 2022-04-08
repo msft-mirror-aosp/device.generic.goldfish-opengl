@@ -17,7 +17,6 @@
 #define __IO_STREAM_H__
 
 #include <stdlib.h>
-#include <stdint.h>
 #include <stdio.h>
 
 #include "ErrorLog.h"
@@ -27,22 +26,8 @@ public:
 
     IOStream(size_t bufSize) {
         m_iostreamBuf = NULL;
-        m_bufsizeOrig = bufSize;
         m_bufsize = bufSize;
         m_free = 0;
-        m_refcount = 1;
-    }
-
-    void incRef() {
-        __atomic_add_fetch(&m_refcount, 1, __ATOMIC_SEQ_CST);
-    }
-
-    bool decRef() {
-        if (0 == __atomic_sub_fetch(&m_refcount, 1, __ATOMIC_SEQ_CST)) {
-            delete this;
-            return true;
-        }
-        return false;
     }
 
     virtual size_t idealAllocSize(size_t len) {
@@ -55,9 +40,6 @@ public:
     virtual const unsigned char *commitBufferAndReadFully(size_t size, void *buf, size_t len) = 0;
     virtual const unsigned char *read( void *buf, size_t *inout_len) = 0;
     virtual int writeFully(const void* buf, size_t len) = 0;
-    virtual int writeFullyAsync(const void* buf, size_t len) {
-        return writeFully(buf, len);
-    }
 
     virtual ~IOStream() {
 
@@ -118,19 +100,10 @@ public:
     void uploadPixels(void* context, int width, int height, int depth, unsigned int format, unsigned int type, const void* pixels);
 
 
-protected:
-    void rewind() {
-        m_iostreamBuf = NULL;
-        m_bufsize = m_bufsizeOrig;
-        m_free = 0;
-    }
-
 private:
     unsigned char *m_iostreamBuf;
-    size_t m_bufsizeOrig;
     size_t m_bufsize;
     size_t m_free;
-    uint32_t m_refcount;
 };
 
 //

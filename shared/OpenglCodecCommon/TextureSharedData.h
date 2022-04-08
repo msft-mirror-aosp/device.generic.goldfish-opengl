@@ -35,13 +35,6 @@ struct TextureRec {
     TextureDims* dims;
     bool immutable;
     bool boundEGLImage;
-    bool hasStorage;
-    bool hasCubeNegX;
-    bool hasCubePosX;
-    bool hasCubeNegY;
-    bool hasCubePosY;
-    bool hasCubeNegZ;
-    bool hasCubePosZ;
 };
 
 typedef std::map<GLuint, TextureRec*> SharedTextureDataMap;

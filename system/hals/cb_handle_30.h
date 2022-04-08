@@ -53,9 +53,7 @@ struct cb_handle_30_t : public cb_handle_t {
                           p_mmapedOffset),
               mmapedSize(p_mmapedSize),
               bytesPerPixel(p_bytesPerPixel),
-              stride(p_stride),
-              locked(0),
-              lockedUsage(0) {
+              stride(p_stride) {
         numInts = CB_HANDLE_NUM_INTS(numFds);
     }
 
@@ -78,8 +76,6 @@ struct cb_handle_30_t : public cb_handle_t {
     uint32_t mmapedSize;            // real allocation side
     uint32_t bytesPerPixel;
     uint32_t stride;
-    uint32_t locked;
-    uint32_t lockedUsage;
 };
 
 #endif // SYSTEM_HALS_CB_HANDLE_30_H

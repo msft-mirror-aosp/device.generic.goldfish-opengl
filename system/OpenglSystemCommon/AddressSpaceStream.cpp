@@ -15,14 +15,11 @@
 */
 #include "AddressSpaceStream.h"
 
-#include "android/base/Tracing.h"
-
 #if PLATFORM_SDK_VERSION < 26
 #include <cutils/log.h>
 #else
 #include <log/log.h>
 #endif
-#include <cutils/properties.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,7 +42,7 @@ AddressSpaceStream* createAddressSpaceStream(size_t ignored_bufSize) {
         return nullptr;
     }
 
-    struct address_space_ping request;
+    struct goldfish_address_space_ping request;
     request.metadata = ASG_GET_RING;
     if (!goldfish_address_space_ping(child_device_handle, &request)) {
         ALOGE("AddressSpaceStream::create failed (get ring)\n");
@@ -126,164 +123,21 @@ AddressSpaceStream* createAddressSpaceStream(size_t ignored_bufSize) {
     context.ring_config->host_consumed_pos = 0;
     context.ring_config->guest_write_pos = 0;
 
-    struct address_space_ops ops = {
-        .open = goldfish_address_space_open,
-        .close = goldfish_address_space_close,
-        .claim_shared = goldfish_address_space_claim_shared,
-        .unclaim_shared = goldfish_address_space_unclaim_shared,
-        .map = goldfish_address_space_map,
-        .unmap = goldfish_address_space_unmap,
-        .set_subdevice_type = goldfish_address_space_set_subdevice_type,
-        .ping = goldfish_address_space_ping,
-    };
-
     AddressSpaceStream* res =
         new AddressSpaceStream(
             child_device_handle, version, context,
-            ringOffset, bufferOffset, false /* not virtio */, ops);
+            ringOffset, bufferOffset);
 
     return res;
 }
-
-#if defined(HOST_BUILD) || defined(__Fuchsia__)
-AddressSpaceStream* createVirtioGpuAddressSpaceStream(size_t ignored_bufSize) {
-    // Ignore incoming ignored_bufSize
-    (void)ignored_bufSize;
-    return nullptr;
-}
-#else
-static address_space_handle_t openVirtGpuAddressSpace() {
-    address_space_handle_t ret;
-    uint8_t retryCount = 64;
-    do {
-        ret = virtgpu_address_space_open();
-    } while(ret < 0 && retryCount-- > 0 && errno == EINTR);
-    return ret;
-}
-
-AddressSpaceStream* createVirtioGpuAddressSpaceStream(size_t ignored_bufSize) {
-    // Ignore incoming ignored_bufSize
-    (void)ignored_bufSize;
-
-    auto handle = openVirtGpuAddressSpace();
-    if (handle <= reinterpret_cast<address_space_handle_t>(-1)) {
-        ALOGE("AddressSpaceStream::create failed (open device) %d (%s)\n", errno, strerror(errno));
-        return nullptr;
-    }
-
-    struct address_space_virtgpu_info virtgpu_info;
-
-    ALOGD("%s: create subdevice and get resp\n", __func__);
-    if (!virtgpu_address_space_create_context_with_subdevice(
-            handle, GoldfishAddressSpaceSubdeviceType::VirtioGpuGraphics,
-            &virtgpu_info)) {
-        ALOGE("AddressSpaceStream::create failed (create subdevice)\n");
-        virtgpu_address_space_close(handle);
-        return nullptr;
-    }
-    ALOGD("%s: create subdevice and get resp (done)\n", __func__);
-
-    struct address_space_ping request;
-    uint32_t ringSize = 0;
-    uint32_t bufferSize = 0;
-
-    request.metadata = ASG_GET_RING;
-    if (!virtgpu_address_space_ping_with_response(
-        &virtgpu_info, &request)) {
-        ALOGE("AddressSpaceStream::create failed (get ring version)\n");
-        virtgpu_address_space_close(handle);
-        return nullptr;
-    }
-    ringSize = request.size;
-
-    request.metadata = ASG_GET_BUFFER;
-    if (!virtgpu_address_space_ping_with_response(
-        &virtgpu_info, &request)) {
-        ALOGE("AddressSpaceStream::create failed (get ring version)\n");
-        virtgpu_address_space_close(handle);
-        return nullptr;
-    }
-    bufferSize = request.size;
-
-    request.metadata = ASG_SET_VERSION;
-    request.size = 1; // version 1
-
-    if (!virtgpu_address_space_ping_with_response(
-        &virtgpu_info, &request)) {
-        ALOGE("AddressSpaceStream::create failed (set version)\n");
-        virtgpu_address_space_close(handle);
-        return nullptr;
-    }
-
-    ALOGD("%s: ping returned. context ring and buffer sizes %u %u\n", __func__,
-            ringSize, bufferSize);
-
-    uint64_t hostmem_id = request.metadata;
-    uint32_t version = request.size;
-    size_t hostmem_alloc_size =
-        (size_t)(ringSize + bufferSize);
-
-    ALOGD("%s: hostmem size: %zu\n", __func__, hostmem_alloc_size);
-
-    struct address_space_virtgpu_hostmem_info hostmem_info;
-    if (!virtgpu_address_space_allocate_hostmem(
-            handle,
-            hostmem_alloc_size,
-            hostmem_id,
-            &hostmem_info)) {
-        ALOGE("AddressSpaceStream::create failed (alloc hostmem)\n");
-        virtgpu_address_space_close(handle);
-        return nullptr;
-    }
-
-    request.metadata = ASG_GET_CONFIG;
-    if (!virtgpu_address_space_ping_with_response(
-        &virtgpu_info, &request)) {
-        ALOGE("AddressSpaceStream::create failed (get config)\n");
-        virtgpu_address_space_close(handle);
-        return nullptr;
-    }
-
-    char* ringPtr = (char*)hostmem_info.ptr;
-    char* bufferPtr = ((char*)hostmem_info.ptr) + sizeof(struct asg_ring_storage);
-
-    struct asg_context context =
-        asg_context_create(
-            (char*)ringPtr, (char*)bufferPtr, bufferSize);
-
-    context.ring_config->transfer_mode = 1;
-    context.ring_config->host_consumed_pos = 0;
-    context.ring_config->guest_write_pos = 0;
-
-    struct address_space_ops ops = {
-        .open = virtgpu_address_space_open,
-        .close = virtgpu_address_space_close,
-        .ping = virtgpu_address_space_ping,
-        .allocate_hostmem = virtgpu_address_space_allocate_hostmem,
-        .ping_with_response = virtgpu_address_space_ping_with_response,
-    };
-
-    AddressSpaceStream* res =
-        new AddressSpaceStream(
-            handle, version, context,
-            0, 0, true /* is virtio */, ops);
-
-    return res;
-}
-#endif // HOST_BUILD || __Fuchsia__
-
 
 AddressSpaceStream::AddressSpaceStream(
     address_space_handle_t handle,
     uint32_t version,
     struct asg_context context,
     uint64_t ringOffset,
-    uint64_t writeBufferOffset,
-    bool virtioMode,
-    struct address_space_ops ops) :
+    uint64_t writeBufferOffset) :
     IOStream(context.ring_config->flush_interval),
-    m_virtioMode(virtioMode),
-    m_ops(ops),
     m_tmpBuf(0),
     m_tmpBufSize(0),
     m_tmpBufXferSize(0),
@@ -302,25 +156,18 @@ AddressSpaceStream::AddressSpaceStream(
     m_writeStart(m_buf),
     m_writeStep(context.ring_config->flush_interval),
     m_notifs(0),
-    m_written(0),
-    m_backoffIters(0),
-    m_backoffFactor(1) {
+    m_written(0) {
     // We'll use this in the future, but at the moment,
     // it's a potential compile Werror.
     (void)m_version;
 }
 
 AddressSpaceStream::~AddressSpaceStream() {
-    flush();
-    ensureType3Finished();
-    ensureType1Finished();
-    if (!m_virtioMode) {
-        m_ops.unmap(m_context.to_host, sizeof(struct asg_ring_storage));
-        m_ops.unmap(m_context.buffer, m_writeBufferSize);
-        m_ops.unclaim_shared(m_handle, m_ringOffset);
-        m_ops.unclaim_shared(m_handle, m_writeBufferOffset);
-    }
-    m_ops.close(m_handle);
+    goldfish_address_space_unmap(m_context.to_host, sizeof(struct asg_ring_storage));
+    goldfish_address_space_unmap(m_context.buffer, m_writeBufferSize);
+    goldfish_address_space_unclaim_shared(m_handle, m_ringOffset);
+    goldfish_address_space_unclaim_shared(m_handle, m_writeBufferOffset);
+    goldfish_address_space_close(m_handle);
     if (m_readBuf) free(m_readBuf);
     if (m_tmpBuf) free(m_tmpBuf);
 }
@@ -331,9 +178,6 @@ size_t AddressSpaceStream::idealAllocSize(size_t len) {
 }
 
 void *AddressSpaceStream::allocBuffer(size_t minSize) {
-    AEMU_SCOPED_TRACE("allocBuffer");
-    ensureType3Finished();
-
     if (!m_readBuf) {
         m_readBuf = (unsigned char*)malloc(kReadSize);
     }
@@ -458,7 +302,6 @@ const unsigned char *AddressSpaceStream::readFully(void *ptr, size_t totalReadSi
         }
     }
 
-    resetBackoff();
     return userReadBuf;
 }
 
@@ -478,7 +321,7 @@ const unsigned char *AddressSpaceStream::read(void *buf, size_t *inout_len) {
 
 int AddressSpaceStream::writeFully(const void *buf, size_t size)
 {
-    AEMU_SCOPED_TRACE("writeFully");
+    ensureConsumerFinishing();
     ensureType3Finished();
     ensureType1Finished();
 
@@ -486,76 +329,9 @@ int AddressSpaceStream::writeFully(const void *buf, size_t size)
     m_context.ring_config->transfer_mode = 3;
 
     size_t sent = 0;
-    size_t preferredChunkSize = m_writeBufferSize / 4;
-    size_t chunkSize = size < preferredChunkSize ? size : preferredChunkSize;
+    size_t quarterRingSize = m_writeBufferSize / 4;
+    size_t chunkSize = size < quarterRingSize ? size : quarterRingSize;
     const uint8_t* bufferBytes = (const uint8_t*)buf;
-
-    bool hostPinged = false;
-    while (sent < size) {
-        size_t remaining = size - sent;
-        size_t sendThisTime = remaining < chunkSize ? remaining : chunkSize;
-
-        long sentChunks =
-            ring_buffer_view_write(
-                m_context.to_host_large_xfer.ring,
-                &m_context.to_host_large_xfer.view,
-                bufferBytes + sent, sendThisTime, 1);
-
-        if (!hostPinged && *(m_context.host_state) != ASG_HOST_STATE_CAN_CONSUME &&
-            *(m_context.host_state) != ASG_HOST_STATE_RENDERING) {
-            notifyAvailable();
-            hostPinged = true;
-        }
-
-        if (sentChunks == 0) {
-            ring_buffer_yield();
-            backoff();
-        }
-
-        sent += sentChunks * sendThisTime;
-
-        if (isInError()) {
-            return -1;
-        }
-    }
-
-    bool isRenderingAfter = ASG_HOST_STATE_RENDERING == __atomic_load_n(m_context.host_state, __ATOMIC_ACQUIRE);
-
-    if (!isRenderingAfter) {
-        notifyAvailable();
-    }
-
-    ensureType3Finished();
-
-    resetBackoff();
-    m_context.ring_config->transfer_mode = 1;
-    m_written += size;
-
-    float mb = (float)m_written / 1048576.0f;
-    if (mb > 100.0f) {
-        ALOGD("%s: %f mb in %d notifs. %f mb/notif\n", __func__,
-              mb, m_notifs, m_notifs ? mb / (float)m_notifs : 0.0f);
-        m_notifs = 0;
-        m_written = 0;
-    }
-    return 0;
-}
-
-int AddressSpaceStream::writeFullyAsync(const void *buf, size_t size)
-{
-    AEMU_SCOPED_TRACE("writeFullyAsync");
-    ensureType3Finished();
-    ensureType1Finished();
-
-    __atomic_store_n(&m_context.ring_config->transfer_size, size, __ATOMIC_RELEASE);
-    m_context.ring_config->transfer_mode = 3;
-
-    size_t sent = 0;
-    size_t preferredChunkSize = m_writeBufferSize / 2;
-    size_t chunkSize = size < preferredChunkSize ? size : preferredChunkSize;
-    const uint8_t* bufferBytes = (const uint8_t*)buf;
-
-    bool pingedHost = false;
 
     while (sent < size) {
         size_t remaining = size - sent;
@@ -567,18 +343,12 @@ int AddressSpaceStream::writeFullyAsync(const void *buf, size_t size)
                 &m_context.to_host_large_xfer.view,
                 bufferBytes + sent, sendThisTime, 1);
 
-        uint32_t hostState = __atomic_load_n(m_context.host_state, __ATOMIC_ACQUIRE);
-
-        if (!pingedHost &&
-            hostState != ASG_HOST_STATE_CAN_CONSUME &&
-            hostState != ASG_HOST_STATE_RENDERING) {
-            pingedHost = true;
+        if (*(m_context.host_state) != ASG_HOST_STATE_CAN_CONSUME) {
             notifyAvailable();
         }
 
         if (sentChunks == 0) {
             ring_buffer_yield();
-            backoff();
         }
 
         sent += sentChunks * sendThisTime;
@@ -588,24 +358,9 @@ int AddressSpaceStream::writeFullyAsync(const void *buf, size_t size)
         }
     }
 
-
-    bool isRenderingAfter = ASG_HOST_STATE_RENDERING == __atomic_load_n(m_context.host_state, __ATOMIC_ACQUIRE);
-
-    if (!isRenderingAfter) {
-        notifyAvailable();
-    }
-
-    resetBackoff();
+    ensureType3Finished();
     m_context.ring_config->transfer_mode = 1;
     m_written += size;
-
-    float mb = (float)m_written / 1048576.0f;
-    if (mb > 100.0f) {
-        ALOGD("%s: %f mb in %d notifs. %f mb/notif\n", __func__,
-              mb, m_notifs, m_notifs ? mb / (float)m_notifs : 0.0f);
-        m_notifs = 0;
-        m_written = 0;
-    }
     return 0;
 }
 
@@ -628,15 +383,12 @@ bool AddressSpaceStream::isInError() const {
 }
 
 ssize_t AddressSpaceStream::speculativeRead(unsigned char* readBuffer, size_t trySize) {
+    ensureConsumerFinishing();
     ensureType3Finished();
     ensureType1Finished();
 
     size_t actuallyRead = 0;
-    size_t readIters = 0;
-
     while (!actuallyRead) {
-        ++readIters;
-
         uint32_t readAvail =
             ring_buffer_available_read(
                 m_context.from_host_large_xfer.ring,
@@ -644,7 +396,6 @@ ssize_t AddressSpaceStream::speculativeRead(unsigned char* readBuffer, size_t tr
 
         if (!readAvail) {
             ring_buffer_yield();
-            backoff();
             continue;
         }
 
@@ -666,10 +417,9 @@ ssize_t AddressSpaceStream::speculativeRead(unsigned char* readBuffer, size_t tr
 }
 
 void AddressSpaceStream::notifyAvailable() {
-    AEMU_SCOPED_TRACE("PING");
-    struct address_space_ping request;
+    struct goldfish_address_space_ping request;
     request.metadata = ASG_NOTIFY_AVAILABLE;
-    m_ops.ping(m_handle, &request);
+    goldfish_address_space_ping(m_handle, &request);
     ++m_notifs;
 }
 
@@ -696,24 +446,20 @@ void AddressSpaceStream::ensureConsumerFinishing() {
             break;
         }
 
-        if (*(m_context.host_state) != ASG_HOST_STATE_CAN_CONSUME &&
-            *(m_context.host_state) != ASG_HOST_STATE_RENDERING) {
+        if (*(m_context.host_state) != ASG_HOST_STATE_CAN_CONSUME) {
             notifyAvailable();
             break;
         }
-
-        backoff();
     }
 }
 
 void AddressSpaceStream::ensureType1Finished() {
-    AEMU_SCOPED_TRACE("ensureType1Finished");
+    ensureConsumerFinishing();
 
     uint32_t currAvailRead =
         ring_buffer_available_read(m_context.to_host, 0);
 
     while (currAvailRead) {
-        backoff();
         ring_buffer_yield();
         currAvailRead = ring_buffer_available_read(m_context.to_host, 0);
         if (isInError()) {
@@ -723,20 +469,17 @@ void AddressSpaceStream::ensureType1Finished() {
 }
 
 void AddressSpaceStream::ensureType3Finished() {
-    AEMU_SCOPED_TRACE("ensureType3Finished");
     uint32_t availReadLarge =
         ring_buffer_available_read(
             m_context.to_host_large_xfer.ring,
             &m_context.to_host_large_xfer.view);
     while (availReadLarge) {
         ring_buffer_yield();
-        backoff();
         availReadLarge =
             ring_buffer_available_read(
                 m_context.to_host_large_xfer.ring,
                 &m_context.to_host_large_xfer.view);
-        if (*(m_context.host_state) != ASG_HOST_STATE_CAN_CONSUME &&
-            *(m_context.host_state) != ASG_HOST_STATE_RENDERING) {
+        if (*(m_context.host_state) != ASG_HOST_STATE_CAN_CONSUME) {
             notifyAvailable();
         }
         if (isInError()) {
@@ -746,11 +489,6 @@ void AddressSpaceStream::ensureType3Finished() {
 }
 
 int AddressSpaceStream::type1Write(uint32_t bufferOffset, size_t size) {
-
-    AEMU_SCOPED_TRACE("type1Write");
-
-    ensureType3Finished();
-
     size_t sent = 0;
     size_t sizeForRing = sizeof(struct asg_type1_xfer);
 
@@ -765,15 +503,16 @@ int AddressSpaceStream::type1Write(uint32_t bufferOffset, size_t size) {
     uint32_t maxSteps = m_context.ring_config->buffer_size /
             m_context.ring_config->flush_interval;
 
-    if (maxSteps > 1) maxOutstanding = maxSteps - 1;
+    if (maxSteps > 1) maxOutstanding = maxSteps >> 1;
 
     uint32_t ringAvailReadNow = ring_buffer_available_read(m_context.to_host, 0);
 
-    while (ringAvailReadNow >= maxOutstanding * sizeForRing) {
+    while (ringAvailReadNow >= maxOutstanding) {
+        ensureConsumerFinishing();
+        ring_buffer_yield();
         ringAvailReadNow = ring_buffer_available_read(m_context.to_host, 0);
     }
 
-    bool hostPinged = false;
     while (sent < sizeForRing) {
 
         long sentChunks = ring_buffer_write(
@@ -781,16 +520,12 @@ int AddressSpaceStream::type1Write(uint32_t bufferOffset, size_t size) {
             writeBufferBytes + sent,
             sizeForRing - sent, 1);
 
-        if (!hostPinged &&
-            *(m_context.host_state) != ASG_HOST_STATE_CAN_CONSUME &&
-            *(m_context.host_state) != ASG_HOST_STATE_RENDERING) {
+        if (*(m_context.host_state) != ASG_HOST_STATE_CAN_CONSUME) {
             notifyAvailable();
-            hostPinged = true;
         }
 
         if (sentChunks == 0) {
             ring_buffer_yield();
-            backoff();
         }
 
         sent += sentChunks * (sizeForRing - sent);
@@ -800,12 +535,7 @@ int AddressSpaceStream::type1Write(uint32_t bufferOffset, size_t size) {
         }
     }
 
-    bool isRenderingAfter = ASG_HOST_STATE_RENDERING == __atomic_load_n(m_context.host_state, __ATOMIC_ACQUIRE);
-
-    if (!isRenderingAfter) {
-        notifyAvailable();
-    }
-
+    ensureConsumerFinishing();
     m_written += size;
 
     float mb = (float)m_written / 1048576.0f;
@@ -816,32 +546,5 @@ int AddressSpaceStream::type1Write(uint32_t bufferOffset, size_t size) {
         m_written = 0;
     }
 
-    resetBackoff();
     return 0;
-}
-
-void AddressSpaceStream::backoff() {
-#if defined(HOST_BUILD) || defined(__APPLE__) || defined(__MACOSX) || defined(__Fuchsia__)
-    static const uint32_t kBackoffItersThreshold = 50000000;
-    static const uint32_t kBackoffFactorDoublingIncrement = 50000000;
-#else
-    static const uint32_t kBackoffItersThreshold = property_get_int32("ro.boot.asg.backoffiters", 50000000);
-    static const uint32_t kBackoffFactorDoublingIncrement = property_get_int32("ro.boot.asg.backoffincrement", 50000000);
-#endif
-    ++m_backoffIters;
-
-    if (m_backoffIters > kBackoffItersThreshold) {
-        usleep(m_backoffFactor);
-        uint32_t itersSoFarAfterThreshold = m_backoffIters - kBackoffItersThreshold;
-        if (itersSoFarAfterThreshold > kBackoffFactorDoublingIncrement) {
-            m_backoffFactor = m_backoffFactor << 1;
-            if (m_backoffFactor > 1000) m_backoffFactor = 1000;
-            m_backoffIters = kBackoffItersThreshold;
-        }
-    }
-}
-
-void AddressSpaceStream::resetBackoff() {
-    m_backoffIters = 0;
-    m_backoffFactor = 1;
 }

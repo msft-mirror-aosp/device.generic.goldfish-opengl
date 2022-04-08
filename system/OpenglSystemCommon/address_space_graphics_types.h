@@ -102,9 +102,6 @@ enum asg_host_state {
 
     // Error: Something weird happened and we need to exit.
     ASG_HOST_STATE_ERROR = 3,
-
-    // Host is rendering
-    ASG_HOST_STATE_RENDERING = 4,
 };
 
 struct asg_ring_config;
@@ -127,7 +124,7 @@ struct asg_context { // ptrs into RingStorage
 // Helper function that will be common between guest and host:
 // Given ring storage and a write buffer, returns asg_context that
 // is the correct view into it.
-static inline struct asg_context asg_context_create(
+static struct asg_context asg_context_create(
     char* ring_storage,
     char* buffer,
     uint32_t buffer_size) {
@@ -345,7 +342,6 @@ enum asg_command {
     // version and can proceed with a protocol that works for both.
     // size (in): the version of the guest
     // size (out): the version of the host
-    // metadata (out): hostmem id
     // After this command runs, the consumer is
     // implicitly created.
     ASG_SET_VERSION = 2,
@@ -353,9 +349,6 @@ enum asg_command {
     // Ping(notiy_available): Wakes up the consumer from sleep so it
     // can read data via toHost
     ASG_NOTIFY_AVAILABLE = 3,
-
-    // Retrieve the host config
-    ASG_GET_CONFIG = 4,
 };
 
 } // extern "C"

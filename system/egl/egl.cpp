@@ -48,9 +48,11 @@
 #include <GLES3/gl31.h>
 
 #ifdef VIRTIO_GPU
-#include <drm/virtgpu_drm.h>
 #include <xf86drm.h>
 #include <poll.h>
+
+#include "virtgpu_drm.h"
+
 #endif // VIRTIO_GPU
 
 #ifdef GFXSTREAM
@@ -2226,6 +2228,9 @@ EGLImageKHR eglCreateImageKHR(EGLDisplay dpy, EGLContext ctx, EGLenum target, EG
 #endif
 #if PLATFORM_SDK_VERSION >= 28
             case HAL_PIXEL_FORMAT_YCBCR_420_888:
+#endif
+#if PLATFORM_SDK_VERSION >= 30
+            case HAL_PIXEL_FORMAT_YCBCR_P010:
 #endif
                 break;
             case HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED:

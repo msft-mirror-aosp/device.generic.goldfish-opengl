@@ -82,6 +82,14 @@ public:
         VkInstance instance, uint32_t* pPhysicalDeviceCount,
         VkPhysicalDevice* pPhysicalDevices);
 
+    void on_vkGetPhysicalDeviceFeatures2(
+        void* context,
+        VkPhysicalDevice physicalDevice,
+        VkPhysicalDeviceFeatures2* pFeatures);
+    void on_vkGetPhysicalDeviceFeatures2KHR(
+        void* context,
+        VkPhysicalDevice physicalDevice,
+        VkPhysicalDeviceFeatures2* pFeatures);
     void on_vkGetPhysicalDeviceProperties(
         void* context,
         VkPhysicalDevice physicalDevice,
@@ -619,7 +627,6 @@ public:
         VkImage image,
         int* pNativeFenceFd);
 
-    bool isMemoryTypeHostVisible(VkDevice device, uint32_t typeIndex) const;
     uint8_t* getMappedPointer(VkDeviceMemory memory);
     VkDeviceSize getMappedSize(VkDeviceMemory memory);
     VkDeviceSize getNonCoherentExtendedSize(VkDevice device, VkDeviceSize basicSize) const;
@@ -633,6 +640,7 @@ public:
     uint32_t getApiVersionFromDevice(VkDevice device) const;
     bool hasInstanceExtension(VkInstance instance, const std::string& name) const;
     bool hasDeviceExtension(VkDevice instance, const std::string& name) const;
+    VkDevice getDevice(VkCommandBuffer commandBuffer) const;
     void addToCommandPool(VkCommandPool commandPool,
                           uint32_t commandBufferCount,
                           VkCommandBuffer* pCommandBuffers);

@@ -74,6 +74,7 @@ LOCAL_C_INCLUDES := \
     system/core/libsync/include \
 
 LOCAL_SRC_FILES := \
+    ClientFrameComposer.cpp \
     Common.cpp \
     Composer.cpp \
     ComposerClient.cpp \
@@ -90,6 +91,7 @@ LOCAL_SRC_FILES := \
     HostUtils.cpp \
     Layer.cpp \
     Main.cpp \
+    NoOpFrameComposer.cpp \
     VsyncThread.cpp \
 
 LOCAL_VINTF_FRAGMENTS := hwc3.xml

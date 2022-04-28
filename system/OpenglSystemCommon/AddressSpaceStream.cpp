@@ -147,32 +147,9 @@ AddressSpaceStream* createAddressSpaceStream(size_t ignored_bufSize) {
     return res;
 }
 
-#if defined(HOST_BUILD) || defined(__Fuchsia__)
-AddressSpaceStream* createVirtioGpuAddressSpaceStream(size_t ignored_bufSize) {
-    // Ignore incoming ignored_bufSize
-    (void)ignored_bufSize;
-    return nullptr;
-}
-#else
-static address_space_handle_t openVirtGpuAddressSpace() {
-    address_space_handle_t ret;
-    uint8_t retryCount = 64;
-    do {
-        ret = virtgpu_address_space_open();
-    } while(ret < 0 && retryCount-- > 0 && errno == EINTR);
-    return ret;
-}
-
-AddressSpaceStream* createVirtioGpuAddressSpaceStream(size_t ignored_bufSize) {
-    // Ignore incoming ignored_bufSize
-    (void)ignored_bufSize;
-
-    auto handle = openVirtGpuAddressSpace();
-    if (handle <= reinterpret_cast<address_space_handle_t>(-1)) {
-        ALOGE("AddressSpaceStream::create failed (open device) %d (%s)\n", errno, strerror(errno));
-        return nullptr;
-    }
-
+#if defined(VIRTIO_GPU) && !defined(HOST_BUILD)
+AddressSpaceStream* createVirtioGpuAddressSpaceStream(const struct StreamCreate &streamCreate) {
+    auto handle = reinterpret_cast<address_space_handle_t>(streamCreate.streamHandle);
     struct address_space_virtgpu_info virtgpu_info;
 
     ALOGD("%s: create subdevice and get resp\n", __func__);
@@ -294,7 +271,7 @@ AddressSpaceStream* createVirtioGpuAddressSpaceStream(size_t ignored_bufSize) {
 
     return res;
 }
-#endif // HOST_BUILD || __Fuchsia__
+#endif // VIRTIO_GPU && !HOST_BUILD
 
 
 AddressSpaceStream::AddressSpaceStream(

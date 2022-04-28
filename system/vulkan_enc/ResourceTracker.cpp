@@ -1368,6 +1368,7 @@ public:
             "VK_KHR_image_format_list",
             "VK_KHR_incremental_present",
             "VK_KHR_pipeline_executable_properties",
+            "VK_EXT_queue_family_foreign",
 #if defined(VK_USE_PLATFORM_ANDROID_KHR) || defined(__linux__)
             "VK_KHR_external_semaphore",
             "VK_KHR_external_semaphore_fd",
@@ -1638,6 +1639,19 @@ public:
         VkPhysicalDeviceProperties* pProperties) {
         if (pProperties) {
             pProperties->deviceType = VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU;
+        }
+    }
+
+    void on_vkGetPhysicalDeviceFeatures2(
+        void*,
+        VkPhysicalDevice,
+        VkPhysicalDeviceFeatures2* pFeatures) {
+        if (pFeatures) {
+            VkPhysicalDeviceDeviceMemoryReportFeaturesEXT* memoryReportFeaturesEXT =
+                vk_find_struct<VkPhysicalDeviceDeviceMemoryReportFeaturesEXT>(pFeatures);
+            if (memoryReportFeaturesEXT) {
+                memoryReportFeaturesEXT->deviceMemoryReport = VK_TRUE;
+            }
         }
     }
 
@@ -2580,18 +2594,20 @@ public:
         }
 
         // Get row alignment from host GPU.
-        VkDeviceSize offset;
-        VkDeviceSize rowPitchAlignment;
+        VkDeviceSize offset = 0;
+        VkDeviceSize rowPitchAlignment = 1u;
 
-        VkImageCreateInfo createInfoDup = *createInfo;
-        createInfoDup.pNext = nullptr;
-        enc->vkGetLinearImageLayout2GOOGLE(device, &createInfoDup, &offset,
-                                           &rowPitchAlignment,
-                                           true /* do lock */);
-        ALOGD(
-            "vkGetLinearImageLayout2GOOGLE: format %d offset %lu "
-            "rowPitchAlignment = %lu",
-            (int)createInfo->format, offset, rowPitchAlignment);
+        if (tiling == VK_IMAGE_TILING_LINEAR) {
+            VkImageCreateInfo createInfoDup = *createInfo;
+            createInfoDup.pNext = nullptr;
+            enc->vkGetLinearImageLayout2GOOGLE(device, &createInfoDup, &offset,
+                                            &rowPitchAlignment,
+                                            true /* do lock */);
+            ALOGD(
+                "vkGetLinearImageLayout2GOOGLE: format %d offset %lu "
+                "rowPitchAlignment = %lu",
+                (int)createInfo->format, offset, rowPitchAlignment);
+        }
 
         imageConstraints.min_coded_width = createInfo->extent.width;
         imageConstraints.max_coded_width = 0xfffffff;
@@ -5167,7 +5183,6 @@ public:
         const VkSamplerCreateInfo* pCreateInfo,
         const VkAllocationCallbacks* pAllocator,
         VkSampler* pSampler) {
-
         VkSamplerCreateInfo localCreateInfo = vk_make_orphan_copy(*pCreateInfo);
         vk_struct_chain_iterator structChainIter = vk_make_chain_iterator(&localCreateInfo);
 
@@ -5180,6 +5195,15 @@ public:
                 localVkSamplerYcbcrConversionInfo = vk_make_orphan_copy(*samplerYcbcrConversionInfo);
                 vk_append_struct(&structChainIter, &localVkSamplerYcbcrConversionInfo);
             }
+        }
+
+        VkSamplerCustomBorderColorCreateInfoEXT localVkSamplerCustomBorderColorCreateInfo;
+        const VkSamplerCustomBorderColorCreateInfoEXT* samplerCustomBorderColorCreateInfo =
+            vk_find_struct<VkSamplerCustomBorderColorCreateInfoEXT>(pCreateInfo);
+        if (samplerCustomBorderColorCreateInfo) {
+            localVkSamplerCustomBorderColorCreateInfo =
+                vk_make_orphan_copy(*samplerCustomBorderColorCreateInfo);
+            vk_append_struct(&structChainIter, &localVkSamplerCustomBorderColorCreateInfo);
         }
 #endif
 
@@ -7674,6 +7698,7 @@ public:
         for (uint32_t i = 0; i < pAllocateInfo->commandBufferCount; ++i) {
             struct goldfish_VkCommandBuffer* cb = as_goldfish_VkCommandBuffer(pCommandBuffers[i]);
             cb->isSecondary = pAllocateInfo->level == VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+            cb->device = device;
         }
 
         return res;
@@ -7814,6 +7839,14 @@ public:
 
         return it->second.enabledExtensions.find(name) !=
                it->second.enabledExtensions.end();
+    }
+
+    VkDevice getDevice(VkCommandBuffer commandBuffer) const {
+        struct goldfish_VkCommandBuffer* cb = as_goldfish_VkCommandBuffer(commandBuffer);
+        if (!cb) {
+            return nullptr;
+        }
+        return cb->device;
     }
 
     // Resets staging stream for this command buffer and primary command buffers
@@ -7997,6 +8030,9 @@ bool ResourceTracker::hasInstanceExtension(VkInstance instance, const std::strin
 bool ResourceTracker::hasDeviceExtension(VkDevice device, const std::string &name) const {
     return mImpl->hasDeviceExtension(device, name);
 }
+VkDevice ResourceTracker::getDevice(VkCommandBuffer commandBuffer) const {
+    return mImpl->getDevice(commandBuffer);
+}
 void ResourceTracker::addToCommandPool(VkCommandPool commandPool,
                       uint32_t commandBufferCount,
                       VkCommandBuffer* pCommandBuffers) {
@@ -8093,6 +8129,22 @@ void ResourceTracker::on_vkGetPhysicalDeviceProperties(
     VkPhysicalDeviceProperties* pProperties) {
     mImpl->on_vkGetPhysicalDeviceProperties(context, physicalDevice,
         pProperties);
+}
+
+void ResourceTracker::on_vkGetPhysicalDeviceFeatures2(
+    void* context,
+    VkPhysicalDevice physicalDevice,
+    VkPhysicalDeviceFeatures2* pFeatures) {
+    mImpl->on_vkGetPhysicalDeviceFeatures2(context, physicalDevice,
+        pFeatures);
+}
+
+void ResourceTracker::on_vkGetPhysicalDeviceFeatures2KHR(
+    void* context,
+    VkPhysicalDevice physicalDevice,
+    VkPhysicalDeviceFeatures2* pFeatures) {
+    mImpl->on_vkGetPhysicalDeviceFeatures2(context, physicalDevice,
+        pFeatures);
 }
 
 void ResourceTracker::on_vkGetPhysicalDeviceProperties2(

@@ -460,10 +460,16 @@ HWC3::Error HostFrameComposer::validateDisplay(Display* display,
 
   const std::vector<Layer*> layers = display->getOrderedLayers();
   for (const auto& layer : layers) {
-    if (layer->getCompositionType() == Composition::INVALID) {
-      // Log error for unused layers, layer leak?
-      ALOGE("%s layer:%" PRIu64 " CompositionType not set", __FUNCTION__,
-            layer->getId());
+    switch (layer->getCompositionType()) {
+      case Composition::INVALID:
+        // Log error for unused layers, layer leak?
+        ALOGE("%s layer:%" PRIu64 " CompositionType not set", __FUNCTION__,
+              layer->getId());
+        break;
+      case Composition::DISPLAY_DECORATION:
+        return HWC3::Error::Unsupported;
+      default:
+        break;
     }
   }
 

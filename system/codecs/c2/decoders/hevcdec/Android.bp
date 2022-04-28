@@ -7,22 +7,26 @@ package {
     default_applicable_licenses: ["device_generic_goldfish-opengl_license"],
 }
 
-cc_library_static {
-    name: "libGoldfishAddressSpace",
+cc_library_shared {
+    name: "libcodec2_goldfish_hevcdec",
     vendor: true,
-    srcs: [
-        "goldfish_address_space.cpp",
+    defaults: [
+        "libcodec2_goldfish-defaults",
     ],
+
+    srcs: ["C2GoldfishHevcDec.cpp",
+        "MediaHevcDecoder.cpp",
+    ],
+
     shared_libs: [
-        "liblog",
-        "libdrm",
+	    "android.hardware.graphics.allocator@3.0",
+		"android.hardware.graphics.mapper@3.0",
+        "libgoldfish_codec2_store",
     ],
-    export_include_dirs: [
-        "include",
+
+   header_libs: [
+    "libgralloc_cb.ranchu",
     ],
-    cflags: [
-        "-DLOG_TAG=\"goldfish-address-space\"",
-        "-DVIRTIO_GPU",
-    ],
-    include_dirs: ["device/generic/goldfish-opengl/system/include"],
+
 }
+

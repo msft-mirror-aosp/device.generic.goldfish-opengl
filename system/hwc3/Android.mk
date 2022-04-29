@@ -34,7 +34,6 @@ LOCAL_SHARED_LIBRARIES := \
     android.hardware.graphics.mapper@2.0 \
     android.hardware.graphics.mapper@4.0 \
     libbase \
-    libbinder \
     libbinder_ndk \
     libEGL \
     libcutils \

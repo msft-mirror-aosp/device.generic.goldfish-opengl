@@ -19,9 +19,11 @@
 #include <android-base/parseint.h>
 #include <android-base/properties.h>
 #include <android-base/strings.h>
+#include <android/hardware/graphics/common/1.0/types.h>
 #include <device_config_shared.h>
 #include <drm_fourcc.h>
 #include <libyuv.h>
+#include <sync/sync.h>
 #include <ui/GraphicBuffer.h>
 #include <ui/GraphicBufferAllocator.h>
 #include <ui/GraphicBufferMapper.h>
@@ -33,6 +35,8 @@
 
 namespace android {
 namespace {
+
+using android::hardware::graphics::common::V1_0::ColorTransform;
 
 uint64_t AlignToPower2(uint64_t val, uint8_t align_log) {
   uint64_t align = 1ULL << align_log;
@@ -81,8 +85,8 @@ ConverterFunction GetConverterForDrmFormat(uint32_t drmFormat) {
     case DRM_FORMAT_YVU420:
       return &ConvertFromYV12;
   }
-  ALOGW("Unsupported drm format: %d(%s), returning null converter", drmFormat,
-        GetDrmFormatString(drmFormat));
+  DEBUG_LOG("Unsupported drm format: %d(%s), returning null converter",
+            drmFormat, GetDrmFormatString(drmFormat));
   return nullptr;
 }
 
@@ -152,6 +156,8 @@ struct BufferSpec {
 
 int ConvertFromRGB565(const BufferSpec& src, const BufferSpec& dst,
                       bool vFlip) {
+  ATRACE_CALL();
+
   // Point to the upper left corner of the crop rectangle
   uint8_t* srcBuffer =
       src.buffer + src.cropY * src.strideBytes + src.cropX * src.sampleBytes;
@@ -170,6 +176,8 @@ int ConvertFromRGB565(const BufferSpec& src, const BufferSpec& dst,
 }
 
 int ConvertFromYV12(const BufferSpec& src, const BufferSpec& dst, bool vFlip) {
+  ATRACE_CALL();
+
   // The following calculation of plane offsets and alignments are based on
   // swiftshader's Sampler::setTextureLevel() implementation
   // (Renderer/Sampler.cpp:225)
@@ -223,6 +231,8 @@ int DoConversion(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
 }
 
 int DoCopy(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
+  ATRACE_CALL();
+
   // Point to the upper left corner of the crop rectangle
   uint8_t* srcBuffer =
       src.buffer + src.cropY * src.strideBytes + src.cropX * src.sampleBytes;
@@ -246,6 +256,8 @@ int DoCopy(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
 
 int DoRotation(const BufferSpec& src, const BufferSpec& dst,
                libyuv::RotationMode rotation, bool v_flip) {
+  ATRACE_CALL();
+
   // Point to the upper left corner of the crop rectangles
   uint8_t* srcBuffer =
       src.buffer + src.cropY * src.strideBytes + src.cropX * src.sampleBytes;
@@ -263,6 +275,8 @@ int DoRotation(const BufferSpec& src, const BufferSpec& dst,
 }
 
 int DoScaling(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
+  ATRACE_CALL();
+
   // Point to the upper left corner of the crop rectangles
   uint8_t* srcBuffer =
       src.buffer + src.cropY * src.strideBytes + src.cropX * src.sampleBytes;
@@ -283,6 +297,8 @@ int DoScaling(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
 }
 
 int DoAttenuation(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
+  ATRACE_CALL();
+
   // Point to the upper left corner of the crop rectangles
   uint8_t* srcBuffer =
       src.buffer + src.cropY * src.strideBytes + src.cropX * src.sampleBytes;
@@ -300,6 +316,8 @@ int DoAttenuation(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
 }
 
 int DoBlending(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
+  ATRACE_CALL();
+
   // Point to the upper left corner of the crop rectangles
   uint8_t* srcBuffer =
       src.buffer + src.cropY * src.strideBytes + src.cropX * src.sampleBytes;
@@ -380,67 +398,40 @@ std::optional<BufferSpec> GetBufferSpec(GrallocBuffer& buffer,
 
 }  // namespace
 
-HWC2::Error GuestComposer::init(const HotplugCallback& cb) {
+GuestComposer::GuestComposer(DrmPresenter* drmPresenter)
+    : mDrmPresenter(drmPresenter) {}
+
+HWC2::Error GuestComposer::init() {
   DEBUG_LOG("%s", __FUNCTION__);
-
-  if (!mDrmPresenter.init(cb)) {
-    ALOGE("%s: failed to initialize DrmPresenter", __FUNCTION__);
-    return HWC2::Error::NoResources;
-  }
-
   return HWC2::Error::None;
 }
 
-HWC2::Error GuestComposer::createDisplays(
-    Device* device, const AddDisplayToDeviceFunction& addDisplayToDeviceFn) {
-  DEBUG_LOG("%s", __FUNCTION__);
+HWC2::Error GuestComposer::onDisplayCreate(Display* display) {
+  hwc2_display_t displayId = display->getId();
+  hwc2_config_t displayConfigId;
+  int32_t displayWidth;
+  int32_t displayHeight;
 
-  HWC2::Error error = HWC2::Error::None;
-
-  std::vector<DisplayConfig> displayConfigs;
-
-  error = getDisplayConfigsFromDeviceConfig(&displayConfigs);
+  HWC2::Error error = display->getActiveConfig(&displayConfigId);
   if (error != HWC2::Error::None) {
-    ALOGE("%s failed to get display configs from device config", __FUNCTION__);
+    ALOGE("%s: display:%" PRIu64 " has no active config", __FUNCTION__,
+          displayId);
     return error;
   }
 
-  error = getDisplayConfigsFromSystemProp(&displayConfigs);
+  error = display->getDisplayAttributeEnum(
+      displayConfigId, HWC2::Attribute::Width, &displayWidth);
   if (error != HWC2::Error::None) {
-    ALOGE("%s failed to get display configs from system prop", __FUNCTION__);
+    ALOGE("%s: display:%" PRIu64 " failed to get width", __FUNCTION__,
+          displayId);
     return error;
   }
-  uint32_t id = 0;
-  for (const auto& displayConfig : displayConfigs) {
-    error = createDisplay(device, id, displayConfig.width, displayConfig.height,
-                          displayConfig.dpiX, displayConfig.dpiY,
-                          displayConfig.refreshRateHz, addDisplayToDeviceFn);
-    if (error != HWC2::Error::None) {
-      ALOGE("%s: failed to create display %d", __FUNCTION__, id);
-      return error;
-    }
 
-    ++id;
-  }
-
-  return HWC2::Error::None;
-}
-
-HWC2::Error GuestComposer::createDisplay(
-    Device* device, uint32_t id, uint32_t width, uint32_t height, uint32_t dpiX,
-    uint32_t dpiY, uint32_t refreshRateHz,
-    const AddDisplayToDeviceFunction& addDisplayToDeviceFn) {
-  auto display = std::make_unique<Display>(*device, this, id);
-  if (display == nullptr) {
-    ALOGE("%s failed to allocate display", __FUNCTION__);
-    return HWC2::Error::NoResources;
-  }
-
-  auto displayId = display->getId();
-
-  HWC2::Error error = display->init(width, height, dpiX, dpiY, refreshRateHz);
+  error = display->getDisplayAttributeEnum(
+      displayConfigId, HWC2::Attribute::Height, &displayHeight);
   if (error != HWC2::Error::None) {
-    ALOGE("%s failed to initialize display:%" PRIu64, __FUNCTION__, displayId);
+    ALOGE("%s: display:%" PRIu64 " failed to get height", __FUNCTION__,
+          displayId);
     return error;
   }
 
@@ -455,8 +446,8 @@ HWC2::Error GuestComposer::createDisplay(
   buffer_handle_t bufferHandle;
 
   auto status = GraphicBufferAllocator::get().allocate(
-      width,                   //
-      height,                  //
+      displayWidth,            //
+      displayHeight,           //
       PIXEL_FORMAT_RGBA_8888,  //
       /*layerCount=*/1,        //
       GraphicBuffer::USAGE_HW_COMPOSER | GraphicBuffer::USAGE_SW_READ_OFTEN |
@@ -476,26 +467,15 @@ HWC2::Error GuestComposer::createDisplay(
       displayInfo.compositionResultBuffer, mDrmPresenter);
 
   if (displayId == 0) {
-    int flushSyncFd = -1;
-
-    HWC2::Error flushError =
-        displayInfo.compositionResultDrmBuffer->flushToDisplay(displayId,
-                                                               &flushSyncFd);
+    auto [flushError, flushSyncFd] =
+        displayInfo.compositionResultDrmBuffer->flushToDisplay(displayId, -1);
     if (flushError != HWC2::Error::None) {
       ALOGW(
           "%s: Initial display flush failed. HWComposer assuming that we are "
           "running in QEMU without a display and disabling presenting.",
           __FUNCTION__);
       mPresentDisabled = true;
-    } else {
-      close(flushSyncFd);
     }
-  }
-
-  error = addDisplayToDeviceFn(std::move(display));
-  if (error != HWC2::Error::None) {
-    ALOGE("%s failed to add display:%" PRIu64, __FUNCTION__, displayId);
-    return error;
   }
 
   return HWC2::Error::None;
@@ -614,25 +594,22 @@ HWC2::Error GuestComposer::validateDisplay(
         layerCompositionType == HWC2::Composition::Cursor ||
         layerCompositionType == HWC2::Composition::Sideband ||
         layerCompositionType == HWC2::Composition::SolidColor) {
-      ALOGW("%s: display:%" PRIu64 " layer:%" PRIu64
-            " has composition type %s, falling back to client composition",
-            __FUNCTION__, displayId, layerId,
-            layerCompositionTypeString.c_str());
+      DEBUG_LOG("%s: display:%" PRIu64 " layer:%" PRIu64
+                " has composition type %s, falling back to client composition",
+                __FUNCTION__, displayId, layerId,
+                layerCompositionTypeString.c_str());
       fallbackToClientComposition = true;
       break;
     }
 
     if (!canComposeLayer(layer)) {
-      ALOGW("%s: display:%" PRIu64 " layer:%" PRIu64
-            " composition not supported, falling back to client composition",
-            __FUNCTION__, displayId, layerId);
+      DEBUG_LOG(
+          "%s: display:%" PRIu64 " layer:%" PRIu64
+          " composition not supported, falling back to client composition",
+          __FUNCTION__, displayId, layerId);
       fallbackToClientComposition = true;
       break;
     }
-  }
-
-  if (display->hasColorTransform()) {
-    fallbackToClientComposition = true;
   }
 
   if (fallbackToClientComposition) {
@@ -685,24 +662,21 @@ HWC2::Error GuestComposer::validateDisplay(
   return HWC2::Error::None;
 }
 
-HWC2::Error GuestComposer::presentDisplay(Display* display,
-                                          int32_t* outRetireFence) {
+std::tuple<HWC2::Error, base::unique_fd> GuestComposer::presentDisplay(
+    Display* display) {
+  ATRACE_CALL();
+
   const auto displayId = display->getId();
   DEBUG_LOG("%s display:%" PRIu64, __FUNCTION__, displayId);
 
-  if (displayId != 0) {
-    // TODO(b/171305898): remove after multi-display fully supported.
-    return HWC2::Error::None;
-  }
-
   if (mPresentDisabled) {
-    return HWC2::Error::None;
+    return std::make_tuple(HWC2::Error::None, base::unique_fd());
   }
 
   auto it = mDisplayInfos.find(displayId);
   if (it == mDisplayInfos.end()) {
     ALOGE("%s: display:%" PRIu64 " not found", __FUNCTION__, displayId);
-    return HWC2::Error::NoResources;
+    return std::make_tuple(HWC2::Error::NoResources, base::unique_fd());
   }
 
   GuestComposerDisplayInfo& displayInfo = it->second;
@@ -710,7 +684,7 @@ HWC2::Error GuestComposer::presentDisplay(Display* display,
   if (displayInfo.compositionResultBuffer == nullptr) {
     ALOGE("%s: display:%" PRIu64 " missing composition result buffer",
           __FUNCTION__, displayId);
-    return HWC2::Error::NoResources;
+    return std::make_tuple(HWC2::Error::NoResources, base::unique_fd());
   }
 
   std::optional<GrallocBuffer> compositionResultBufferOpt =
@@ -718,7 +692,7 @@ HWC2::Error GuestComposer::presentDisplay(Display* display,
   if (!compositionResultBufferOpt) {
     ALOGE("%s: display:%" PRIu64 " failed to import buffer", __FUNCTION__,
           displayId);
-    return HWC2::Error::NoResources;
+    return std::make_tuple(HWC2::Error::NoResources, base::unique_fd());
   }
 
   std::optional<uint32_t> compositionResultBufferWidthOpt =
@@ -726,7 +700,7 @@ HWC2::Error GuestComposer::presentDisplay(Display* display,
   if (!compositionResultBufferWidthOpt) {
     ALOGE("%s: display:%" PRIu64 " failed to query buffer width", __FUNCTION__,
           displayId);
-    return HWC2::Error::NoResources;
+    return std::make_tuple(HWC2::Error::NoResources, base::unique_fd());
   }
 
   std::optional<uint32_t> compositionResultBufferHeightOpt =
@@ -734,7 +708,7 @@ HWC2::Error GuestComposer::presentDisplay(Display* display,
   if (!compositionResultBufferHeightOpt) {
     ALOGE("%s: display:%" PRIu64 " failed to query buffer height", __FUNCTION__,
           displayId);
-    return HWC2::Error::NoResources;
+    return std::make_tuple(HWC2::Error::NoResources, base::unique_fd());
   }
 
   std::optional<uint32_t> compositionResultBufferStrideOpt =
@@ -742,7 +716,7 @@ HWC2::Error GuestComposer::presentDisplay(Display* display,
   if (!compositionResultBufferStrideOpt) {
     ALOGE("%s: display:%" PRIu64 " failed to query buffer stride", __FUNCTION__,
           displayId);
-    return HWC2::Error::NoResources;
+    return std::make_tuple(HWC2::Error::NoResources, base::unique_fd());
   }
 
   std::optional<GrallocBufferView> compositionResultBufferViewOpt =
@@ -750,7 +724,7 @@ HWC2::Error GuestComposer::presentDisplay(Display* display,
   if (!compositionResultBufferViewOpt) {
     ALOGE("%s: display:%" PRIu64 " failed to get buffer view", __FUNCTION__,
           displayId);
-    return HWC2::Error::NoResources;
+    return std::make_tuple(HWC2::Error::NoResources, base::unique_fd());
   }
 
   const std::optional<void*> compositionResultBufferDataOpt =
@@ -758,7 +732,7 @@ HWC2::Error GuestComposer::presentDisplay(Display* display,
   if (!compositionResultBufferDataOpt) {
     ALOGE("%s: display:%" PRIu64 " failed to get buffer data", __FUNCTION__,
           displayId);
-    return HWC2::Error::NoResources;
+    return std::make_tuple(HWC2::Error::NoResources, base::unique_fd());
   }
 
   uint32_t compositionResultBufferWidth = *compositionResultBufferWidthOpt;
@@ -784,27 +758,27 @@ HWC2::Error GuestComposer::presentDisplay(Display* display,
         mGralloc.Import(display->waitAndGetClientTargetBuffer());
     if (!clientTargetBufferOpt) {
       ALOGE("%s: failed to import client target buffer.", __FUNCTION__);
-      return HWC2::Error::NoResources;
+      return std::make_tuple(HWC2::Error::NoResources, base::unique_fd());
     }
     GrallocBuffer& clientTargetBuffer = *clientTargetBufferOpt;
 
     auto clientTargetBufferViewOpt = clientTargetBuffer.Lock();
     if (!clientTargetBufferViewOpt) {
       ALOGE("%s: failed to lock client target buffer.", __FUNCTION__);
-      return HWC2::Error::NoResources;
+      return std::make_tuple(HWC2::Error::NoResources, base::unique_fd());
     }
     GrallocBufferView& clientTargetBufferView = *clientTargetBufferViewOpt;
 
     auto clientTargetPlaneLayoutsOpt = clientTargetBuffer.GetPlaneLayouts();
     if (!clientTargetPlaneLayoutsOpt) {
       ALOGE("Failed to get client target buffer plane layouts.");
-      return HWC2::Error::NoResources;
+      return std::make_tuple(HWC2::Error::NoResources, base::unique_fd());
     }
     auto& clientTargetPlaneLayouts = *clientTargetPlaneLayoutsOpt;
 
     if (clientTargetPlaneLayouts.size() != 1) {
       ALOGE("Unexpected number of plane layouts for client target buffer.");
-      return HWC2::Error::NoResources;
+      return std::make_tuple(HWC2::Error::NoResources, base::unique_fd());
     }
 
     std::size_t clientTargetPlaneSize =
@@ -813,7 +787,7 @@ HWC2::Error GuestComposer::presentDisplay(Display* display,
     auto clientTargetDataOpt = clientTargetBufferView.Get();
     if (!clientTargetDataOpt) {
       ALOGE("%s failed to lock gralloc buffer.", __FUNCTION__);
-      return HWC2::Error::NoResources;
+      return std::make_tuple(HWC2::Error::NoResources, base::unique_fd());
     }
     auto* clientTargetData = reinterpret_cast<uint8_t*>(*clientTargetDataOpt);
 
@@ -836,21 +810,39 @@ HWC2::Error GuestComposer::presentDisplay(Display* display,
       if (error != HWC2::Error::None) {
         ALOGE("%s: display:%" PRIu64 " failed to compose layer:%" PRIu64,
               __FUNCTION__, displayId, layerId);
-        return error;
+        return std::make_tuple(error, base::unique_fd());
       }
+    }
+  }
+
+  if (display->hasColorTransform()) {
+    const ColorTransformWithMatrix colorTransform =
+        display->getColorTransform();
+
+    HWC2::Error error =
+        applyColorTransformToRGBA(colorTransform,                 //
+                                  compositionResultBufferData,    //
+                                  compositionResultBufferWidth,   //
+                                  compositionResultBufferHeight,  //
+                                  compositionResultBufferStride);
+    if (error != HWC2::Error::None) {
+      ALOGE("%s: display:%" PRIu64 " failed to apply color transform",
+            __FUNCTION__, displayId);
+      return std::make_tuple(error, base::unique_fd());
     }
   }
 
   DEBUG_LOG("%s display:%" PRIu64 " flushing drm buffer", __FUNCTION__,
             displayId);
 
-  HWC2::Error error = displayInfo.compositionResultDrmBuffer->flushToDisplay(
-      static_cast<int>(displayId), outRetireFence);
+  auto [error, outRetireFence] =
+      displayInfo.compositionResultDrmBuffer->flushToDisplay(
+          static_cast<int>(displayId), -1);
   if (error != HWC2::Error::None) {
     ALOGE("%s: display:%" PRIu64 " failed to flush drm buffer" PRIu64,
           __FUNCTION__, displayId);
   }
-  return error;
+  return std::make_tuple(error, std::move(outRetireFence));
 }
 
 bool GuestComposer::canComposeLayer(Layer* layer) {
@@ -885,6 +877,8 @@ HWC2::Error GuestComposer::composeLayerInto(
     Layer* srcLayer, std::uint8_t* dstBuffer, std::uint32_t dstBufferWidth,
     std::uint32_t dstBufferHeight, std::uint32_t dstBufferStrideBytes,
     std::uint32_t dstBufferBytesPerPixel) {
+  ATRACE_CALL();
+
   libyuv::RotationMode rotation =
       GetRotationFromTransform(srcLayer->getTransform());
 
@@ -912,7 +906,8 @@ HWC2::Error GuestComposer::composeLayerInto(
   BufferSpec srcLayerSpec = *srcLayerSpecOpt;
 
   // TODO(jemoreira): Remove the hardcoded fomat.
-  bool needsConversion = srcLayerSpec.drmFormat != DRM_FORMAT_XBGR8888;
+  bool needsConversion = srcLayerSpec.drmFormat != DRM_FORMAT_XBGR8888 &&
+                         srcLayerSpec.drmFormat != DRM_FORMAT_ABGR8888;
   bool needsScaling = LayerNeedsScaling(*srcLayer);
   bool needsRotation = rotation != libyuv::kRotate0;
   bool needsTranspose = needsRotation && rotation != libyuv::kRotate180;
@@ -1067,6 +1062,80 @@ HWC2::Error GuestComposer::composeLayerInto(
     }
     // Don't need to assign destination to source in the last one
     dstBufferStack.pop_back();
+  }
+
+  return HWC2::Error::None;
+}
+
+namespace {
+
+static constexpr const std::array<float, 16> kInvertColorMatrix = {
+    // clang-format off
+  -1.0f,  0.0f,  0.0f, 0.0f,
+   0.0f, -1.0f,  0.0f, 0.0f,
+   0.0f, -1.0f, -1.0f, 0.0f,
+   1.0f,  1.0f,  1.0f, 1.0f,
+    // clang-format on
+};
+
+// Returns a color matrix that can be used with libyuv by converting values
+// in -1 to 1 into -64 to 64 and transposing.
+std::array<std::int8_t, 16> ToLibyuvColorMatrix(
+    const std::array<float, 16>& in) {
+  std::array<std::int8_t, 16> out;
+
+  for (int r = 0; r < 4; r++) {
+    for (int c = 0; c < 4; c++) {
+      int indexIn = (4 * r) + c;
+      int indexOut = (4 * c) + r;
+
+      out[indexOut] = std::max(
+          -128, std::min(127, static_cast<int>(in[indexIn] * 64.0f + 0.5f)));
+    }
+  }
+
+  return out;
+}
+
+}  // namespace
+
+HWC2::Error GuestComposer::applyColorTransformToRGBA(
+    const ColorTransformWithMatrix& transform,  //
+    std::uint8_t* buffer,                       //
+    std::uint32_t bufferWidth,                  //
+    std::uint32_t bufferHeight,                 //
+    std::uint32_t bufferStrideBytes) {
+  ATRACE_CALL();
+
+  if (transform.transformType == ColorTransform::ARBITRARY_MATRIX) {
+    if (!transform.transformMatrixOpt.has_value()) {
+      ALOGE("%s: color transform matrix missing", __FUNCTION__);
+      return HWC2::Error::BadParameter;
+    }
+    const auto& transformMatrix = *transform.transformMatrixOpt;
+    const auto transformMatrixLibyuv = ToLibyuvColorMatrix(transformMatrix);
+    libyuv::ARGBColorMatrix(buffer, bufferStrideBytes,     // in buffer params
+                            buffer, bufferStrideBytes,     // out buffer params
+                            transformMatrixLibyuv.data(),  //
+                            bufferWidth,                   //
+                            bufferHeight);
+  } else if (transform.transformType == ColorTransform::VALUE_INVERSE) {
+    const auto transformMatrixLibyuv = ToLibyuvColorMatrix(kInvertColorMatrix);
+    libyuv::ARGBColorMatrix(buffer, bufferStrideBytes,     // in buffer params
+                            buffer, bufferStrideBytes,     // out buffer params
+                            transformMatrixLibyuv.data(),  //
+                            bufferWidth,                   //
+                            bufferHeight);
+  } else if (transform.transformType == ColorTransform::GRAYSCALE) {
+    libyuv::ARGBGrayTo(buffer, bufferStrideBytes,  // in buffer params
+                       buffer, bufferStrideBytes,  // out buffer params
+                       bufferWidth,                //
+                       bufferHeight);
+  } else {
+    const auto transformTypeString = toString(transform.transformType);
+    ALOGE("%s: unhandled color transform type %s", __FUNCTION__,
+          transformTypeString.c_str());
+    return HWC2::Error::BadParameter;
   }
 
   return HWC2::Error::None;

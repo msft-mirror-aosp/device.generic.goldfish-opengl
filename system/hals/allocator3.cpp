@@ -301,11 +301,15 @@ private:
                     // Camera-to-encoder is NV21
                     *format = PixelFormat::YCRCB_420_SP;
                     RETURN(Error3::NONE);
+                } else {
+                    // b/189957071
+                    *format = PixelFormat::YCBCR_420_888;
+                    RETURN(Error3::NONE);
                 }
             }
             RETURN_ERROR(Error3::UNSUPPORTED);
         } else if (static_cast<int>(frameworkFormat) == kOMX_COLOR_FormatYUV420Planar &&
-               (usage & BufferUsage::GPU_DATA_BUFFER)) {
+               (usage & BufferUsage::VIDEO_DECODER)) {
             ALOGW("gralloc_alloc: Requested OMX_COLOR_FormatYUV420Planar, given "
               "YCbCr_420_888, taking experimental path. "
               "usage=%x", usage);
@@ -337,6 +341,7 @@ private:
                             | BufferUsage::GPU_RENDER_TARGET
                             | BufferUsage::COMPOSER_OVERLAY
                             | BufferUsage::VIDEO_ENCODER
+                            | BufferUsage::VIDEO_DECODER
                             | BufferUsage::COMPOSER_CLIENT_TARGET
                             | BufferUsage::CPU_READ_MASK));
     }

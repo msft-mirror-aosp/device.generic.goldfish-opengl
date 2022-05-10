@@ -72,6 +72,10 @@ static const struct _renderControl_funcs_by_name {
 	{"rcComposeAsyncWithoutPost", (void*)rcComposeAsyncWithoutPost},
 	{"rcCreateDisplayById", (void*)rcCreateDisplayById},
 	{"rcSetDisplayPoseDpi", (void*)rcSetDisplayPoseDpi},
+	{"rcReadColorBufferDMA", (void*)rcReadColorBufferDMA},
+	{"rcGetFBDisplayConfigsCount", (void*)rcGetFBDisplayConfigsCount},
+	{"rcGetFBDisplayConfigsParam", (void*)rcGetFBDisplayConfigsParam},
+	{"rcGetFBDisplayActiveConfig", (void*)rcGetFBDisplayActiveConfig},
 };
 static const int renderControl_num_funcs = sizeof(renderControl_funcs_by_name) / sizeof(struct _renderControl_funcs_by_name);
 

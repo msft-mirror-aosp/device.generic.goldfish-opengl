@@ -16,17 +16,20 @@
 
 #include "Display.h"
 
+#include <android-base/unique_fd.h>
 #include <sync/sync.h>
 
 #include <atomic>
 #include <numeric>
+#include <sstream>
 
+#include "Common.h"
 #include "Device.h"
 
 namespace android {
 namespace {
 
-std::atomic<hwc2_config_t> sNextConfigId{0};
+using android::hardware::graphics::common::V1_0::ColorTransform;
 
 bool IsValidColorMode(android_color_mode_t mode) {
   switch (mode) {
@@ -60,40 +63,36 @@ bool isValidPowerMode(HWC2::PowerMode mode) {
 
 }  // namespace
 
-Display::Display(Device& device, Composer* composer, hwc2_display_t id)
-    : mDevice(device),
-      mComposer(composer),
-      mId(id),
-      mVsyncThread(new VsyncThread(*this)) {}
+Display::Display(Composer* composer, hwc2_display_t id)
+    : mComposer(composer), mId(id), mVsyncThread(new VsyncThread(id)) {}
 
 Display::~Display() {}
 
-HWC2::Error Display::init(uint32_t width, uint32_t height, uint32_t dpiX,
-                          uint32_t dpiY, uint32_t refreshRateHz,
+HWC2::Error Display::init(const std::vector<DisplayConfig>& configs,
+                          hwc2_config_t activeConfigId,
                           const std::optional<std::vector<uint8_t>>& edid) {
-  ALOGD("%s initializing display:%" PRIu64
-        " width:%d height:%d dpiX:%d dpiY:%d refreshRateHz:%d",
-        __FUNCTION__, mId, width, height, dpiX, dpiY, refreshRateHz);
-
   std::unique_lock<std::recursive_mutex> lock(mStateMutex);
 
-  mVsyncPeriod = 1000 * 1000 * 1000 / refreshRateHz;
-  mVsyncThread->run("", ANDROID_PRIORITY_URGENT_DISPLAY);
+  for (const DisplayConfig& config : configs) {
+    mConfigs.emplace(config.getId(), config);
+  }
 
-  hwc2_config_t configId = sNextConfigId++;
-
-  Config config(configId);
-  config.setAttribute(HWC2::Attribute::VsyncPeriod, mVsyncPeriod);
-  config.setAttribute(HWC2::Attribute::Width, width);
-  config.setAttribute(HWC2::Attribute::Height, height);
-  config.setAttribute(HWC2::Attribute::DpiX, dpiX * 1000);
-  config.setAttribute(HWC2::Attribute::DpiY, dpiY * 1000);
-  mConfigs.emplace(configId, config);
-
-  mActiveConfigId = configId;
-  mActiveColorMode = HAL_COLOR_MODE_NATIVE;
-  mColorModes.emplace((android_color_mode_t)HAL_COLOR_MODE_NATIVE);
+  mActiveConfigId = activeConfigId;
   mEdid = edid;
+
+  auto it = mConfigs.find(activeConfigId);
+  if (it == mConfigs.end()) {
+    ALOGE("%s: display:%" PRIu64 "missing config:%" PRIu32, __FUNCTION__, mId,
+          activeConfigId);
+    return HWC2::Error::NoResources;
+  }
+
+  const auto& activeConfig = it->second;
+  const auto activeConfigString = activeConfig.toString();
+  ALOGD("%s initializing display:%" PRIu64 " with config:%s", __FUNCTION__, mId,
+        activeConfigString.c_str());
+
+  mVsyncThread->start(activeConfig.getVsyncPeriod());
 
   return HWC2::Error::None;
 }
@@ -107,18 +106,17 @@ HWC2::Error Display::updateParameters(
 
   std::unique_lock<std::recursive_mutex> lock(mStateMutex);
 
-  mVsyncPeriod = 1000 * 1000 * 1000 / refreshRateHz;
-
   auto it = mConfigs.find(*mActiveConfigId);
   if (it == mConfigs.end()) {
     ALOGE("%s: failed to find config %" PRIu32, __func__, *mActiveConfigId);
     return HWC2::Error::NoResources;
   }
-  it->second.setAttribute(HWC2::Attribute::VsyncPeriod, mVsyncPeriod);
+  it->second.setAttribute(HWC2::Attribute::VsyncPeriod,
+                          1000 * 1000 * 1000 / refreshRateHz);
   it->second.setAttribute(HWC2::Attribute::Width, width);
   it->second.setAttribute(HWC2::Attribute::Height, height);
-  it->second.setAttribute(HWC2::Attribute::DpiX, dpiX * 1000);
-  it->second.setAttribute(HWC2::Attribute::DpiY, dpiY * 1000);
+  it->second.setAttribute(HWC2::Attribute::DpiX, dpiX);
+  it->second.setAttribute(HWC2::Attribute::DpiY, dpiY);
 
   mEdid = edid;
 
@@ -138,13 +136,13 @@ Layer* Display::getLayer(hwc2_layer_t layerId) {
 buffer_handle_t Display::waitAndGetClientTargetBuffer() {
   DEBUG_LOG("%s: display:%" PRIu64, __FUNCTION__, mId);
 
-  int fence = mClientTarget.getFence();
-  if (fence != -1) {
-    int err = sync_wait(fence, 3000);
+  base::unique_fd fence = mClientTarget.getFence();
+  if (fence.ok()) {
+    int err = sync_wait(fence.get(), 3000);
     if (err < 0 && errno == ETIME) {
-      ALOGE("%s waited on fence %" PRId32 " for 3000 ms", __FUNCTION__, fence);
+      ALOGE("%s waited on fence %" PRId32 " for 3000 ms", __FUNCTION__,
+            fence.get());
     }
-    close(fence);
   }
 
   return mClientTarget.getBuffer();
@@ -247,7 +245,7 @@ HWC2::Error Display::getDisplayAttributeEnum(hwc2_config_t configId,
     return HWC2::Error::BadConfig;
   }
 
-  const Config& config = it->second;
+  const DisplayConfig& config = it->second;
   *outValue = config.getAttribute(attribute);
   DEBUG_LOG("%s: display:%" PRIu64 " attribute:%s value is %" PRIi32,
             __FUNCTION__, mId, attributeString.c_str(), *outValue);
@@ -374,18 +372,12 @@ HWC2::Error Display::getName(uint32_t* outSize, char* outName) {
   return HWC2::Error::None;
 }
 
-HWC2::Error Display::addReleaseFenceLocked(int32_t fence) {
-  DEBUG_LOG("%s: display:%" PRIu64 " fence:%d", __FUNCTION__, mId, fence);
+HWC2::Error Display::addReleaseFenceLocked(hwc2_layer_t layerId,
+                                           base::unique_fd fence) {
+  DEBUG_LOG("%s: display:%" PRIu64 " layer: %" PRIu64 ", fence: %d",
+            __FUNCTION__, mId, static_cast<uint64_t>(layerId), fence.get());
 
-  mReleaseFences.push_back(fence);
-  return HWC2::Error::None;
-}
-
-HWC2::Error Display::addReleaseLayerLocked(hwc2_layer_t layerId) {
-  DEBUG_LOG("%s: display:%" PRIu64 " layer:%" PRIu64, __FUNCTION__, mId,
-            layerId);
-
-  mReleaseLayerIds.push_back(layerId);
+  mReleaseFences[layerId] = std::move(fence);
   return HWC2::Error::None;
 }
 
@@ -396,18 +388,44 @@ HWC2::Error Display::getReleaseFences(uint32_t* outNumElements,
 
   std::unique_lock<std::recursive_mutex> lock(mStateMutex);
 
-  *outNumElements = mReleaseLayerIds.size();
+  uint32_t outArraySize = *outNumElements;
 
-  if (*outNumElements && outLayers) {
-    DEBUG_LOG("%s export release layers", __FUNCTION__);
-    memcpy(outLayers, mReleaseLayerIds.data(),
-           sizeof(hwc2_layer_t) * (*outNumElements));
+  *outNumElements = 0;
+  for (const auto& [_, releaseFence] : mReleaseFences) {
+    if (releaseFence.ok()) {
+      (*outNumElements)++;
+    }
   }
 
-  if (*outNumElements && outFences) {
-    DEBUG_LOG("%s export release fences", __FUNCTION__);
-    memcpy(outFences, mReleaseFences.data(),
-           sizeof(int32_t) * (*outNumElements));
+  if ((!outLayers && !outFences) || (outArraySize == 0) ||
+      (*outNumElements == 0)) {
+    return HWC2::Error::None;
+  }
+  DEBUG_LOG("%s export release fences", __FUNCTION__);
+
+  uint32_t index = 0;
+  for (const auto& [layer_id, releaseFence] : mReleaseFences) {
+    if (index >= outArraySize) {
+      break;
+    }
+    if (!releaseFence.ok()) {
+      continue;
+    }
+    if (outLayers) {
+      outLayers[index] = layer_id;
+    }
+    if (outFences) {
+      int outFence = dup(releaseFence.get());
+      if (outFence < 0) {
+        ALOGE("%s: Fail to dup release fence for display id = %" PRIu64
+              ", layer id = %" PRIu64 ", fence = %d, error(%d): %s",
+              __FUNCTION__, static_cast<uint64_t>(mId),
+              static_cast<uint64_t>(layer_id), releaseFence.get(), errno,
+              strerror(errno));
+      }
+      outFences[index] = outFence;
+    }
+    index++;
   }
 
   return HWC2::Error::None;
@@ -416,7 +434,6 @@ HWC2::Error Display::getReleaseFences(uint32_t* outNumElements,
 HWC2::Error Display::clearReleaseFencesAndIdsLocked() {
   DEBUG_LOG("%s: display:%" PRIu64, __FUNCTION__, mId);
 
-  mReleaseLayerIds.clear();
   mReleaseFences.clear();
 
   return HWC2::Error::None;
@@ -465,10 +482,12 @@ HWC2::Error Display::getType(int32_t* outType) {
   return HWC2::Error::None;
 }
 
-HWC2::Error Display::present(int32_t* outRetireFence) {
+HWC2::Error Display::present(int32_t* outRetireFencePtr) {
+  ATRACE_CALL();
+
   DEBUG_LOG("%s: display:%" PRIu64, __FUNCTION__, mId);
 
-  *outRetireFence = -1;
+  *outRetireFencePtr = -1;
 
   std::unique_lock<std::recursive_mutex> lock(mStateMutex);
 
@@ -483,13 +502,16 @@ HWC2::Error Display::present(int32_t* outRetireFence) {
     return HWC2::Error::NoResources;
   }
 
-  HWC2::Error error = mComposer->presentDisplay(this, outRetireFence);
+  HWC2::Error error;
+  base::unique_fd outRetireFence;
+  std::tie(error, outRetireFence) = mComposer->presentDisplay(this);
   if (error != HWC2::Error::None) {
     ALOGE("%s: display:%" PRIu64 " failed to present", __FUNCTION__, mId);
     return error;
   }
 
   DEBUG_LOG("%s: display:%" PRIu64 " present done!", __FUNCTION__, mId);
+  *outRetireFencePtr = outRetireFence.release();
   return HWC2::Error::None;
 }
 
@@ -497,16 +519,11 @@ HWC2::Error Display::setActiveConfig(hwc2_config_t configId) {
   DEBUG_LOG("%s: display:%" PRIu64 " setting active config to %" PRIu32,
             __FUNCTION__, mId, configId);
 
-  std::unique_lock<std::recursive_mutex> lock(mStateMutex);
-
-  if (mConfigs.find(configId) == mConfigs.end()) {
-    ALOGE("%s: display:%" PRIu64 " bad config:%" PRIu32, __FUNCTION__, mId,
-          configId);
-    return HWC2::Error::BadConfig;
-  }
-
-  mActiveConfigId = configId;
-  return HWC2::Error::None;
+  hwc_vsync_period_change_constraints_t constraints;
+  constraints.desiredTimeNanos = 0;
+  constraints.seamlessRequired = false;
+  hwc_vsync_period_change_timeline_t timeline;
+  return setActiveConfigWithConstraints(configId, &constraints, &timeline);
 }
 
 HWC2::Error Display::setClientTarget(buffer_handle_t target,
@@ -517,7 +534,7 @@ HWC2::Error Display::setClientTarget(buffer_handle_t target,
 
   std::unique_lock<std::recursive_mutex> lock(mStateMutex);
   mClientTarget.setBuffer(target);
-  mClientTarget.setFence(acquireFence);
+  mClientTarget.setFence(base::unique_fd(acquireFence));
   mComposer->onDisplayClientTargetSet(this);
   return HWC2::Error::None;
 }
@@ -544,17 +561,38 @@ HWC2::Error Display::setColorMode(int32_t intMode) {
   return HWC2::Error::None;
 }
 
-HWC2::Error Display::setColorTransform(const float* /*matrix*/, int32_t hint) {
-  DEBUG_LOG("%s: display:%" PRIu64 " setting hint to %d", __FUNCTION__, mId,
-            hint);
+HWC2::Error Display::setColorTransform(const float* transformMatrix,
+                                       int transformTypeRaw) {
+  const auto transformType = static_cast<ColorTransform>(transformTypeRaw);
+  return setColorTransformEnum(transformMatrix, transformType);
+}
+
+HWC2::Error Display::setColorTransformEnum(const float* transformMatrix,
+                                           ColorTransform transformType) {
+  const auto transformTypeString = toString(transformType);
+  DEBUG_LOG("%s: display:%" PRIu64 " color transform type %s", __FUNCTION__,
+            mId, transformTypeString.c_str());
+
+  if (transformType == ColorTransform::ARBITRARY_MATRIX &&
+      transformMatrix == nullptr) {
+    return HWC2::Error::BadParameter;
+  }
 
   std::unique_lock<std::recursive_mutex> lock(mStateMutex);
-  // we force client composition if this is set
-  if (hint == 0) {
-    mSetColorTransform = false;
+
+  if (transformType == ColorTransform::IDENTITY) {
+    mColorTransform.reset();
   } else {
-    mSetColorTransform = true;
+    ColorTransformWithMatrix& colorTransform = mColorTransform.emplace();
+    colorTransform.transformType = transformType;
+
+    if (transformType == ColorTransform::ARBITRARY_MATRIX) {
+      auto& colorTransformMatrix = colorTransform.transformMatrixOpt.emplace();
+      std::copy_n(transformMatrix, colorTransformMatrix.size(),
+                  colorTransformMatrix.begin());
+    }
   }
+
   return HWC2::Error::None;
 }
 
@@ -583,6 +621,17 @@ HWC2::Error Display::setPowerMode(int32_t intMode) {
 
   std::unique_lock<std::recursive_mutex> lock(mStateMutex);
 
+  if (IsCuttlefish()) {
+    if (int fd = open("/dev/kmsg", O_WRONLY | O_CLOEXEC); fd != -1) {
+      std::ostringstream stream;
+      stream << "VIRTUAL_DEVICE_DISPLAY_POWER_MODE_CHANGED display=" << mId
+             << " mode=" << modeString;
+      std::string message = stream.str();
+      write(fd, message.c_str(), message.length());
+      close(fd);
+    }
+  }
+
   mPowerMode = mode;
   return HWC2::Error::None;
 }
@@ -598,22 +647,53 @@ HWC2::Error Display::setVsyncEnabled(int32_t intEnable) {
   }
 
   std::unique_lock<std::recursive_mutex> lock(mStateMutex);
-  DEBUG_LOG("%s: display:%" PRIu64 " setting vsync locked to %s", __FUNCTION__,
-            mId, enableString.c_str());
-
-  mVsyncEnabled = enable;
-  return HWC2::Error::None;
+  return mVsyncThread->setVsyncEnabled(enable == HWC2::Vsync::Enable);
 }
 
-HWC2::Error Display::setVsyncPeriod(uint32_t period) {
-  DEBUG_LOG("%s: display:%" PRIu64 " setting vsync period to %d", __FUNCTION__,
-            mId, period);
+HWC2::Error Display::setVsyncCallback(HWC2_PFN_VSYNC callback,
+                                      hwc2_callback_data_t data) {
+  DEBUG_LOG("%s: display:%" PRIu64, __FUNCTION__, mId);
 
-  mVsyncPeriod = period;
+  std::unique_lock<std::recursive_mutex> lock(mStateMutex);
+
+  return mVsyncThread->setVsyncCallback(callback, data);
+}
+
+HWC2::Error Display::setVsync24Callback(HWC2_PFN_VSYNC_2_4 callback,
+                                        hwc2_callback_data_t data) {
+  DEBUG_LOG("%s: display:%" PRIu64, __FUNCTION__, mId);
+
+  std::unique_lock<std::recursive_mutex> lock(mStateMutex);
+
+  return mVsyncThread->setVsync24Callback(callback, data);
+}
+
+HWC2::Error Display::getDisplayVsyncPeriod(
+    hwc2_vsync_period_t* outVsyncPeriod) {
+  DEBUG_LOG("%s: display:%" PRIu64, __FUNCTION__, mId);
+
+  std::unique_lock<std::recursive_mutex> lock(mStateMutex);
+
+  if (!mActiveConfigId) {
+    ALOGE("%s : display:%" PRIu64 " no active config", __FUNCTION__, mId);
+    return HWC2::Error::BadConfig;
+  }
+
+  const auto it = mConfigs.find(*mActiveConfigId);
+  if (it == mConfigs.end()) {
+    ALOGE("%s : display:%" PRIu64 " failed to find active config:%" PRIu32,
+          __FUNCTION__, mId, *mActiveConfigId);
+    return HWC2::Error::BadConfig;
+  }
+  const DisplayConfig& activeConfig = it->second;
+
+  *outVsyncPeriod = static_cast<hwc2_vsync_period_t>(
+      activeConfig.getAttribute(HWC2::Attribute::VsyncPeriod));
   return HWC2::Error::None;
 }
 
 HWC2::Error Display::validate(uint32_t* outNumTypes, uint32_t* outNumRequests) {
+  ATRACE_CALL();
   DEBUG_LOG("%s: display:%" PRIu64, __FUNCTION__, mId);
 
   std::unique_lock<std::recursive_mutex> lock(mStateMutex);
@@ -695,7 +775,7 @@ HWC2::Error Display::getClientTargetSupport(uint32_t width, uint32_t height,
     return HWC2::Error::Unsupported;
   }
 
-  const Config& activeConfig = it->second;
+  const DisplayConfig& activeConfig = it->second;
   const uint32_t activeConfigWidth =
       static_cast<uint32_t>(activeConfig.getAttribute(HWC2::Attribute::Width));
   const uint32_t activeConfigHeight =
@@ -759,6 +839,13 @@ static const uint8_t sEDID2[] = {
     0x70, 0x6c, 0x61, 0x79, 0x5f, 0x32, 0x00, 0x49};
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
+
+HWC2::Error Display::setEdid(std::vector<uint8_t> edid) {
+  DEBUG_LOG("%s: display:%" PRIu64, __FUNCTION__, mId);
+
+  mEdid = edid;
+  return HWC2::Error::None;
+}
 
 HWC2::Error Display::getDisplayIdentificationData(uint8_t* outPort,
                                                   uint32_t* outDataSize,
@@ -867,123 +954,95 @@ HWC2::Error Display::setDisplayBrightness(float brightness) {
   return HWC2::Error::Unsupported;
 }
 
-void Display::Config::setAttribute(HWC2::Attribute attribute, int32_t value) {
-  mAttributes[attribute] = value;
+HWC2::Error Display::setActiveConfigWithConstraints(
+    hwc2_config_t configId,
+    hwc_vsync_period_change_constraints_t* vsyncPeriodChangeConstraints,
+    hwc_vsync_period_change_timeline_t* outTimeline) {
+  DEBUG_LOG("%s: display:%" PRIu64, __FUNCTION__, mId);
+
+  std::unique_lock<std::recursive_mutex> lock(mStateMutex);
+
+  if (vsyncPeriodChangeConstraints == nullptr || outTimeline == nullptr) {
+    return HWC2::Error::BadParameter;
+  }
+
+  if (mConfigs.find(configId) == mConfigs.end()) {
+    ALOGE("%s: display:%" PRIu64 " bad config:%" PRIu32, __FUNCTION__, mId,
+          configId);
+    return HWC2::Error::BadConfig;
+  }
+
+  if (mActiveConfigId == configId) {
+    return HWC2::Error::None;
+  }
+  mActiveConfigId = configId;
+
+  if (mComposer == nullptr) {
+    ALOGE("%s: display:%" PRIu64 " missing composer", __FUNCTION__, mId);
+    return HWC2::Error::NoResources;
+  }
+
+  HWC2::Error error = mComposer->onActiveConfigChange(this);
+  if (error != HWC2::Error::None) {
+    ALOGE("%s: display:%" PRIu64 " composer failed to handle config change",
+          __FUNCTION__, mId);
+    return error;
+  }
+
+  hwc2_vsync_period_t vsyncPeriod;
+  error = getDisplayVsyncPeriod(&vsyncPeriod);
+  if (error != HWC2::Error::None) {
+    ALOGE("%s: display:%" PRIu64 " composer failed to handle config change",
+          __FUNCTION__, mId);
+    return error;
+  }
+
+  return mVsyncThread->scheduleVsyncUpdate(
+      vsyncPeriod, vsyncPeriodChangeConstraints, outTimeline);
 }
 
-int32_t Display::Config::getAttribute(HWC2::Attribute attribute) const {
-  if (mAttributes.count(attribute) == 0) {
-    return -1;
+HWC2::Error Display::getDisplayConnectionType(uint32_t* outType) {
+  if (IsCuttlefishFoldable()) {
+    // Workaround to force all displays to INTERNAL for cf_x86_64_foldable.
+    // TODO(b/193568008): Allow configuring internal/external per display.
+    *outType = HWC2_DISPLAY_CONNECTION_TYPE_INTERNAL;
+  } else {
+    // Other devices default to the first display INTERNAL, others EXTERNAL.
+    *outType = mId == 0 ? HWC2_DISPLAY_CONNECTION_TYPE_INTERNAL
+                        : HWC2_DISPLAY_CONNECTION_TYPE_EXTERNAL;
   }
-  return mAttributes.at(attribute);
+  return HWC2::Error::None;
 }
 
-std::string Display::Config::toString() const {
-  std::string output;
+HWC2::Error Display::setAutoLowLatencyMode(bool /*on*/) {
+  DEBUG_LOG("%s: display:%" PRIu64, __FUNCTION__, mId);
 
-  auto widthIt = mAttributes.find(HWC2::Attribute::Width);
-  if (widthIt != mAttributes.end()) {
-    output += " w:" + std::to_string(widthIt->second);
-  }
-
-  auto heightIt = mAttributes.find(HWC2::Attribute::Height);
-  if (heightIt != mAttributes.end()) {
-    output += " h:" + std::to_string(heightIt->second);
-  }
-
-  auto vsyncIt = mAttributes.find(HWC2::Attribute::VsyncPeriod);
-  if (vsyncIt != mAttributes.end()) {
-    output += " vsync:" + std::to_string(1e9 / vsyncIt->second);
-  }
-
-  auto dpiXIt = mAttributes.find(HWC2::Attribute::DpiX);
-  if (dpiXIt != mAttributes.end()) {
-    output += " dpi-x:" + std::to_string(dpiXIt->second / 1000.0f);
-  }
-
-  auto dpiYIt = mAttributes.find(HWC2::Attribute::DpiY);
-  if (dpiYIt != mAttributes.end()) {
-    output += " dpi-y:" + std::to_string(dpiYIt->second / 1000.0f);
-  }
-
-  return output;
+  return HWC2::Error::Unsupported;
 }
 
-// VsyncThread function
-bool Display::VsyncThread::threadLoop() {
-  struct timespec rt;
-  if (clock_gettime(CLOCK_MONOTONIC, &rt) == -1) {
-    ALOGE("%s: error in vsync thread clock_gettime: %s", __FUNCTION__,
-          strerror(errno));
-    return true;
+HWC2::Error Display::getSupportedContentTypes(
+    uint32_t* outNumSupportedContentTypes,
+    const uint32_t* /*outSupportedContentTypes*/) {
+  DEBUG_LOG("%s: display:%" PRIu64, __FUNCTION__, mId);
+
+  if (outNumSupportedContentTypes != nullptr) {
+    *outNumSupportedContentTypes = 0;
   }
-  const int logInterval = 60;
-  int64_t lastLogged = rt.tv_sec;
-  int sent = 0;
-  int lastSent = 0;
-  bool vsyncEnabled = false;
 
-  struct timespec wait_time;
-  wait_time.tv_sec = 0;
-  wait_time.tv_nsec = mDisplay.mVsyncPeriod;
-  const int64_t kOneRefreshNs = mDisplay.mVsyncPeriod;
-  const int64_t kOneSecondNs = 1000ULL * 1000ULL * 1000ULL;
-  int64_t lastTimeNs = -1;
-  int64_t phasedWaitNs = 0;
-  int64_t currentNs = 0;
+  return HWC2::Error::None;
+}
 
-  while (true) {
-    clock_gettime(CLOCK_MONOTONIC, &rt);
-    currentNs = rt.tv_nsec + rt.tv_sec * kOneSecondNs;
+HWC2::Error Display::setContentType(int32_t contentTypeRaw) {
+  auto contentType = static_cast<HWC2::ContentType>(contentTypeRaw);
+  auto contentTypeString = to_string(contentType);
+  DEBUG_LOG("%s: display:%" PRIu64 " content type:%s", __FUNCTION__, mId,
+            contentTypeString.c_str());
 
-    if (lastTimeNs < 0) {
-      phasedWaitNs = currentNs + kOneRefreshNs;
-    } else {
-      phasedWaitNs =
-          kOneRefreshNs * ((currentNs - lastTimeNs) / kOneRefreshNs + 1) +
-          lastTimeNs;
-    }
-
-    wait_time.tv_sec = phasedWaitNs / kOneSecondNs;
-    wait_time.tv_nsec = phasedWaitNs - wait_time.tv_sec * kOneSecondNs;
-
-    int ret;
-    do {
-      ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &wait_time, NULL);
-    } while (ret == -1 && errno == EINTR);
-
-    lastTimeNs = phasedWaitNs;
-
-    std::unique_lock<std::recursive_mutex> lock(mDisplay.mStateMutex);
-    vsyncEnabled = (mDisplay.mVsyncEnabled == HWC2::Vsync::Enable);
-    lock.unlock();
-
-    if (!vsyncEnabled) {
-      continue;
-    }
-
-    lock.lock();
-    const auto& callbackInfo =
-        mDisplay.mDevice.mCallbacks[HWC2::Callback::Vsync];
-    auto vsync = reinterpret_cast<HWC2_PFN_VSYNC>(callbackInfo.pointer);
-    lock.unlock();
-
-    if (vsync) {
-      DEBUG_LOG("%s: display:%" PRIu64 " calling vsync", __FUNCTION__,
-                mDisplay.mId);
-      vsync(callbackInfo.data, mDisplay.mId, lastTimeNs);
-    }
-
-    int64_t lastSentInterval = rt.tv_sec - lastLogged;
-    if (lastSentInterval >= logInterval) {
-      DEBUG_LOG("sent %d syncs in %" PRId64 "s", sent - lastSent,
-                lastSentInterval);
-      lastLogged = rt.tv_sec;
-      lastSent = sent;
-    }
-    ++sent;
+  if (contentType != HWC2::ContentType::None) {
+    return HWC2::Error::Unsupported;
   }
-  return false;
+
+  return HWC2::Error::None;
 }
 
 }  // namespace android

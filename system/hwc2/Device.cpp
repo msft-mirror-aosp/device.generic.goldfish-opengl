@@ -18,11 +18,28 @@
 
 #include <android-base/properties.h>
 
+#include "DisplayFinder.h"
 #include "GuestComposer.h"
 #include "HostComposer.h"
+#include "NoOpComposer.h"
 
 namespace android {
 namespace {
+
+static bool isMinigbmFromProperty() {
+  static constexpr const auto kGrallocProp = "ro.hardware.gralloc";
+
+  const auto grallocProp = android::base::GetProperty(kGrallocProp, "");
+  DEBUG_LOG("%s: prop value is: %s", __FUNCTION__, grallocProp.c_str());
+
+  if (grallocProp == "minigbm") {
+    ALOGD("%s: Using minigbm, in minigbm mode.\n", __FUNCTION__);
+    return true;
+  } else {
+    ALOGD("%s: Is not using minigbm, in goldfish mode.\n", __FUNCTION__);
+    return false;
+  }
+}
 
 template <typename PFN, typename T>
 static hwc2_function_pointer_t asFP(T function) {
@@ -36,7 +53,7 @@ static int CloseHook(hw_device_t* dev) {
   return 0;
 }
 
-bool IsCuttlefish() {
+bool ShouldUseGuestComposer() {
   return android::base::GetProperty("ro.hardware.vulkan", "") == "pastel";
 }
 
@@ -50,22 +67,39 @@ Device::Device() {
   common.close = CloseHook;
   hwc2_device_t::getCapabilities = getCapabilitiesHook;
   hwc2_device_t::getFunction = getFunctionHook;
+
+  mDrmPresenter = std::make_unique<DrmPresenter>();
 }
 
 HWC2::Error Device::init() {
   DEBUG_LOG("%s", __FUNCTION__);
+  bool isMinigbm = isMinigbmFromProperty();
 
-  if (IsCuttlefish()) {
-    mComposer = std::make_unique<GuestComposer>();
+  if (IsNoOpMode()) {
+    DEBUG_LOG("%s: using NoOpComposer", __FUNCTION__);
+    mComposer = std::make_unique<NoOpComposer>();
+  } else if (ShouldUseGuestComposer()) {
+    DEBUG_LOG("%s: using GuestComposer", __FUNCTION__);
+    mComposer = std::make_unique<GuestComposer>(mDrmPresenter.get());
   } else {
-    mComposer = std::make_unique<HostComposer>();
+    DEBUG_LOG("%s: using HostComposer", __FUNCTION__);
+    mComposer = std::make_unique<HostComposer>(mDrmPresenter.get(), isMinigbm);
   }
 
-  HWC2::Error error = mComposer->init(
-      [this](bool connected, uint32_t id, uint32_t width, uint32_t height,
-             uint32_t dpiX, uint32_t dpiY, uint32_t refreshRate) {
-        handleHotplug(connected, id, width, height, dpiX, dpiY, refreshRate);
-      });
+  if (!IsNoOpMode() && (ShouldUseGuestComposer() || isMinigbm)) {
+    bool success = mDrmPresenter->init(
+        [this](bool connected, uint32_t id, uint32_t width, uint32_t height,
+               uint32_t dpiX, uint32_t dpiY, uint32_t refreshRate) {
+          handleHotplug(connected, id, width, height, dpiX, dpiY, refreshRate);
+        });
+
+    if (!success) {
+      ALOGE("%s: failed to initialize DrmPresenter", __FUNCTION__);
+      return HWC2::Error::NoResources;
+    }
+  }
+
+  HWC2::Error error = mComposer->init();
 
   if (error != HWC2::Error::None) {
     ALOGE("%s failed to initialize Composer", __FUNCTION__);
@@ -96,44 +130,56 @@ HWC2::Error Device::createDisplays() {
     return HWC2::Error::NoResources;
   }
 
-  auto addDisplayLockedFn = [this](std::unique_ptr<Display> display) {
-    auto displayId = display->getId();
-    DEBUG_LOG("%s: adding display:%" PRIu64, __FUNCTION__, displayId);
-    mDisplays.emplace(displayId, std::move(display));
-    return HWC2::Error::None;
-  };
+  std::vector<DisplayMultiConfigs> displays;
 
-  HWC2::Error error = mComposer->createDisplays(this, addDisplayLockedFn);
+  HWC2::Error error = findDisplays(mDrmPresenter.get(), displays);
   if (error != HWC2::Error::None) {
-    ALOGE("%s composer failed to create displays", __FUNCTION__);
+    ALOGE("%s failed to find display configs", __FUNCTION__);
     return error;
+  }
+
+  for (const auto& iter : displays) {
+    error = createDisplay(iter.displayId, iter.activeConfigId, iter.configs);
+    if (error != HWC2::Error::None) {
+      ALOGE("%s failed to create display from config", __FUNCTION__);
+      return error;
+    }
   }
 
   return HWC2::Error::None;
 }
 
-HWC2::Error Device::createDisplay(uint32_t displayId, uint32_t width,
-                                  uint32_t height, uint32_t dpiX, uint32_t dpiY,
-                                  uint32_t refreshRate) {
+HWC2::Error Device::createDisplay(hwc2_display_t displayId,
+                                  hwc2_config_t activeConfigId,
+                                  const std::vector<DisplayConfig>& configs) {
+  DEBUG_LOG("%s", __FUNCTION__);
+
   if (!mComposer) {
     ALOGE("%s composer not initialized!", __FUNCTION__);
     return HWC2::Error::NoResources;
   }
 
-  auto addDisplayLockedFn = [this](std::unique_ptr<Display> display) {
-    auto displayId = display->getId();
-    DEBUG_LOG("%s: adding display:%" PRIu64, __FUNCTION__, displayId);
-    mDisplays.emplace(displayId, std::move(display));
-    return HWC2::Error::None;
-  };
+  auto display = std::make_unique<Display>(mComposer.get(), displayId);
+  if (display == nullptr) {
+    ALOGE("%s failed to allocate display", __FUNCTION__);
+    return HWC2::Error::NoResources;
+  }
 
-  HWC2::Error error =
-      mComposer->createDisplay(this, displayId, width, height, dpiX, dpiY,
-                               refreshRate, addDisplayLockedFn);
+  HWC2::Error error = display->init(configs, activeConfigId);
   if (error != HWC2::Error::None) {
-    ALOGE("%s composer failed to create displays", __FUNCTION__);
+    ALOGE("%s failed to initialize display:%" PRIu64, __FUNCTION__, displayId);
     return error;
   }
+
+  error = mComposer->onDisplayCreate(display.get());
+  if (error != HWC2::Error::None) {
+    ALOGE("%s failed to register display:%" PRIu64 " with composer",
+          __FUNCTION__, displayId);
+    return error;
+  }
+
+  DEBUG_LOG("%s: adding display:%" PRIu64, __FUNCTION__, displayId);
+  mDisplays.emplace(displayId, std::move(display));
 
   return HWC2::Error::None;
 }
@@ -339,6 +385,33 @@ hwc2_function_pointer_t Device::getFunction(int32_t desc) {
       return asFP<HWC2_PFN_SET_DISPLAY_BRIGHTNESS>(
           displayHook<decltype(&Display::setDisplayBrightness),
                       &Display::setDisplayBrightness, float>);
+    case HWC2::FunctionDescriptor::GetDisplayVsyncPeriod:
+      return asFP<HWC2_PFN_GET_DISPLAY_VSYNC_PERIOD>(
+          displayHook<decltype(&Display::getDisplayVsyncPeriod),
+                      &Display::getDisplayVsyncPeriod, hwc2_vsync_period_t*>);
+    case HWC2::FunctionDescriptor::SetActiveConfigWithConstraints:
+      return asFP<HWC2_PFN_SET_ACTIVE_CONFIG_WITH_CONSTRAINTS>(
+          displayHook<decltype(&Display::setActiveConfigWithConstraints),
+                      &Display::setActiveConfigWithConstraints, hwc2_config_t,
+                      hwc_vsync_period_change_constraints_t*,
+                      hwc_vsync_period_change_timeline_t*>);
+    case HWC2::FunctionDescriptor::GetDisplayConnectionType:
+      return asFP<HWC2_PFN_GET_DISPLAY_CONNECTION_TYPE>(
+          displayHook<decltype(&Display::getDisplayConnectionType),
+                      &Display::getDisplayConnectionType, uint32_t*>);
+    case HWC2::FunctionDescriptor::SetAutoLowLatencyMode:
+      return asFP<HWC2_PFN_SET_AUTO_LOW_LATENCY_MODE>(
+          displayHook<decltype(&Display::setAutoLowLatencyMode),
+                      &Display::setAutoLowLatencyMode, bool>);
+    case HWC2::FunctionDescriptor::GetSupportedContentTypes:
+      return asFP<HWC2_PFN_GET_SUPPORTED_CONTENT_TYPES>(
+          displayHook<decltype(&Display::getSupportedContentTypes),
+                      &Display::getSupportedContentTypes, uint32_t*,
+                      uint32_t*>);
+    case HWC2::FunctionDescriptor::SetContentType:
+      return asFP<HWC2_PFN_SET_CONTENT_TYPE>(
+          displayHook<decltype(&Display::setContentType),
+                      &Display::setContentType, int32_t>);
 
     // Layer functions
     case HWC2::FunctionDescriptor::SetCursorPosition:
@@ -440,64 +513,50 @@ uint32_t Device::getMaxVirtualDisplayCount() {
   return 0;
 }
 
-static bool IsHandledCallback(HWC2::Callback descriptor) {
-  switch (descriptor) {
-    case HWC2::Callback::Hotplug: {
-      return true;
-    }
-    case HWC2::Callback::Refresh: {
-      return true;
-    }
-    case HWC2::Callback::Vsync: {
-      return true;
-    }
-    case HWC2::Callback::Vsync_2_4: {
-      return false;
-    }
-    case HWC2::Callback::VsyncPeriodTimingChanged: {
-      return false;
-    }
-    case HWC2::Callback::Invalid: {
-      return false;
-    }
-    case HWC2::Callback::SeamlessPossible: {
-      return false;
-    }
-  }
-  return false;
-}
-
 HWC2::Error Device::registerCallback(int32_t desc,
                                      hwc2_callback_data_t callbackData,
-                                     hwc2_function_pointer_t pointer) {
+                                     hwc2_function_pointer_t callbackPointer) {
   const auto callbackType = static_cast<HWC2::Callback>(desc);
   const auto callbackTypeString = to_string(callbackType);
   DEBUG_LOG("%s callback %s", __FUNCTION__, callbackTypeString.c_str());
 
-  if (!IsHandledCallback(callbackType)) {
-    ALOGE("%s unhandled callback: %s", __FUNCTION__,
-          callbackTypeString.c_str());
-    return HWC2::Error::BadParameter;
-  }
-
   std::unique_lock<std::mutex> lock(mStateMutex);
 
-  if (pointer != nullptr) {
-    mCallbacks[callbackType] = {callbackData, pointer};
+  if (callbackPointer != nullptr) {
+    mCallbacks[callbackType] = {callbackData, callbackPointer};
   } else {
     mCallbacks.erase(callbackType);
-    return HWC2::Error::None;
   }
 
-  if (callbackType == HWC2::Callback::Hotplug) {
+  if (callbackType == HWC2::Callback::Vsync) {
+    auto callback = reinterpret_cast<HWC2_PFN_VSYNC>(callbackPointer);
+    for (const auto& [displayId, display] : mDisplays) {
+      display->setVsyncCallback(callback, callbackData);
+    }
+  } else if (callbackType == HWC2::Callback::Vsync_2_4) {
+    auto callback = reinterpret_cast<HWC2_PFN_VSYNC_2_4>(callbackPointer);
+    for (const auto& [displayId, display] : mDisplays) {
+      display->setVsync24Callback(callback, callbackData);
+    }
+  } else if (callbackType == HWC2::Callback::Hotplug) {
+    if (callbackPointer == nullptr) {
+      return HWC2::Error::None;
+    }
+
     // Callback without the state lock held
     lock.unlock();
-    auto hotplug = reinterpret_cast<HWC2_PFN_HOTPLUG>(pointer);
+    auto hotplug = reinterpret_cast<HWC2_PFN_HOTPLUG>(callbackPointer);
     auto hotplugConnect = static_cast<int32_t>(HWC2::Connection::Connected);
     for (const auto& [displayId, display] : mDisplays) {
       ALOGI("%s hotplug connecting display:%" PRIu64, __FUNCTION__, displayId);
       hotplug(callbackData, displayId, hotplugConnect);
     }
+  } else if (callbackType == HWC2::Callback::Refresh) {
+    // Not used
+  } else {
+    ALOGE("%s unhandled callback: %s", __FUNCTION__,
+          callbackTypeString.c_str());
+    return HWC2::Error::BadParameter;
   }
 
   return HWC2::Error::None;
@@ -524,10 +583,16 @@ bool Device::handleHotplug(bool connected, uint32_t id, uint32_t width,
     display->unlock();
   }
   if (connected) {
-    createDisplay(id, width, height, dpiX, dpiY, refreshRate);
+    hwc2_display_t displayId = static_cast<hwc2_display_t>(id);
+    hwc2_config_t configId = static_cast<hwc2_config_t>(id);
+    std::vector<DisplayConfig> configs = {
+        DisplayConfig(configId, static_cast<int>(width),
+                      static_cast<int>(height), static_cast<int>(dpiX),
+                      static_cast<int>(dpiY), static_cast<int>(refreshRate))};
+    createDisplay(displayId, configId, configs);
     ALOGD("callback hotplugConnect display %" PRIu32 " width %" PRIu32
-          " height %" PRIu32 " dpiX %" PRIu32 " dpiY %" PRIu32
-          "fps %" PRIu32, id, width, height, dpiX, dpiY, refreshRate);
+          " height %" PRIu32 " dpiX %" PRIu32 " dpiY %" PRIu32 "fps %" PRIu32,
+          id, width, height, dpiX, dpiY, refreshRate);
     hotplug(mCallbacks[HWC2::Callback::Hotplug].data, id, hotplugConnect);
   };
 
@@ -579,7 +644,7 @@ static struct hw_module_methods_t hwc2_module_methods = {
 hw_module_t HAL_MODULE_INFO_SYM = {
     .tag = HARDWARE_MODULE_TAG,
     .version_major = 2,
-    .version_minor = 3,
+    .version_minor = 4,
     .id = HWC_HARDWARE_MODULE_ID,
     .name = "goldfish HWC2 module",
     .author = "The Android Open Source Project",

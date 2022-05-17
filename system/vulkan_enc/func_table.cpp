@@ -1651,20 +1651,6 @@ static void entry_vkCmdSetDeviceMask(
     auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
     vkEnc->vkCmdSetDeviceMask(commandBuffer, deviceMask, true /* do lock */);
 }
-static void dynCheck_entry_vkCmdSetDeviceMask(
-    VkCommandBuffer commandBuffer,
-    uint32_t deviceMask)
-{
-    auto resources = ResourceTracker::get();
-    VkDevice device = resources->getDevice(commandBuffer);
-    if (resources->getApiVersionFromDevice(device) < VK_API_VERSION_1_1)
-    {
-        sOnInvalidDynamicallyCheckedCall("vkCmdSetDeviceMask", "VK_VERSION_1_1");
-    }
-    AEMU_SCOPED_TRACE("vkCmdSetDeviceMask");
-    auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
-    vkEnc->vkCmdSetDeviceMask(commandBuffer, deviceMask, true /* do lock */);
-}
 static void entry_vkCmdDispatchBase(
     VkCommandBuffer commandBuffer,
     uint32_t baseGroupX,
@@ -1674,25 +1660,6 @@ static void entry_vkCmdDispatchBase(
     uint32_t groupCountY,
     uint32_t groupCountZ)
 {
-    AEMU_SCOPED_TRACE("vkCmdDispatchBase");
-    auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
-    vkEnc->vkCmdDispatchBase(commandBuffer, baseGroupX, baseGroupY, baseGroupZ, groupCountX, groupCountY, groupCountZ, true /* do lock */);
-}
-static void dynCheck_entry_vkCmdDispatchBase(
-    VkCommandBuffer commandBuffer,
-    uint32_t baseGroupX,
-    uint32_t baseGroupY,
-    uint32_t baseGroupZ,
-    uint32_t groupCountX,
-    uint32_t groupCountY,
-    uint32_t groupCountZ)
-{
-    auto resources = ResourceTracker::get();
-    VkDevice device = resources->getDevice(commandBuffer);
-    if (resources->getApiVersionFromDevice(device) < VK_API_VERSION_1_1)
-    {
-        sOnInvalidDynamicallyCheckedCall("vkCmdDispatchBase", "VK_VERSION_1_1");
-    }
     AEMU_SCOPED_TRACE("vkCmdDispatchBase");
     auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
     vkEnc->vkCmdDispatchBase(commandBuffer, baseGroupX, baseGroupY, baseGroupZ, groupCountX, groupCountY, groupCountZ, true /* do lock */);
@@ -2089,25 +2056,6 @@ static void entry_vkCmdDrawIndirectCount(
     auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
     vkEnc->vkCmdDrawIndirectCount(commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride, true /* do lock */);
 }
-static void dynCheck_entry_vkCmdDrawIndirectCount(
-    VkCommandBuffer commandBuffer,
-    VkBuffer buffer,
-    VkDeviceSize offset,
-    VkBuffer countBuffer,
-    VkDeviceSize countBufferOffset,
-    uint32_t maxDrawCount,
-    uint32_t stride)
-{
-    auto resources = ResourceTracker::get();
-    VkDevice device = resources->getDevice(commandBuffer);;
-    if (!resources->hasDeviceExtension(device, "VK_VERSION_1_2"))
-    {
-        sOnInvalidDynamicallyCheckedCall("vkCmdDrawIndirectCount", "VK_VERSION_1_2");
-    }
-    AEMU_SCOPED_TRACE("vkCmdDrawIndirectCount");
-    auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
-    vkEnc->vkCmdDrawIndirectCount(commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride, true /* do lock */);
-}
 static void entry_vkCmdDrawIndexedIndirectCount(
     VkCommandBuffer commandBuffer,
     VkBuffer buffer,
@@ -2117,25 +2065,6 @@ static void entry_vkCmdDrawIndexedIndirectCount(
     uint32_t maxDrawCount,
     uint32_t stride)
 {
-    AEMU_SCOPED_TRACE("vkCmdDrawIndexedIndirectCount");
-    auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
-    vkEnc->vkCmdDrawIndexedIndirectCount(commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride, true /* do lock */);
-}
-static void dynCheck_entry_vkCmdDrawIndexedIndirectCount(
-    VkCommandBuffer commandBuffer,
-    VkBuffer buffer,
-    VkDeviceSize offset,
-    VkBuffer countBuffer,
-    VkDeviceSize countBufferOffset,
-    uint32_t maxDrawCount,
-    uint32_t stride)
-{
-    auto resources = ResourceTracker::get();
-    VkDevice device = resources->getDevice(commandBuffer);;
-    if (!resources->hasDeviceExtension(device, "VK_VERSION_1_2"))
-    {
-        sOnInvalidDynamicallyCheckedCall("vkCmdDrawIndexedIndirectCount", "VK_VERSION_1_2");
-    }
     AEMU_SCOPED_TRACE("vkCmdDrawIndexedIndirectCount");
     auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
     vkEnc->vkCmdDrawIndexedIndirectCount(commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride, true /* do lock */);
@@ -2178,21 +2107,6 @@ static void entry_vkCmdBeginRenderPass2(
     auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
     vkEnc->vkCmdBeginRenderPass2(commandBuffer, pRenderPassBegin, pSubpassBeginInfo, true /* do lock */);
 }
-static void dynCheck_entry_vkCmdBeginRenderPass2(
-    VkCommandBuffer commandBuffer,
-    const VkRenderPassBeginInfo* pRenderPassBegin,
-    const VkSubpassBeginInfo* pSubpassBeginInfo)
-{
-    auto resources = ResourceTracker::get();
-    VkDevice device = resources->getDevice(commandBuffer);;
-    if (!resources->hasDeviceExtension(device, "VK_VERSION_1_2"))
-    {
-        sOnInvalidDynamicallyCheckedCall("vkCmdBeginRenderPass2", "VK_VERSION_1_2");
-    }
-    AEMU_SCOPED_TRACE("vkCmdBeginRenderPass2");
-    auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
-    vkEnc->vkCmdBeginRenderPass2(commandBuffer, pRenderPassBegin, pSubpassBeginInfo, true /* do lock */);
-}
 static void entry_vkCmdNextSubpass2(
     VkCommandBuffer commandBuffer,
     const VkSubpassBeginInfo* pSubpassBeginInfo,
@@ -2202,39 +2116,10 @@ static void entry_vkCmdNextSubpass2(
     auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
     vkEnc->vkCmdNextSubpass2(commandBuffer, pSubpassBeginInfo, pSubpassEndInfo, true /* do lock */);
 }
-static void dynCheck_entry_vkCmdNextSubpass2(
-    VkCommandBuffer commandBuffer,
-    const VkSubpassBeginInfo* pSubpassBeginInfo,
-    const VkSubpassEndInfo* pSubpassEndInfo)
-{
-    auto resources = ResourceTracker::get();
-    VkDevice device = resources->getDevice(commandBuffer);;
-    if (!resources->hasDeviceExtension(device, "VK_VERSION_1_2"))
-    {
-        sOnInvalidDynamicallyCheckedCall("vkCmdNextSubpass2", "VK_VERSION_1_2");
-    }
-    AEMU_SCOPED_TRACE("vkCmdNextSubpass2");
-    auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
-    vkEnc->vkCmdNextSubpass2(commandBuffer, pSubpassBeginInfo, pSubpassEndInfo, true /* do lock */);
-}
 static void entry_vkCmdEndRenderPass2(
     VkCommandBuffer commandBuffer,
     const VkSubpassEndInfo* pSubpassEndInfo)
 {
-    AEMU_SCOPED_TRACE("vkCmdEndRenderPass2");
-    auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
-    vkEnc->vkCmdEndRenderPass2(commandBuffer, pSubpassEndInfo, true /* do lock */);
-}
-static void dynCheck_entry_vkCmdEndRenderPass2(
-    VkCommandBuffer commandBuffer,
-    const VkSubpassEndInfo* pSubpassEndInfo)
-{
-    auto resources = ResourceTracker::get();
-    VkDevice device = resources->getDevice(commandBuffer);;
-    if (!resources->hasDeviceExtension(device, "VK_VERSION_1_2"))
-    {
-        sOnInvalidDynamicallyCheckedCall("vkCmdEndRenderPass2", "VK_VERSION_1_2");
-    }
     AEMU_SCOPED_TRACE("vkCmdEndRenderPass2");
     auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
     vkEnc->vkCmdEndRenderPass2(commandBuffer, pSubpassEndInfo, true /* do lock */);
@@ -6795,36 +6680,9 @@ static void entry_vkCmdBeginDebugUtilsLabelEXT(
     auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
     vkEnc->vkCmdBeginDebugUtilsLabelEXT(commandBuffer, pLabelInfo, true /* do lock */);
 }
-static void dynCheck_entry_vkCmdBeginDebugUtilsLabelEXT(
-    VkCommandBuffer commandBuffer,
-    const VkDebugUtilsLabelEXT* pLabelInfo)
-{
-    auto resources = ResourceTracker::get();
-    VkDevice device = resources->getDevice(commandBuffer);;
-    if (!resources->hasDeviceExtension(device, "VK_EXT_debug_utils"))
-    {
-        sOnInvalidDynamicallyCheckedCall("vkCmdBeginDebugUtilsLabelEXT", "VK_EXT_debug_utils");
-    }
-    AEMU_SCOPED_TRACE("vkCmdBeginDebugUtilsLabelEXT");
-    auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
-    vkEnc->vkCmdBeginDebugUtilsLabelEXT(commandBuffer, pLabelInfo, true /* do lock */);
-}
 static void entry_vkCmdEndDebugUtilsLabelEXT(
     VkCommandBuffer commandBuffer)
 {
-    AEMU_SCOPED_TRACE("vkCmdEndDebugUtilsLabelEXT");
-    auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
-    vkEnc->vkCmdEndDebugUtilsLabelEXT(commandBuffer, true /* do lock */);
-}
-static void dynCheck_entry_vkCmdEndDebugUtilsLabelEXT(
-    VkCommandBuffer commandBuffer)
-{
-    auto resources = ResourceTracker::get();
-    VkDevice device = resources->getDevice(commandBuffer);;
-    if (!resources->hasDeviceExtension(device, "VK_EXT_debug_utils"))
-    {
-        sOnInvalidDynamicallyCheckedCall("vkCmdEndDebugUtilsLabelEXT", "VK_EXT_debug_utils");
-    }
     AEMU_SCOPED_TRACE("vkCmdEndDebugUtilsLabelEXT");
     auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
     vkEnc->vkCmdEndDebugUtilsLabelEXT(commandBuffer, true /* do lock */);
@@ -6833,20 +6691,6 @@ static void entry_vkCmdInsertDebugUtilsLabelEXT(
     VkCommandBuffer commandBuffer,
     const VkDebugUtilsLabelEXT* pLabelInfo)
 {
-    AEMU_SCOPED_TRACE("vkCmdInsertDebugUtilsLabelEXT");
-    auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
-    vkEnc->vkCmdInsertDebugUtilsLabelEXT(commandBuffer, pLabelInfo, true /* do lock */);
-}
-static void dynCheck_entry_vkCmdInsertDebugUtilsLabelEXT(
-    VkCommandBuffer commandBuffer,
-    const VkDebugUtilsLabelEXT* pLabelInfo)
-{
-    auto resources = ResourceTracker::get();
-    VkDevice device = resources->getDevice(commandBuffer);;
-    if (!resources->hasDeviceExtension(device, "VK_EXT_debug_utils"))
-    {
-        sOnInvalidDynamicallyCheckedCall("vkCmdInsertDebugUtilsLabelEXT", "VK_EXT_debug_utils");
-    }
     AEMU_SCOPED_TRACE("vkCmdInsertDebugUtilsLabelEXT");
     auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
     vkEnc->vkCmdInsertDebugUtilsLabelEXT(commandBuffer, pLabelInfo, true /* do lock */);
@@ -9799,36 +9643,9 @@ static void entry_vkBeginCommandBufferAsyncGOOGLE(
     auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
     vkEnc->vkBeginCommandBufferAsyncGOOGLE(commandBuffer, pBeginInfo, true /* do lock */);
 }
-static void dynCheck_entry_vkBeginCommandBufferAsyncGOOGLE(
-    VkCommandBuffer commandBuffer,
-    const VkCommandBufferBeginInfo* pBeginInfo)
-{
-    auto resources = ResourceTracker::get();
-    VkDevice device = resources->getDevice(commandBuffer);;
-    if (!resources->hasDeviceExtension(device, "VK_GOOGLE_gfxstream"))
-    {
-        sOnInvalidDynamicallyCheckedCall("vkBeginCommandBufferAsyncGOOGLE", "VK_GOOGLE_gfxstream");
-    }
-    AEMU_SCOPED_TRACE("vkBeginCommandBufferAsyncGOOGLE");
-    auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
-    vkEnc->vkBeginCommandBufferAsyncGOOGLE(commandBuffer, pBeginInfo, true /* do lock */);
-}
 static void entry_vkEndCommandBufferAsyncGOOGLE(
     VkCommandBuffer commandBuffer)
 {
-    AEMU_SCOPED_TRACE("vkEndCommandBufferAsyncGOOGLE");
-    auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
-    vkEnc->vkEndCommandBufferAsyncGOOGLE(commandBuffer, true /* do lock */);
-}
-static void dynCheck_entry_vkEndCommandBufferAsyncGOOGLE(
-    VkCommandBuffer commandBuffer)
-{
-    auto resources = ResourceTracker::get();
-    VkDevice device = resources->getDevice(commandBuffer);;
-    if (!resources->hasDeviceExtension(device, "VK_GOOGLE_gfxstream"))
-    {
-        sOnInvalidDynamicallyCheckedCall("vkEndCommandBufferAsyncGOOGLE", "VK_GOOGLE_gfxstream");
-    }
     AEMU_SCOPED_TRACE("vkEndCommandBufferAsyncGOOGLE");
     auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
     vkEnc->vkEndCommandBufferAsyncGOOGLE(commandBuffer, true /* do lock */);
@@ -9841,40 +9658,11 @@ static void entry_vkResetCommandBufferAsyncGOOGLE(
     auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
     vkEnc->vkResetCommandBufferAsyncGOOGLE(commandBuffer, flags, true /* do lock */);
 }
-static void dynCheck_entry_vkResetCommandBufferAsyncGOOGLE(
-    VkCommandBuffer commandBuffer,
-    VkCommandBufferResetFlags flags)
-{
-    auto resources = ResourceTracker::get();
-    VkDevice device = resources->getDevice(commandBuffer);;
-    if (!resources->hasDeviceExtension(device, "VK_GOOGLE_gfxstream"))
-    {
-        sOnInvalidDynamicallyCheckedCall("vkResetCommandBufferAsyncGOOGLE", "VK_GOOGLE_gfxstream");
-    }
-    AEMU_SCOPED_TRACE("vkResetCommandBufferAsyncGOOGLE");
-    auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
-    vkEnc->vkResetCommandBufferAsyncGOOGLE(commandBuffer, flags, true /* do lock */);
-}
 static void entry_vkCommandBufferHostSyncGOOGLE(
     VkCommandBuffer commandBuffer,
     uint32_t needHostSync,
     uint32_t sequenceNumber)
 {
-    AEMU_SCOPED_TRACE("vkCommandBufferHostSyncGOOGLE");
-    auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
-    vkEnc->vkCommandBufferHostSyncGOOGLE(commandBuffer, needHostSync, sequenceNumber, true /* do lock */);
-}
-static void dynCheck_entry_vkCommandBufferHostSyncGOOGLE(
-    VkCommandBuffer commandBuffer,
-    uint32_t needHostSync,
-    uint32_t sequenceNumber)
-{
-    auto resources = ResourceTracker::get();
-    VkDevice device = resources->getDevice(commandBuffer);;
-    if (!resources->hasDeviceExtension(device, "VK_GOOGLE_gfxstream"))
-    {
-        sOnInvalidDynamicallyCheckedCall("vkCommandBufferHostSyncGOOGLE", "VK_GOOGLE_gfxstream");
-    }
     AEMU_SCOPED_TRACE("vkCommandBufferHostSyncGOOGLE");
     auto vkEnc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
     vkEnc->vkCommandBufferHostSyncGOOGLE(commandBuffer, needHostSync, sequenceNumber, true /* do lock */);
@@ -13823,11 +13611,11 @@ void* goldfish_vulkan_get_instance_proc_address(VkInstance instance, const char*
     }
     if (!strcmp(name, "vkCmdSetDeviceMask"))
     {
-        return (void*)dynCheck_entry_vkCmdSetDeviceMask;
+        return has1_1OrHigher ? (void*)entry_vkCmdSetDeviceMask : nullptr;
     }
     if (!strcmp(name, "vkCmdDispatchBase"))
     {
-        return (void*)dynCheck_entry_vkCmdDispatchBase;
+        return has1_1OrHigher ? (void*)entry_vkCmdDispatchBase : nullptr;
     }
     if (!strcmp(name, "vkEnumeratePhysicalDeviceGroups"))
     {
@@ -13921,11 +13709,13 @@ void* goldfish_vulkan_get_instance_proc_address(VkInstance instance, const char*
 #ifdef VK_VERSION_1_2
     if (!strcmp(name, "vkCmdDrawIndirectCount"))
     {
-        return (void*)dynCheck_entry_vkCmdDrawIndirectCount;
+        bool hasExt = resources->hasInstanceExtension(instance, "VK_VERSION_1_2");
+        return hasExt ? (void*)entry_vkCmdDrawIndirectCount : nullptr;
     }
     if (!strcmp(name, "vkCmdDrawIndexedIndirectCount"))
     {
-        return (void*)dynCheck_entry_vkCmdDrawIndexedIndirectCount;
+        bool hasExt = resources->hasInstanceExtension(instance, "VK_VERSION_1_2");
+        return hasExt ? (void*)entry_vkCmdDrawIndexedIndirectCount : nullptr;
     }
     if (!strcmp(name, "vkCreateRenderPass2"))
     {
@@ -13933,15 +13723,18 @@ void* goldfish_vulkan_get_instance_proc_address(VkInstance instance, const char*
     }
     if (!strcmp(name, "vkCmdBeginRenderPass2"))
     {
-        return (void*)dynCheck_entry_vkCmdBeginRenderPass2;
+        bool hasExt = resources->hasInstanceExtension(instance, "VK_VERSION_1_2");
+        return hasExt ? (void*)entry_vkCmdBeginRenderPass2 : nullptr;
     }
     if (!strcmp(name, "vkCmdNextSubpass2"))
     {
-        return (void*)dynCheck_entry_vkCmdNextSubpass2;
+        bool hasExt = resources->hasInstanceExtension(instance, "VK_VERSION_1_2");
+        return hasExt ? (void*)entry_vkCmdNextSubpass2 : nullptr;
     }
     if (!strcmp(name, "vkCmdEndRenderPass2"))
     {
-        return (void*)dynCheck_entry_vkCmdEndRenderPass2;
+        bool hasExt = resources->hasInstanceExtension(instance, "VK_VERSION_1_2");
+        return hasExt ? (void*)entry_vkCmdEndRenderPass2 : nullptr;
     }
     if (!strcmp(name, "vkResetQueryPool"))
     {
@@ -14974,15 +14767,18 @@ void* goldfish_vulkan_get_instance_proc_address(VkInstance instance, const char*
     }
     if (!strcmp(name, "vkCmdBeginDebugUtilsLabelEXT"))
     {
-        return (void*)dynCheck_entry_vkCmdBeginDebugUtilsLabelEXT;
+        bool hasExt = resources->hasInstanceExtension(instance, "VK_EXT_debug_utils");
+        return hasExt ? (void*)entry_vkCmdBeginDebugUtilsLabelEXT : nullptr;
     }
     if (!strcmp(name, "vkCmdEndDebugUtilsLabelEXT"))
     {
-        return (void*)dynCheck_entry_vkCmdEndDebugUtilsLabelEXT;
+        bool hasExt = resources->hasInstanceExtension(instance, "VK_EXT_debug_utils");
+        return hasExt ? (void*)entry_vkCmdEndDebugUtilsLabelEXT : nullptr;
     }
     if (!strcmp(name, "vkCmdInsertDebugUtilsLabelEXT"))
     {
-        return (void*)dynCheck_entry_vkCmdInsertDebugUtilsLabelEXT;
+        bool hasExt = resources->hasInstanceExtension(instance, "VK_EXT_debug_utils");
+        return hasExt ? (void*)entry_vkCmdInsertDebugUtilsLabelEXT : nullptr;
     }
     if (!strcmp(name, "vkCreateDebugUtilsMessengerEXT"))
     {
@@ -15556,19 +15352,23 @@ void* goldfish_vulkan_get_instance_proc_address(VkInstance instance, const char*
     }
     if (!strcmp(name, "vkBeginCommandBufferAsyncGOOGLE"))
     {
-        return (void*)dynCheck_entry_vkBeginCommandBufferAsyncGOOGLE;
+        bool hasExt = resources->hasInstanceExtension(instance, "VK_GOOGLE_gfxstream");
+        return hasExt ? (void*)entry_vkBeginCommandBufferAsyncGOOGLE : nullptr;
     }
     if (!strcmp(name, "vkEndCommandBufferAsyncGOOGLE"))
     {
-        return (void*)dynCheck_entry_vkEndCommandBufferAsyncGOOGLE;
+        bool hasExt = resources->hasInstanceExtension(instance, "VK_GOOGLE_gfxstream");
+        return hasExt ? (void*)entry_vkEndCommandBufferAsyncGOOGLE : nullptr;
     }
     if (!strcmp(name, "vkResetCommandBufferAsyncGOOGLE"))
     {
-        return (void*)dynCheck_entry_vkResetCommandBufferAsyncGOOGLE;
+        bool hasExt = resources->hasInstanceExtension(instance, "VK_GOOGLE_gfxstream");
+        return hasExt ? (void*)entry_vkResetCommandBufferAsyncGOOGLE : nullptr;
     }
     if (!strcmp(name, "vkCommandBufferHostSyncGOOGLE"))
     {
-        return (void*)dynCheck_entry_vkCommandBufferHostSyncGOOGLE;
+        bool hasExt = resources->hasInstanceExtension(instance, "VK_GOOGLE_gfxstream");
+        return hasExt ? (void*)entry_vkCommandBufferHostSyncGOOGLE : nullptr;
     }
     if (!strcmp(name, "vkCreateImageWithRequirementsGOOGLE"))
     {

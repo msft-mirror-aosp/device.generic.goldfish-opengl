@@ -14,26 +14,26 @@
  * limitations under the License.
  */
 
-#ifndef GOLDFISH_HEVC_HELPER_H_
-#define GOLDFISH_HEVC_HELPER_H_
+#ifndef GOLDFISH_H264_HELPER_H_
+#define GOLDFISH_H264_HELPER_H_
 
 #include <inttypes.h>
-#include "ihevc_typedefs.h"
-#include "ihevcd_cxa.h"
+#include "ih264_typedefs.h"
+#include "ih264d.h"
 
 
 namespace android {
 
 // this class is just to provide some functions to decode header
 // so that we know w/h of each sps
-class GoldfishHevcHelper {
+class GoldfishH264Helper {
   public:
-    GoldfishHevcHelper(int w, int h);
-    ~GoldfishHevcHelper();
+    GoldfishH264Helper(int w, int h);
+    ~GoldfishH264Helper();
 
-    // check whether the frame is vps; typical hevc will have
-    // a frame that is vps/sps/pps together
-    static bool isVpsFrame(const uint8_t* frame, int inSize);
+    // check whether the frame is sps; typical h264 will have
+    // a frame that is sps/pps together
+    static bool isSpsFrame(const uint8_t* frame, int inSize);
   public:
     // return true if decoding finds out w/h changed;
     // otherwise false

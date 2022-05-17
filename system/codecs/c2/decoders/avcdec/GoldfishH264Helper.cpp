@@ -14,13 +14,11 @@
  * limitations under the License.
  */
 
-#include "GoldfishHevcHelper.h"
+#include "GoldfishH264Helper.h"
 
-#define LOG_TAG "GoldfishHevcHelper"
+#define LOG_TAG "GoldfishH264Helper"
 #include <log/log.h>
 
-#include "ihevc_typedefs.h"
-#include "ihevcd_cxa.h"
 
 #define DEBUG 0
 #if DEBUG
@@ -32,20 +30,20 @@
 
 #include <Codec2Mapper.h>
 
-#define ivdec_api_function ihevcd_cxa_api_function
-#define ivdext_create_ip_t ihevcd_cxa_create_ip_t
-#define ivdext_create_op_t ihevcd_cxa_create_op_t
-#define ivdext_delete_ip_t ihevcd_cxa_delete_ip_t
-#define ivdext_delete_op_t ihevcd_cxa_delete_op_t
-#define ivdext_ctl_set_num_cores_ip_t ihevcd_cxa_ctl_set_num_cores_ip_t
-#define ivdext_ctl_set_num_cores_op_t ihevcd_cxa_ctl_set_num_cores_op_t
-#define ivdext_ctl_get_vui_params_ip_t ihevcd_cxa_ctl_get_vui_params_ip_t
-#define ivdext_ctl_get_vui_params_op_t ihevcd_cxa_ctl_get_vui_params_op_t
-#define ALIGN128(x) ((((x) + 127) >> 7) << 7)
-#define MAX_NUM_CORES 4
-#define IVDEXT_CMD_CTL_SET_NUM_CORES                                           \
-    (IVD_CONTROL_API_COMMAND_TYPE_T) IHEVCD_CXA_CMD_CTL_SET_NUM_CORES
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#define ivdec_api_function              ih264d_api_function
+#define ivdext_create_ip_t              ih264d_create_ip_t
+#define ivdext_create_op_t              ih264d_create_op_t
+#define ivdext_delete_ip_t              ih264d_delete_ip_t
+#define ivdext_delete_op_t              ih264d_delete_op_t
+#define ivdext_ctl_set_num_cores_ip_t   ih264d_ctl_set_num_cores_ip_t
+#define ivdext_ctl_set_num_cores_op_t   ih264d_ctl_set_num_cores_op_t
+#define ivdext_ctl_get_vui_params_ip_t  ih264d_ctl_get_vui_params_ip_t
+#define ivdext_ctl_get_vui_params_op_t  ih264d_ctl_get_vui_params_op_t
+#define ALIGN128(x)                     ((((x) + 127) >> 7) << 7)
+#define MAX_NUM_CORES                   4
+#define IVDEXT_CMD_CTL_SET_NUM_CORES    \
+        (IVD_CONTROL_API_COMMAND_TYPE_T)IH264D_CMD_CTL_SET_NUM_CORES
+#define MIN(a, b)                       (((a) < (b)) ? (a) : (b))
 
 namespace android {
 
@@ -60,13 +58,13 @@ static void ivd_aligned_free(void *ctxt, void *mem) {
 }
 
 
-GoldfishHevcHelper::GoldfishHevcHelper(int w, int h):mWidth(w),mHeight(h) { createDecoder(); }
+GoldfishH264Helper::GoldfishH264Helper(int w, int h):mWidth(w),mHeight(h) { createDecoder(); }
 
-GoldfishHevcHelper::~GoldfishHevcHelper() {
+GoldfishH264Helper::~GoldfishH264Helper() {
     destroyDecoder();
 }
 
-void GoldfishHevcHelper::createDecoder() {
+void GoldfishH264Helper::createDecoder() {
     ivdext_create_ip_t s_create_ip = {};
     ivdext_create_op_t s_create_op = {};
 
@@ -94,7 +92,7 @@ void GoldfishHevcHelper::createDecoder() {
     setNumCores();
 }
 
-void GoldfishHevcHelper::destroyDecoder() {
+void GoldfishH264Helper::destroyDecoder() {
     if (mDecHandle) {
         ivdext_delete_ip_t s_delete_ip = {};
         ivdext_delete_op_t s_delete_op = {};
@@ -112,7 +110,7 @@ void GoldfishHevcHelper::destroyDecoder() {
     }
 }
 
-void GoldfishHevcHelper::setNumCores() {
+void GoldfishH264Helper::setNumCores() {
     ivdext_ctl_set_num_cores_ip_t s_set_num_cores_ip = {};
     ivdext_ctl_set_num_cores_op_t s_set_num_cores_op = {};
 
@@ -128,7 +126,7 @@ void GoldfishHevcHelper::setNumCores() {
     }
 }
 
-void GoldfishHevcHelper::resetDecoder() {
+void GoldfishH264Helper::resetDecoder() {
     ivd_ctl_reset_ip_t s_reset_ip = {};
     ivd_ctl_reset_op_t s_reset_op = {};
 
@@ -144,43 +142,43 @@ void GoldfishHevcHelper::resetDecoder() {
     setNumCores();
 }
 
-void GoldfishHevcHelper::setParams(size_t stride,
+void GoldfishH264Helper::setParams(size_t stride,
                                    IVD_VIDEO_DECODE_MODE_T dec_mode) {
-    ihevcd_cxa_ctl_set_config_ip_t s_hevcd_set_dyn_params_ip = {};
-    ihevcd_cxa_ctl_set_config_op_t s_hevcd_set_dyn_params_op = {};
+    ih264d_ctl_set_config_ip_t s_h264d_set_dyn_params_ip = {};
+    ih264d_ctl_set_config_op_t s_h264d_set_dyn_params_op = {};
     ivd_ctl_set_config_ip_t *ps_set_dyn_params_ip =
-        &s_hevcd_set_dyn_params_ip.s_ivd_ctl_set_config_ip_t;
+        &s_h264d_set_dyn_params_ip.s_ivd_ctl_set_config_ip_t;
     ivd_ctl_set_config_op_t *ps_set_dyn_params_op =
-        &s_hevcd_set_dyn_params_op.s_ivd_ctl_set_config_op_t;
+        &s_h264d_set_dyn_params_op.s_ivd_ctl_set_config_op_t;
 
-    ps_set_dyn_params_ip->u4_size = sizeof(ihevcd_cxa_ctl_set_config_ip_t);
+    ps_set_dyn_params_ip->u4_size = sizeof(ih264d_ctl_set_config_ip_t);
     ps_set_dyn_params_ip->e_cmd = IVD_CMD_VIDEO_CTL;
     ps_set_dyn_params_ip->e_sub_cmd = IVD_CMD_CTL_SETPARAMS;
-    ps_set_dyn_params_ip->u4_disp_wd = (UWORD32)stride;
+    ps_set_dyn_params_ip->u4_disp_wd = (UWORD32) stride;
     ps_set_dyn_params_ip->e_frm_skip_mode = IVD_SKIP_NONE;
     ps_set_dyn_params_ip->e_frm_out_mode = IVD_DISPLAY_FRAME_OUT;
     ps_set_dyn_params_ip->e_vid_dec_mode = dec_mode;
-    ps_set_dyn_params_op->u4_size = sizeof(ihevcd_cxa_ctl_set_config_op_t);
-    IV_API_CALL_STATUS_T status = ivdec_api_function(
-        mDecHandle, ps_set_dyn_params_ip, ps_set_dyn_params_op);
+    ps_set_dyn_params_op->u4_size = sizeof(ih264d_ctl_set_config_op_t);
+    IV_API_CALL_STATUS_T status = ivdec_api_function(mDecHandle,
+                                                     &s_h264d_set_dyn_params_ip,
+                                                     &s_h264d_set_dyn_params_op);
     if (status != IV_SUCCESS) {
         ALOGE("error in %s: 0x%x", __func__,
               ps_set_dyn_params_op->u4_error_code);
     }
 }
 
-bool GoldfishHevcHelper::isVpsFrame(const uint8_t* frame, int inSize) {
+bool GoldfishH264Helper::isSpsFrame(const uint8_t* frame, int inSize) {
     if (inSize < 5) return false;
     if (frame[0] == 0 && frame[1] == 0 && frame[2] == 0 && frame[3] == 1) {
         const bool forbiddenBitIsInvalid = 0x80 & frame[4];
         if (forbiddenBitIsInvalid) {
             return false;
         }
-        // nalu type is the lower 6 bits after shiftting to right 1 bit
-        uint8_t naluType = 0x3f & (frame[4] >> 1);
-        if (naluType == 32
-            || naluType == 33
-            || naluType == 34
+        // nalu type is the lower 5 bits
+        uint8_t naluType = 0x1f & frame[4];
+        if (naluType == 7
+            || naluType == 8
                 ) return true;
         else return false;
     } else {
@@ -188,22 +186,20 @@ bool GoldfishHevcHelper::isVpsFrame(const uint8_t* frame, int inSize) {
     }
 }
 
-bool GoldfishHevcHelper::decodeHeader(const uint8_t *frame, int inSize) {
+bool GoldfishH264Helper::decodeHeader(const uint8_t *frame, int inSize) {
     // should we check the header for vps/sps/pps frame ? otherwise
     // there is no point calling decoder
-    if (!isVpsFrame(frame, inSize)) {
+    if (!isSpsFrame(frame, inSize)) {
         DDD("could not find valid vps frame");
         return false;
     } else {
         DDD("found valid vps frame");
     }
 
-    ihevcd_cxa_video_decode_ip_t s_hevcd_decode_ip = {};
-    ihevcd_cxa_video_decode_op_t s_hevcd_decode_op = {};
-    ivd_video_decode_ip_t *ps_decode_ip =
-        &s_hevcd_decode_ip.s_ivd_video_decode_ip_t;
-    ivd_video_decode_op_t *ps_decode_op =
-        &s_hevcd_decode_op.s_ivd_video_decode_op_t;
+    ih264d_video_decode_ip_t s_h264d_decode_ip = {};
+    ih264d_video_decode_op_t s_h264d_decode_op = {};
+    ivd_video_decode_ip_t *ps_decode_ip = &s_h264d_decode_ip.s_ivd_video_decode_ip_t;
+    ivd_video_decode_op_t *ps_decode_op = &s_h264d_decode_op.s_ivd_video_decode_op_t;
 
     // setup input/output arguments to decoder
     setDecodeArgs(ps_decode_ip, ps_decode_op, frame, mStride,
@@ -257,7 +253,7 @@ bool GoldfishHevcHelper::decodeHeader(const uint8_t *frame, int inSize) {
     return false;
 }
 
-bool GoldfishHevcHelper::setDecodeArgs(ivd_video_decode_ip_t *ps_decode_ip,
+bool GoldfishH264Helper::setDecodeArgs(ivd_video_decode_ip_t *ps_decode_ip,
                                        ivd_video_decode_op_t *ps_decode_op,
                                        const uint8_t *inBuffer,
                                        uint32_t displayStride, size_t inOffset,
@@ -274,7 +270,7 @@ bool GoldfishHevcHelper::setDecodeArgs(ivd_video_decode_ip_t *ps_decode_ip,
     // hope this will be quick and cheap
     setParams(mStride, IVD_DECODE_HEADER);
 
-    ps_decode_ip->u4_size = sizeof(ihevcd_cxa_video_decode_ip_t);
+    ps_decode_ip->u4_size = sizeof(ih264d_video_decode_ip_t);
     ps_decode_ip->e_cmd = IVD_CMD_VIDEO_DECODE;
     if (inBuffer) {
         ps_decode_ip->u4_ts = tsMarker;
@@ -306,7 +302,7 @@ bool GoldfishHevcHelper::setDecodeArgs(ivd_video_decode_ip_t *ps_decode_ip,
         ps_decode_ip->s_out_buffer.pu1_bufs[2] = nullptr;
     }
     ps_decode_ip->s_out_buffer.u4_num_bufs = 3;
-    ps_decode_op->u4_size = sizeof(ihevcd_cxa_video_decode_op_t);
+    ps_decode_op->u4_size = sizeof(ih264d_video_decode_op_t);
     ps_decode_op->u4_output_present = 0;
 
     return true;

@@ -27,6 +27,7 @@
 
 #include "../OpenglSystemCommon/EmulatorFeatureInfo.h"
 #include "../OpenglSystemCommon/HostConnection.h"
+#include "vulkan/vulkan_core.h"
 
 /// Use installed headers or locally defined Fuchsia-specific bits
 #ifdef VK_USE_PLATFORM_FUCHSIA
@@ -49,7 +50,7 @@
 #endif
 
 #define GET_STATUS_SAFE(result, member) \
-    ((result).ok() ? ((result).Unwrap()->member) : ZX_OK)
+    ((result).ok() ? ((result).Unwrap_NEW()->member) : ZX_OK)
 
 #else
 
@@ -852,7 +853,6 @@ public:
         info.memProps = memProps;
         initHostVisibleMemoryVirtualizationInfo(
             physdev, &memProps,
-            mFeatureInfo.get(),
             &mHostVisibleMemoryVirtInfo);
         info.apiVersion = props.apiVersion;
 
@@ -1676,10 +1676,11 @@ public:
         VkPhysicalDevice physdev,
         VkPhysicalDeviceMemoryProperties* out) {
 
+        // If the device supports VK_MAX_MEMORY_HEAPS heaps and VK_MAX_MEMORY_TYPES, the current
+        // logic will break unless refactored (see b:233803018 for progress).
         initHostVisibleMemoryVirtualizationInfo(
             physdev,
             out,
-            mFeatureInfo.get(),
             &mHostVisibleMemoryVirtInfo);
 
         if (mHostVisibleMemoryVirtInfo.virtualizationSupported) {
@@ -1692,10 +1693,11 @@ public:
         VkPhysicalDevice physdev,
         VkPhysicalDeviceMemoryProperties2* out) {
 
+        // If the device supports VK_MAX_MEMORY_HEAPS heaps and VK_MAX_MEMORY_TYPES, the current
+        // logic will break unless refactored (see b:233803018 for progress).
         initHostVisibleMemoryVirtualizationInfo(
             physdev,
             &out->memoryProperties,
-            mFeatureInfo.get(),
             &mHostVisibleMemoryVirtInfo);
 
         if (mHostVisibleMemoryVirtInfo.virtualizationSupported) {
@@ -1928,9 +1930,9 @@ public:
                 result.status());
             return VK_ERROR_INITIALIZATION_FAILED;
         }
-        if (result->result.is_response()) {
-            memoryProperty = result->result.response().info.memory_property();
-        } else if (result->result.err() == ZX_ERR_NOT_FOUND) {
+        if (result.value_NEW().is_ok()) {
+            memoryProperty = result.value_NEW().value()->info.memory_property();
+        } else if (result.value_NEW().error_value() == ZX_ERR_NOT_FOUND) {
             // If an VMO is allocated while ColorBuffer/Buffer is not created,
             // it must be a device-local buffer, since for host-visible buffers,
             // ColorBuffer/Buffer is created at sysmem allocation time.
@@ -1941,7 +1943,7 @@ public:
             // VkMemoryZirconHandlePropertiesFUCHSIA with no available
             // memoryType bits should be enough for clients. See fxbug.dev/24225
             // for other issues this this flow.
-            ALOGW("GetBufferHandleInfo failed: %d", result->result.err());
+            ALOGW("GetBufferHandleInfo failed: %d", result.value_NEW().error_value());
             pProperties->memoryTypeBits = 0;
             return VK_SUCCESS;
         }
@@ -3193,13 +3195,13 @@ public:
             collection);
 
         auto result = sysmem_collection->WaitForBuffersAllocated();
-        if (!result.ok() || result.Unwrap()->status != ZX_OK) {
+        if (!result.ok() || result.Unwrap_NEW()->status != ZX_OK) {
             ALOGE("Failed wait for allocation: %d %d", result.status(),
                   GET_STATUS_SAFE(result, status));
             return VK_ERROR_INITIALIZATION_FAILED;
         }
         fuchsia_sysmem::wire::BufferCollectionInfo2 info =
-            std::move(result.Unwrap()->buffer_collection_info);
+            std::move(result.Unwrap_NEW()->buffer_collection_info);
 
         bool is_host_visible =
             info.settings.buffer_settings.heap ==
@@ -3425,13 +3427,13 @@ public:
             fidl::WireSyncClient<fuchsia_sysmem::BufferCollection>*>(collection);
 
         auto result = sysmem_collection->WaitForBuffersAllocated();
-        if (!result.ok() || result.Unwrap()->status != ZX_OK) {
+        if (!result.ok() || result.Unwrap_NEW()->status != ZX_OK) {
             ALOGE("Failed wait for allocation: %d %d", result.status(),
                   GET_STATUS_SAFE(result, status));
             return VK_ERROR_INITIALIZATION_FAILED;
         }
         fuchsia_sysmem::wire::BufferCollectionInfo2 info =
-            std::move(result.Unwrap()->buffer_collection_info);
+            std::move(result.Unwrap_NEW()->buffer_collection_info);
 
         bool is_host_visible = info.settings.buffer_settings.heap ==
                                fuchsia_sysmem::wire::HeapType::kGoldfishHostVisible;
@@ -4089,13 +4091,13 @@ public:
                 fidl::WireSyncClient<fuchsia_sysmem::BufferCollection>*>(
                 importBufferCollectionInfoPtr->collection);
             auto result = collection->WaitForBuffersAllocated();
-            if (!result.ok() || result.Unwrap()->status != ZX_OK) {
+            if (!result.ok() || result.Unwrap_NEW()->status != ZX_OK) {
                 ALOGE("WaitForBuffersAllocated failed: %d %d", result.status(),
                       GET_STATUS_SAFE(result, status));
                 _RETURN_FAILURE_WITH_DEVICE_MEMORY_REPORT(VK_ERROR_INITIALIZATION_FAILED);
             }
             fuchsia_sysmem::wire::BufferCollectionInfo2& info =
-                result.Unwrap()->buffer_collection_info;
+                result.Unwrap_NEW()->buffer_collection_info;
             uint32_t index = importBufferCollectionInfoPtr->index;
             if (info.buffer_count < index) {
                 ALOGE("Invalid buffer index: %d %d", index);
@@ -4109,14 +4111,14 @@ public:
                 fidl::WireSyncClient<fuchsia_sysmem::BufferCollection>*>(
                 importBufferCollectionInfoPtrX->collection);
             auto result = collection->WaitForBuffersAllocated();
-            if (!result.ok() || result.Unwrap()->status != ZX_OK) {
+            if (!result.ok() || result.Unwrap_NEW()->status != ZX_OK) {
                 ALOGE("WaitForBuffersAllocated failed: %d %d", result.status(),
                       GET_STATUS_SAFE(result, status));
                 _RETURN_FAILURE_WITH_DEVICE_MEMORY_REPORT(
                     VK_ERROR_INITIALIZATION_FAILED);
             }
             fuchsia_sysmem::wire::BufferCollectionInfo2& info =
-                result.Unwrap()->buffer_collection_info;
+                result.Unwrap_NEW()->buffer_collection_info;
             uint32_t index = importBufferCollectionInfoPtrX->index;
             if (info.buffer_count < index) {
                 ALOGE("Invalid buffer index: %d %d", index);
@@ -4261,9 +4263,9 @@ public:
 
                 {
                     auto result = collection->WaitForBuffersAllocated();
-                    if (result.ok() && result.Unwrap()->status == ZX_OK) {
+                    if (result.ok() && result.Unwrap_NEW()->status == ZX_OK) {
                         fuchsia_sysmem::wire::BufferCollectionInfo2& info =
-                            result.Unwrap()->buffer_collection_info;
+                            result.Unwrap_NEW()->buffer_collection_info;
                         if (!info.buffer_count) {
                             ALOGE(
                                 "WaitForBuffersAllocated returned "
@@ -4356,9 +4358,9 @@ public:
 
                         auto result = mControlDevice->CreateColorBuffer2(
                             std::move(vmo_copy), std::move(createParams));
-                        if (!result.ok() || result.Unwrap()->res != ZX_OK) {
+                        if (!result.ok() || result.Unwrap_NEW()->res != ZX_OK) {
                             if (result.ok() &&
-                                result.Unwrap()->res == ZX_ERR_ALREADY_EXISTS) {
+                                result.Unwrap_NEW()->res == ZX_ERR_ALREADY_EXISTS) {
                                 ALOGD(
                                     "CreateColorBuffer: color buffer already "
                                     "exists\n");
@@ -4383,9 +4385,9 @@ public:
 
                     auto result =
                         mControlDevice->CreateBuffer2(std::move(vmo_copy), std::move(createParams));
-                    if (!result.ok() || result.Unwrap()->result.is_err()) {
+                    if (!result.ok() || result.Unwrap_NEW()->is_error()) {
                         ALOGE("CreateBuffer2 failed: %d:%d", result.status(),
-                              GET_STATUS_SAFE(result, result.err()));
+                              GET_STATUS_SAFE(result, error_value()));
                         abort();
                     }
                 }
@@ -4404,13 +4406,13 @@ public:
             zx_status_t status2 = ZX_OK;
 
             auto result = mControlDevice->GetBufferHandle(std::move(vmo_copy));
-            if (!result.ok() || result.Unwrap()->res != ZX_OK) {
+            if (!result.ok() || result.Unwrap_NEW()->res != ZX_OK) {
                 ALOGE("GetBufferHandle failed: %d:%d", result.status(),
                       GET_STATUS_SAFE(result, res));
             } else {
                 fuchsia_hardware_goldfish::wire::BufferHandleType
-                    handle_type = result.Unwrap()->type;
-                uint32_t buffer_handle = result.Unwrap()->id;
+                    handle_type = result.Unwrap_NEW()->type;
+                uint32_t buffer_handle = result.Unwrap_NEW()->id;
 
                 if (handle_type == fuchsia_hardware_goldfish::wire::
                                        BufferHandleType::kBuffer) {
@@ -4948,8 +4950,8 @@ public:
             fuchsia_sysmem::wire::BufferCollectionInfo2 info;
 
             auto result = collection->WaitForBuffersAllocated();
-            if (result.ok() && result.Unwrap()->status == ZX_OK) {
-                info = std::move(result.Unwrap()->buffer_collection_info);
+            if (result.ok() && result.Unwrap_NEW()->status == ZX_OK) {
+                info = std::move(result.Unwrap_NEW()->buffer_collection_info);
                 if (index < info.buffer_count && info.settings.has_image_format_constraints) {
                     vmo = std::move(info.buffers[index].vmo);
                 }
@@ -4972,16 +4974,16 @@ public:
                           buffer_handle_result.status());
                     abort();
                 }
-                if (buffer_handle_result.value().res == ZX_OK) {
+                if (buffer_handle_result.value_NEW().res == ZX_OK) {
                     // Buffer handle already exists.
                     // If it is a ColorBuffer, no-op; Otherwise return error.
-                    if (buffer_handle_result.value().type !=
+                    if (buffer_handle_result.value_NEW().type !=
                         fuchsia_hardware_goldfish::wire::BufferHandleType::kColorBuffer) {
                         ALOGE("%s: BufferHandle %u is not a ColorBuffer", __func__,
-                              buffer_handle_result.value().id);
+                              buffer_handle_result.value_NEW().id);
                         return VK_ERROR_OUT_OF_HOST_MEMORY;
                     }
-                } else if (buffer_handle_result.value().res == ZX_ERR_NOT_FOUND) {
+                } else if (buffer_handle_result.value_NEW().res == ZX_ERR_NOT_FOUND) {
                     // Buffer handle not found. Create ColorBuffer based on buffer settings.
                     auto format =
                         info.settings.image_format_constraints.pixel_format.type ==
@@ -5007,10 +5009,10 @@ public:
 
                     auto result =
                         mControlDevice->CreateColorBuffer2(std::move(vmo), std::move(createParams));
-                    if (result.ok() && result.Unwrap()->res == ZX_ERR_ALREADY_EXISTS) {
+                    if (result.ok() && result.Unwrap_NEW()->res == ZX_ERR_ALREADY_EXISTS) {
                         ALOGD(
                             "CreateColorBuffer: color buffer already exists\n");
-                    } else if (!result.ok() || result.Unwrap()->res != ZX_OK) {
+                    } else if (!result.ok() || result.Unwrap_NEW()->res != ZX_OK) {
                         ALOGE("CreateColorBuffer failed: %d:%d", result.status(),
                             GET_STATUS_SAFE(result, res));
                     }
@@ -5965,6 +5967,11 @@ public:
         VkDevice device, VkImage image, VkDeviceMemory memory,
         VkDeviceSize memoryOffset) {
         VkEncoder* enc = (VkEncoder*)context;
+        // Do not forward calls with invalid handles to host.
+        if (info_VkDeviceMemory.find(memory) == info_VkDeviceMemory.end() ||
+            info_VkImage.find(image) == info_VkImage.end()) {
+            return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+        }
         return enc->vkBindImageMemory(device, image, memory, memoryOffset, true /* do lock */);
     }
 
@@ -5972,6 +5979,13 @@ public:
         void* context, VkResult,
         VkDevice device, uint32_t bindingCount, const VkBindImageMemoryInfo* pBindInfos) {
         VkEncoder* enc = (VkEncoder*)context;
+        // Do not forward calls with invalid handles to host.
+        if (!pBindInfos ||
+            info_VkDeviceMemory.find(pBindInfos->memory) ==
+                info_VkDeviceMemory.end() ||
+            info_VkImage.find(pBindInfos->image) == info_VkImage.end()) {
+            return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+        }
         return enc->vkBindImageMemory2(device, bindingCount, pBindInfos, true /* do lock */);
     }
 
@@ -5979,6 +5993,13 @@ public:
         void* context, VkResult,
         VkDevice device, uint32_t bindingCount, const VkBindImageMemoryInfo* pBindInfos) {
         VkEncoder* enc = (VkEncoder*)context;
+        // Do not forward calls with invalid handles to host.
+        if (!pBindInfos ||
+            info_VkDeviceMemory.find(pBindInfos->memory) ==
+                info_VkDeviceMemory.end() ||
+            info_VkImage.find(pBindInfos->image) == info_VkImage.end()) {
+            return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+        }
         return enc->vkBindImageMemory2KHR(device, bindingCount, pBindInfos, true /* do lock */);
     }
 
@@ -5989,12 +6010,22 @@ public:
         VkBuffer *pBuffer) {
         VkEncoder* enc = (VkEncoder*)context;
 
+        VkBufferCreateInfo localCreateInfo = vk_make_orphan_copy(*pCreateInfo);
+        vk_struct_chain_iterator structChainIter =
+            vk_make_chain_iterator(&localCreateInfo);
+        VkExternalMemoryBufferCreateInfo localExtBufCi;
+
+        const VkExternalMemoryBufferCreateInfo* extBufCiPtr =
+            vk_find_struct<VkExternalMemoryBufferCreateInfo>(pCreateInfo);
+        if (extBufCiPtr) {
+            localExtBufCi = vk_make_orphan_copy(*extBufCiPtr);
+            vk_append_struct(&structChainIter, &localExtBufCi);
+        }
+
 #ifdef VK_USE_PLATFORM_FUCHSIA
         Optional<zx::vmo> vmo;
         bool isSysmemBackedMemory = false;
 
-        const VkExternalMemoryBufferCreateInfo* extBufCiPtr =
-            vk_find_struct<VkExternalMemoryBufferCreateInfo>(pCreateInfo);
         if (extBufCiPtr &&
             (extBufCiPtr->handleTypes &
              VK_EXTERNAL_MEMORY_HANDLE_TYPE_ZIRCON_VMO_BIT_FUCHSIA)) {
@@ -6019,8 +6050,8 @@ public:
             uint32_t index = extBufferCollectionPtr->index;
 
             auto result = collection->WaitForBuffersAllocated();
-            if (result.ok() && result.Unwrap()->status == ZX_OK) {
-                auto& info = result.Unwrap()->buffer_collection_info;
+            if (result.ok() && result.Unwrap_NEW()->status == ZX_OK) {
+                auto& info = result.Unwrap_NEW()->buffer_collection_info;
                 if (index < info.buffer_count) {
                     vmo = android::base::makeOptional(
                             std::move(info.buffers[index].vmo));
@@ -6040,10 +6071,10 @@ public:
                 auto result =
                     mControlDevice->CreateBuffer2(std::move(*vmo), createParams);
                 if (!result.ok() ||
-                    (result.Unwrap()->result.is_err() != ZX_OK &&
-                     result.Unwrap()->result.err() != ZX_ERR_ALREADY_EXISTS)) {
+                    (result.Unwrap_NEW()->is_error() != ZX_OK &&
+                     result.Unwrap_NEW()->error_value() != ZX_ERR_ALREADY_EXISTS)) {
                     ALOGE("CreateBuffer2 failed: %d:%d", result.status(),
-                          GET_STATUS_SAFE(result, result.err()));
+                          GET_STATUS_SAFE(result, error_value()));
                 }
                 isSysmemBackedMemory = true;
             }
@@ -6054,9 +6085,12 @@ public:
         VkMemoryRequirements memReqs;
 
         if (supportsCreateResourcesWithRequirements()) {
-            res = enc->vkCreateBufferWithRequirementsGOOGLE(device, pCreateInfo, pAllocator, pBuffer, &memReqs, true /* do lock */);
+            res = enc->vkCreateBufferWithRequirementsGOOGLE(
+                device, &localCreateInfo, pAllocator, pBuffer, &memReqs,
+                true /* do lock */);
         } else {
-            res = enc->vkCreateBuffer(device, pCreateInfo, pAllocator, pBuffer, true /* do lock */);
+            res = enc->vkCreateBuffer(device, &localCreateInfo, pAllocator,
+                                      pBuffer, true /* do lock */);
         }
 
         if (res != VK_SUCCESS) return res;
@@ -6068,19 +6102,16 @@ public:
 
         auto& info = it->second;
 
-        info.createInfo = *pCreateInfo;
+        info.createInfo = localCreateInfo;
         info.createInfo.pNext = nullptr;
 
         if (supportsCreateResourcesWithRequirements()) {
             info.baseRequirementsKnown = true;
         }
 
-        const VkExternalMemoryBufferCreateInfo* extBufCi =
-            vk_find_struct<VkExternalMemoryBufferCreateInfo>(pCreateInfo);
-
-        if (extBufCi) {
+        if (extBufCiPtr) {
             info.external = true;
-            info.externalCreateInfo = *extBufCi;
+            info.externalCreateInfo = *extBufCiPtr;
         }
 
 #ifdef VK_USE_PLATFORM_FUCHSIA

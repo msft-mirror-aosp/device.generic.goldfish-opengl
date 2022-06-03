@@ -4628,12 +4628,9 @@ public:
 
         VkDeviceMemory baseMemory = info.subAlloc.baseMemory;
         uint32_t memoryTypeIndex = info.subAlloc.memoryTypeIndex;
-        bool isDeviceAddressMemoryAllocation = info.subAlloc.isDeviceAddressMemoryAllocation;
         // If this was a device address memory allocation,
         // free it right away.
-        // TODO: Retest with eagerly freeing other kinds of host visible
-        // allocs as well
-        if (subFreeHostMemory(&info.subAlloc) && isDeviceAddressMemoryAllocation) {
+        if (subFreeHostMemory(&info.subAlloc)) {
             ALOGV("%s: Last free for this device-address block, "
                   "free on host and clear block contents\n", __func__);
             ALOGV("%s: baseMem 0x%llx this mem 0x%llx\n", __func__,
@@ -5061,10 +5058,12 @@ public:
         info.createInfo = *pCreateInfo;
         info.createInfo.pNext = nullptr;
 
+#ifdef VK_USE_PLATFORM_ANDROID_KHR
         if (extFormatAndroidPtr && extFormatAndroidPtr->externalFormat) {
             info.hasExternalFormat = true;
             info.androidFormat = extFormatAndroidPtr->externalFormat;
         }
+#endif  // VK_USE_PLATFORM_ANDROID_KHR
 
         if (supportsCreateResourcesWithRequirements()) {
             info.baseRequirementsKnown = true;

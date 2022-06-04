@@ -856,7 +856,7 @@ public:
         info.props = props;
         info.memProps = memProps;
         initHostVisibleMemoryVirtualizationInfo(
-            physdev, &memProps,
+            &memProps,
             &mHostVisibleMemoryVirtInfo);
         info.apiVersion = props.apiVersion;
 
@@ -1064,7 +1064,7 @@ public:
     }
 
     bool usingDirectMapping() const {
-        return mHostVisibleMemoryVirtInfo.virtualizationSupported;
+        return true;
     }
 
     uint32_t getStreamFeatures() const {
@@ -1121,8 +1121,6 @@ public:
 
         const auto& hostVirt =
             mHostVisibleMemoryVirtInfo;
-
-        if (!hostVirt.virtualizationSupported) return;
 
         if (memory) {
             AutoLock<RecursiveLock> lock (mLock);
@@ -1186,8 +1184,6 @@ public:
 
         const auto& hostVirt =
             mHostVisibleMemoryVirtInfo;
-
-        if (!hostVirt.virtualizationSupported) return;
 
         AutoLock<RecursiveLock> lock (mLock);
 
@@ -1680,16 +1676,14 @@ public:
         VkPhysicalDevice physdev,
         VkPhysicalDeviceMemoryProperties* out) {
 
+        (void)physdev;
         // If the device supports VK_MAX_MEMORY_HEAPS heaps and VK_MAX_MEMORY_TYPES, the current
         // logic will break unless refactored (see b:233803018 for progress).
         initHostVisibleMemoryVirtualizationInfo(
-            physdev,
             out,
             &mHostVisibleMemoryVirtInfo);
 
-        if (mHostVisibleMemoryVirtInfo.virtualizationSupported) {
-            *out = mHostVisibleMemoryVirtInfo.guestMemoryProperties;
-        }
+        *out = mHostVisibleMemoryVirtInfo.guestMemoryProperties;
     }
 
     void on_vkGetPhysicalDeviceMemoryProperties2(
@@ -1697,16 +1691,14 @@ public:
         VkPhysicalDevice physdev,
         VkPhysicalDeviceMemoryProperties2* out) {
 
+        (void)physdev;
         // If the device supports VK_MAX_MEMORY_HEAPS heaps and VK_MAX_MEMORY_TYPES, the current
         // logic will break unless refactored (see b:233803018 for progress).
         initHostVisibleMemoryVirtualizationInfo(
-            physdev,
             &out->memoryProperties,
             &mHostVisibleMemoryVirtInfo);
 
-        if (mHostVisibleMemoryVirtInfo.virtualizationSupported) {
-            out->memoryProperties = mHostVisibleMemoryVirtInfo.guestMemoryProperties;
-        }
+        out->memoryProperties = mHostVisibleMemoryVirtInfo.guestMemoryProperties;
     }
 
     void on_vkGetDeviceQueue(void*,
@@ -4500,31 +4492,6 @@ public:
             return VK_SUCCESS;
         }
 #endif
-
-        // Host visible memory, non external
-        bool directMappingSupported = usingDirectMapping();
-        if (!directMappingSupported) {
-            input_result =
-                enc->vkAllocateMemory(
-                    device, &finalAllocInfo, pAllocator, pMemory, true /* do lock */);
-
-            if (input_result != VK_SUCCESS) return input_result;
-
-            VkDeviceSize mappedSize =
-                getNonCoherentExtendedSize(device,
-                    finalAllocInfo.allocationSize);
-            uint8_t* mappedPtr = (uint8_t*)aligned_buf_alloc(4096, mappedSize);
-            D("host visible alloc (non-direct): "
-              "size 0x%llx host ptr %p mapped size 0x%llx",
-              (unsigned long long)finalAllocInfo.allocationSize, mappedPtr,
-              (unsigned long long)mappedSize);
-            setDeviceMemoryInfo(
-                device, *pMemory,
-                finalAllocInfo.allocationSize,
-                mappedSize, mappedPtr,
-                finalAllocInfo.memoryTypeIndex);
-            _RETURN_SCUCCESS_WITH_DEVICE_MEMORY_REPORT;
-        }
 
         // Host visible memory with direct mapping via
         // VkImportPhysicalAddressGOOGLE
@@ -7612,7 +7579,7 @@ public:
         VkImageViewCreateInfo localCreateInfo = vk_make_orphan_copy(*pCreateInfo);
         vk_struct_chain_iterator structChainIter = vk_make_chain_iterator(&localCreateInfo);
 
-#if defined(VK_USE_PLATFORM_ANDROID_KHR) || defined(__linux__)
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
         if (pCreateInfo->format == VK_FORMAT_UNDEFINED) {
             AutoLock<RecursiveLock> lock(mLock);
 

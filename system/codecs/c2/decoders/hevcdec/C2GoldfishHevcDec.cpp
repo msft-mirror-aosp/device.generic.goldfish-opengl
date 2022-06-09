@@ -457,6 +457,7 @@ status_t C2GoldfishHevcDec::createDecoder() {
     }
     mContext->initHevcContext(mWidth, mHeight, mWidth, mHeight,
                               MediaHevcDecoder::PixelFormat::YUV420P);
+
     return OK;
 }
 
@@ -660,31 +661,14 @@ C2GoldfishHevcDec::ensureDecoderState(const std::shared_ptr<C2BlockPool> &pool) 
 void C2GoldfishHevcDec::checkMode(const std::shared_ptr<C2BlockPool> &pool) {
     mWidth = mIntf->width();
     mHeight = mIntf->height();
-    {
-        // now get the block
-        constexpr uint32_t format = HAL_PIXEL_FORMAT_YCBCR_420_888;
-        std::shared_ptr<C2GraphicBlock> block;
-        C2MemoryUsage usage = {C2MemoryUsage::CPU_READ,
-                               C2MemoryUsage::CPU_WRITE};
-        usage.expected = (uint64_t)(BufferUsage::VIDEO_DECODER);
-
-        c2_status_t err = pool->fetchGraphicBlock(align(mWidth, 16), mHeight,
-                                                  format, usage, &block);
-        if (err != C2_OK) {
-            ALOGE("fetchGraphicBlock for Output failed with status %d", err);
-            return;
-        }
-        auto c2Handle = block->handle();
-        native_handle_t *grallocHandle =
-            UnwrapNativeCodec2GrallocHandle(c2Handle);
-        int hostColorBufferId = getColorBufferHandle(grallocHandle);
-        if (hostColorBufferId > 0) {
-            DDD("decoding to host color buffer");
-            mEnableAndroidNativeBuffers = true;
-        } else {
-            DDD("decoding to guest byte buffer");
-            mEnableAndroidNativeBuffers = false;
-        }
+    const bool isGraphic = (pool->getAllocatorId() & C2Allocator::GRAPHIC);
+    DDD("buffer id %d", (int)(pool->getAllocatorId()));
+    if (isGraphic) {
+        DDD("decoding to host color buffer");
+        mEnableAndroidNativeBuffers = true;
+    } else {
+        DDD("decoding to guest byte buffer");
+        mEnableAndroidNativeBuffers = false;
     }
 }
 
@@ -884,11 +868,6 @@ void C2GoldfishHevcDec::process(const std::unique_ptr<C2Work> &work,
                 return;
             }
 
-            if (false == mHeaderDecoded) {
-                /* Decode header and get dimensions */
-                setParams(mStride);
-            }
-
             DDD("flag is %x", work->input.flags);
             if (work->input.flags & C2FrameData::FLAG_CODEC_CONFIG) {
                 hasPicture = false;
@@ -903,9 +882,50 @@ void C2GoldfishHevcDec::process(const std::unique_ptr<C2Work> &work,
                 removePts(mPts);
             }
 
+            bool whChanged = false;
+            if (GoldfishHevcHelper::isVpsFrame(mInPBuffer, mInPBufferSize)) {
+                mHevcHelper.reset(new GoldfishHevcHelper(mWidth, mHeight));
+                whChanged = mHevcHelper->decodeHeader(mInPBuffer, mInPBufferSize);
+                if (whChanged) {
+                        DDD("w changed from old %d to new %d\n", mWidth, mHevcHelper->getWidth());
+                        DDD("h changed from old %d to new %d\n", mHeight, mHevcHelper->getHeight());
+                        if (1) {
+                            drainInternal(DRAIN_COMPONENT_NO_EOS, pool, work);
+                            resetDecoder();
+                            resetPlugin();
+                            work->workletsProcessed = 0u;
+                        }
+                        {
+                            mWidth = mHevcHelper->getWidth();
+                            mHeight = mHevcHelper->getHeight();
+                            C2StreamPictureSizeInfo::output size(0u, mWidth, mHeight);
+                            std::vector<std::unique_ptr<C2SettingResult>> failures;
+                            c2_status_t err = mIntf->config({&size}, C2_MAY_BLOCK, &failures);
+                            if (err == OK) {
+                                work->worklets.front()->output.configUpdate.push_back(
+                                        C2Param::Copy(size));
+                                ensureDecoderState(pool);
+                            } else {
+                                ALOGE("Cannot set width and height");
+                                mSignalledError = true;
+                                work->workletsProcessed = 1u;
+                                work->result = C2_CORRUPTED;
+                                return;
+                            }
+                        }
+                        if (!mContext) {
+                            DDD("creating decoder context to host in process work");
+                            checkMode(pool);
+                            createDecoder();
+                        }
+                        continue;//return;
+                } // end of whChanged
+            } // end of isVpsFrame
+
             uint32_t delay;
             GETTIME(&mTimeStart, nullptr);
             TIME_DIFF(mTimeEnd, mTimeStart, delay);
+            (void)delay;
             //(void) ivdec_api_function(mDecHandle, &s_decode_ip, &s_decode_op);
             DDD("decoding");
             hevc_result_t hevcRes =
@@ -922,44 +942,9 @@ void C2GoldfishHevcDec::process(const std::unique_ptr<C2Work> &work,
             uint32_t decodeTime;
             GETTIME(&mTimeEnd, nullptr);
             TIME_DIFF(mTimeStart, mTimeEnd, decodeTime);
-        }
-        // TODO: handle res change
-        if (0) {
-            DDD("resolution changed");
-            drainInternal(DRAIN_COMPONENT_NO_EOS, pool, work);
-            resetDecoder();
-            resetPlugin();
-            work->workletsProcessed = 0u;
-
-            /* Decode header and get new dimensions */
-            setParams(mStride);
-            //            (void) ivdec_api_function(mDecHandle, &s_decode_ip,
-            //            &s_decode_op);
+            (void)decodeTime;
         }
         if (mImg.data != nullptr) {
-            // check for new width and height
-            auto decodedW = mImg.width;
-            auto decodedH = mImg.height;
-            if (decodedW != mWidth || decodedH != mHeight) {
-                mWidth = decodedW;
-                mHeight = decodedH;
-
-                C2StreamPictureSizeInfo::output size(0u, mWidth, mHeight);
-                std::vector<std::unique_ptr<C2SettingResult>> failures;
-                c2_status_t err = mIntf->config({&size}, C2_MAY_BLOCK, &failures);
-                if (err == OK) {
-                    work->worklets.front()->output.configUpdate.push_back(
-                        C2Param::Copy(size));
-                    ensureDecoderState(pool);
-                } else {
-                    ALOGE("Cannot set width and height");
-                    mSignalledError = true;
-                    work->workletsProcessed = 1u;
-                    work->result = C2_CORRUPTED;
-                    return;
-                }
-            }
-
             DDD("got data %" PRIu64 " with pts %" PRIu64,  getWorkIndex(mImg.pts), mImg.pts);
             mHeaderDecoded = true;
             copyImageData(mImg);

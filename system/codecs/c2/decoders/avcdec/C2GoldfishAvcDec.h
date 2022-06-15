@@ -22,7 +22,6 @@
 #include <media/stagefright/foundation/ColorUtils.h>
 
 #include "MediaH264Decoder.h"
-#include "GoldfishH264Helper.h"
 #include <SimpleC2Component.h>
 #include <atomic>
 #include <map>
@@ -152,8 +151,6 @@ class C2GoldfishAvcDec : public SimpleC2Component {
     std::vector<uint8_t> mCsd0;
     std::vector<uint8_t> mCsd1;
     void decodeHeaderAfterFlush();
-
-    std::unique_ptr<GoldfishH264Helper> mH264Helper;
 
     C2_DO_NOT_COPY(C2GoldfishAvcDec);
 };

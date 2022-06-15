@@ -5,11 +5,6 @@
 
 namespace GLESTextureUtils {
 
-// By spec, the buffer is only required to provide just enough data. The
-// last row does not have to fill unpackRowLength. But our decoder is
-// written to always read full row. So we add "ignoreTrailing" here. When
-// ignoreTrailing == 1 we compute the real size as defined by spec. When
-// ignoreTrailing == 0 we compute the size used by decoder/encoder.
 void computeTextureStartEnd(
         GLsizei width, GLsizei height, GLsizei depth,
         GLenum format, GLenum type,
@@ -20,8 +15,7 @@ void computeTextureStartEnd(
         int unpackSkipRows,
         int unpackSkipImages,
         int* start,
-        int* end,
-        int ignoreTrailing);
+        int* end);
 
 int computeTotalImageSize(
         GLsizei width, GLsizei height, GLsizei depth,
@@ -41,8 +35,7 @@ int computeNeededBufferSize(
         int unpackImageHeight,
         int unpackSkipPixels,
         int unpackSkipRows,
-        int unpackSkipImages,
-        int ignoreTrailing);
+        int unpackSkipImages);
 
 // Writes out |height| offsets for glReadPixels to read back
 // data in separate rows of pixels. Returns:
@@ -86,7 +79,6 @@ bool isEtc2Format(GLenum internalformat);
 bool isAstcFormat(GLenum internalformat);
 bool isBptcFormat(GLenum internalformat);
 bool isS3tcFormat(GLenum internalformat);
-bool isRgtcFormat(GLenum internalformat);
 
 } // namespace GLESTextureUtils
 #endif

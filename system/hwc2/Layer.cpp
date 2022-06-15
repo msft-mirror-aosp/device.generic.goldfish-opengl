@@ -16,7 +16,6 @@
 
 #include "Layer.h"
 
-#include <android-base/unique_fd.h>
 #include <sync/sync.h>
 
 #include <atomic>
@@ -34,20 +33,20 @@ HWC2::Error Layer::setBuffer(buffer_handle_t buffer, int32_t fence) {
   DEBUG_LOG("%s: layer:%" PRIu64 " buffer:%p fence:%" PRIu32, __FUNCTION__, mId,
             buffer, fence);
   mBuffer.setBuffer(buffer);
-  mBuffer.setFence(base::unique_fd(fence));
+  mBuffer.setFence(fence);
   return HWC2::Error::None;
 }
 
 buffer_handle_t Layer::waitAndGetBuffer() {
   DEBUG_LOG("%s layer:%" PRIu64, __FUNCTION__, mId);
 
-  base::unique_fd fence = mBuffer.getFence();
-  if (fence.ok()) {
-    int err = sync_wait(fence.get(), 3000);
+  int fence = mBuffer.getFence();
+  if (fence != -1) {
+    int err = sync_wait(fence, 3000);
     if (err < 0 && errno == ETIME) {
-      ALOGE("%s waited on fence %" PRId32 " for 3000 ms", __FUNCTION__,
-            fence.get());
+      ALOGE("%s waited on fence %" PRId32 " for 3000 ms", __FUNCTION__, fence);
     }
+    close(fence);
   }
 
   return mBuffer.getBuffer();

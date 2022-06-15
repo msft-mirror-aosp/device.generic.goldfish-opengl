@@ -15,8 +15,9 @@
  */
 
 #include "VirtioGpuStream.h"
-#include "virtgpu_drm.h"
 
+#include <cros_gralloc_handle.h>
+#include <drm/virtgpu_drm.h>
 #include <xf86drm.h>
 
 #include <sys/types.h>
@@ -51,21 +52,19 @@ struct VirtioGpuCmd {
     unsigned char buf[0];
 } __attribute__((packed));
 
-union process_pipe_info {
-    uint64_t proto;
-    struct {
-       int pid;
-       int tid;
-      } id;
-};
-
-bool VirtioGpuProcessPipe::processPipeInit(int stream_handle, HostConnectionType, renderControl_encoder_context_t *rcEnc)
+bool VirtioGpuProcessPipe::processPipeInit(HostConnectionType, renderControl_encoder_context_t *rcEnc)
 {
-  union process_pipe_info info;
-
-  info.id.pid = getpid();
-  info.id.tid = gettid();
-  rcEnc->rcSetPuid(rcEnc, info.proto);
+  union {
+      uint64_t proto;
+      struct {
+          int pid;
+          int tid;
+      } id;
+  } puid = {
+      .id.pid = getpid(),
+      .id.tid = gettid(),
+  };
+  rcEnc->rcSetPuid(rcEnc, puid.proto);
   return true;
 }
 

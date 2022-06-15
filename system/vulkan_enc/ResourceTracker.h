@@ -82,14 +82,6 @@ public:
         VkInstance instance, uint32_t* pPhysicalDeviceCount,
         VkPhysicalDevice* pPhysicalDevices);
 
-    void on_vkGetPhysicalDeviceFeatures2(
-        void* context,
-        VkPhysicalDevice physicalDevice,
-        VkPhysicalDeviceFeatures2* pFeatures);
-    void on_vkGetPhysicalDeviceFeatures2KHR(
-        void* context,
-        VkPhysicalDevice physicalDevice,
-        VkPhysicalDeviceFeatures2* pFeatures);
     void on_vkGetPhysicalDeviceProperties(
         void* context,
         VkPhysicalDevice physicalDevice,
@@ -282,18 +274,21 @@ public:
         VkDevice device,
         const VkImportSemaphoreZirconHandleInfoFUCHSIA* pInfo);
     VkResult on_vkCreateBufferCollectionFUCHSIA(
-        void* context,
-        VkResult input_result,
+        void* context, VkResult input_result,
         VkDevice device,
         const VkBufferCollectionCreateInfoFUCHSIA* pInfo,
         const VkAllocationCallbacks* pAllocator,
         VkBufferCollectionFUCHSIA* pCollection);
     void on_vkDestroyBufferCollectionFUCHSIA(
-        void* context,
-        VkResult input_result,
+        void* context, VkResult input_result,
         VkDevice device,
         VkBufferCollectionFUCHSIA collection,
         const VkAllocationCallbacks* pAllocator);
+    VkResult on_vkSetBufferCollectionConstraintsFUCHSIA(
+        void* context, VkResult input_result,
+        VkDevice device,
+        VkBufferCollectionFUCHSIA collection,
+        const VkImageCreateInfo* pImageInfo);
     VkResult on_vkSetBufferCollectionBufferConstraintsFUCHSIA(
         void* context,
         VkResult input_result,
@@ -307,54 +302,16 @@ public:
         VkBufferCollectionFUCHSIA collection,
         const VkImageConstraintsInfoFUCHSIA* pImageConstraintsInfo);
     VkResult on_vkGetBufferCollectionPropertiesFUCHSIA(
+        void* context, VkResult input_result,
+        VkDevice device,
+        VkBufferCollectionFUCHSIA collection,
+        VkBufferCollectionPropertiesFUCHSIA* pProperties);
+    VkResult on_vkGetBufferCollectionProperties2FUCHSIA(
         void* context,
         VkResult input_result,
         VkDevice device,
         VkBufferCollectionFUCHSIA collection,
-        VkBufferCollectionPropertiesFUCHSIA* pProperties);
-    VkResult on_vkCreateBufferCollectionFUCHSIAX(
-        void* context,
-        VkResult input_result,
-        VkDevice device,
-        const VkBufferCollectionCreateInfoFUCHSIAX* pInfo,
-        const VkAllocationCallbacks* pAllocator,
-        VkBufferCollectionFUCHSIAX* pCollection);
-    void on_vkDestroyBufferCollectionFUCHSIAX(
-        void* context,
-        VkResult input_result,
-        VkDevice device,
-        VkBufferCollectionFUCHSIAX collection,
-        const VkAllocationCallbacks* pAllocator);
-    VkResult on_vkSetBufferCollectionConstraintsFUCHSIAX(
-        void* context,
-        VkResult input_result,
-        VkDevice device,
-        VkBufferCollectionFUCHSIAX collection,
-        const VkImageCreateInfo* pImageInfo);
-    VkResult on_vkSetBufferCollectionBufferConstraintsFUCHSIAX(
-        void* context,
-        VkResult input_result,
-        VkDevice device,
-        VkBufferCollectionFUCHSIAX collection,
-        const VkBufferConstraintsInfoFUCHSIAX* pBufferConstraintsInfo);
-    VkResult on_vkSetBufferCollectionImageConstraintsFUCHSIAX(
-        void* context,
-        VkResult input_result,
-        VkDevice device,
-        VkBufferCollectionFUCHSIAX collection,
-        const VkImageConstraintsInfoFUCHSIAX* pImageConstraintsInfo);
-    VkResult on_vkGetBufferCollectionPropertiesFUCHSIAX(
-        void* context,
-        VkResult input_result,
-        VkDevice device,
-        VkBufferCollectionFUCHSIAX collection,
-        VkBufferCollectionPropertiesFUCHSIAX* pProperties);
-    VkResult on_vkGetBufferCollectionProperties2FUCHSIAX(
-        void* context,
-        VkResult input_result,
-        VkDevice device,
-        VkBufferCollectionFUCHSIAX collection,
-        VkBufferCollectionProperties2FUCHSIAX* pProperties);
+        VkBufferCollectionProperties2FUCHSIA* pProperties);
 #endif
 
     VkResult on_vkGetAndroidHardwareBufferPropertiesANDROID(
@@ -618,15 +575,7 @@ public:
         const VkCommandBufferAllocateInfo* pAllocateInfo,
         VkCommandBuffer* pCommandBuffers);
 
-    VkResult on_vkQueueSignalReleaseImageANDROID(
-        void* context,
-        VkResult input_result,
-        VkQueue queue,
-        uint32_t waitSemaphoreCount,
-        const VkSemaphore* pWaitSemaphores,
-        VkImage image,
-        int* pNativeFenceFd);
-
+    bool isMemoryTypeHostVisible(VkDevice device, uint32_t typeIndex) const;
     uint8_t* getMappedPointer(VkDeviceMemory memory);
     VkDeviceSize getMappedSize(VkDeviceMemory memory);
     VkDeviceSize getNonCoherentExtendedSize(VkDevice device, VkDeviceSize basicSize) const;
@@ -640,25 +589,19 @@ public:
     uint32_t getApiVersionFromDevice(VkDevice device) const;
     bool hasInstanceExtension(VkInstance instance, const std::string& name) const;
     bool hasDeviceExtension(VkDevice instance, const std::string& name) const;
-    VkDevice getDevice(VkCommandBuffer commandBuffer) const;
     void addToCommandPool(VkCommandPool commandPool,
                           uint32_t commandBufferCount,
                           VkCommandBuffer* pCommandBuffers);
     void resetCommandPoolStagingInfo(VkCommandPool commandPool);
 
-#ifdef __GNUC__
-    #define ALWAYS_INLINE
-#elif
-    #define ALWAYS_INLINE __attribute__((always_inline))
-#endif
 
     static VkEncoder* getCommandBufferEncoder(VkCommandBuffer commandBuffer);
     static VkEncoder* getQueueEncoder(VkQueue queue);
     static VkEncoder* getThreadLocalEncoder();
 
     static void setSeqnoPtr(uint32_t* seqnoptr);
-    static ALWAYS_INLINE uint32_t nextSeqno();
-    static ALWAYS_INLINE uint32_t getSeqno();
+    static __attribute__((always_inline)) uint32_t nextSeqno();
+    static __attribute__((always_inline)) uint32_t getSeqno();
 
     // Transforms
     void deviceMemoryTransform_tohost(
@@ -680,8 +623,6 @@ public:
     void transformImpl_VkExternalMemoryProperties_tohost(
         VkExternalMemoryProperties* pProperties,
         uint32_t);
-    void transformImpl_VkImageCreateInfo_fromhost(const VkImageCreateInfo*, uint32_t);
-    void transformImpl_VkImageCreateInfo_tohost(const VkImageCreateInfo*, uint32_t);
 
 #define DEFINE_TRANSFORMED_TYPE_PROTOTYPE(type)          \
     void transformImpl_##type##_tohost(type*, uint32_t); \

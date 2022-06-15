@@ -10,36 +10,14 @@
 #include <cstdint>
 #include <cstdio>
 #include <thread>
-#include <cstring>
 
-#if defined(__Fuchsia__)
 #include <lib/syslog/global.h>
-#else
-#include <libgen.h>
-#endif
 
 #include "cutils/log.h"
 #include "cutils/properties.h"
 #include "cutils/threads.h"
 
 extern "C" {
-
-#if !defined(__Fuchsia__)
-static void linux_log_prefix(const char *prefix, const char *file, int line, const char *format,
-                             va_list ap, ...)
-{
-  char buf[50];
-  char *dup = strdup(file);
-  if (!dup)
-    return;
-
-  snprintf(buf, sizeof(buf), "[%s(%d)]", basename(dup), line);
-  fprintf(stderr, "%s\n", buf);
-  vfprintf(stderr, format, ap);
-
-  free(dup);
-}
-#endif
 
 int property_get(const char* key, char* value, const char* default_value) {
   return 0;
@@ -51,10 +29,8 @@ int __android_log_print(int priority, const char* tag, const char* file,
   if (!local_tag) {
     local_tag = "<NO_TAG>";
   }
-
   va_list ap;
   va_start(ap, format);
-#if defined(__Fuchsia__)
   switch (priority) {
     case ANDROID_LOG_VERBOSE:
     case ANDROID_LOG_DEBUG:
@@ -74,10 +50,6 @@ int __android_log_print(int priority, const char* tag, const char* file,
       FX_LOGVF(INFO, local_tag, file, line, format, ap);
       break;
   }
-#else
-  linux_log_prefix(local_tag, file, line, format, ap);
-#endif
-
   return 1;
 }
 
@@ -89,12 +61,7 @@ void __android_log_assert(const char* condition, const char* tag,
   }
   va_list ap;
   va_start(ap, format);
-#if defined(__Fuchsia__)
   FX_LOGVF(ERROR, local_tag, file, line, format, ap);
-#else
-  linux_log_prefix(local_tag, file, line, format, ap);
-#endif
-
   va_end(ap);
 
   abort();

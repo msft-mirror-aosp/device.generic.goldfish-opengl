@@ -2721,9 +2721,10 @@ void GL2Encoder::s_glTexSubImage2D(void* self, GLenum target, GLint level,
     }
 
     // If unpack buffer is nonzero, verify buffer data fits and is evenly divisible by the type.
+
     SET_ERROR_IF(ctx->boundBuffer(GL_PIXEL_UNPACK_BUFFER) &&
                  ctx->getBufferData(GL_PIXEL_UNPACK_BUFFER) &&
-                 (state->pboNeededDataSize(width, height, 1, format, type, 0, 1) + (uintptr_t)pixels >
+                 (state->pboNeededDataSize(width, height, 1, format, type, 0) + (uintptr_t)pixels >
                   ctx->getBufferData(GL_PIXEL_UNPACK_BUFFER)->m_size),
                  GL_INVALID_OPERATION);
     SET_ERROR_IF(ctx->boundBuffer(GL_PIXEL_UNPACK_BUFFER) &&
@@ -3090,7 +3091,8 @@ void GL2Encoder::s_glGetFramebufferAttachmentParameteriv(void* self,
         GL_INVALID_ENUM);
     SET_ERROR_IF(attachment == GL_DEPTH_STENCIL_ATTACHMENT &&
                  pname == GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME &&
-                 !state->depthStencilHasSameObject(target),
+                 (state->objectOfAttachment(target, GL_DEPTH_ATTACHMENT) !=
+                  state->objectOfAttachment(target, GL_STENCIL_ATTACHMENT)),
                  GL_INVALID_OPERATION);
     SET_ERROR_IF(state->boundFramebuffer(target) &&
                  (attachment == GL_BACK ||

@@ -22,8 +22,7 @@ enum class MediaCodecType : __u8 {
     VP8Codec = 0,
     VP9Codec = 1,
     H264Codec = 2,
-    HevcCodec = 3,
-    Max = 4,
+    Max = 3,
 };
 
 enum class MediaOperation : __u8 {

@@ -20,7 +20,6 @@
 #include "android/base/synchronization/AndroidLock.h"
 
 #include <GLES2/gl2.h>
-#include <memory>
 
 template <class IndexType, bool initialIsTrue>
 class PredicateMap {
@@ -105,8 +104,8 @@ struct RboProps {
     GLsizei width;
     GLsizei height;
     bool previouslyBound;
+    uint32_t refcount;
     bool boundEGLImage;
-    GLuint id;
 };
 
 struct SamplerProps {
@@ -131,7 +130,7 @@ protected:
 
 struct RenderbufferInfo {
     android::base::guest::Lock infoLock;
-    android::base::HybridComponentManager<1000, uint32_t, std::shared_ptr<RboProps>> component;
+    android::base::HybridComponentManager<1000, uint32_t, RboProps> component;
 
     void lock() { infoLock.lock(); }
     void unlock() { infoLock.unlock(); }
@@ -140,63 +139,55 @@ struct RenderbufferInfo {
         public:
             ScopedView(RenderbufferInfo* info) : ScopedLockedView<RenderbufferInfo>(info) { }
             bool hasRbo(GLuint id) const {
-                return nullptr != internalInfo_const()->component.get_const(id);
+                const RboProps* info = internalInfo_const()->component.get_const(id);
+                if (!info) return false;
+                return 0 != info->refcount;
             }
             virtual ~ScopedView() = default;
             RboProps* get(GLuint id) {
-                auto rboPropPtr = internalInfo()->component.get(id);
-                if (!rboPropPtr) {
-                    return nullptr;
-                }
-                return rboPropPtr->get();
-            }
-            std::shared_ptr<RboProps> get_or_add_shared_ptr(GLuint id) {
-                auto rboPropPtr = internalInfo()->component.get(id);
-                if (!rboPropPtr) {
-                    addFresh(id);
-                    rboPropPtr = internalInfo()->component.get(id);
-                }
-                return *rboPropPtr;
-            }
-            std::shared_ptr<RboProps> get_shared_ptr(GLuint id) {
-                auto rboPropPtr = internalInfo()->component.get(id);
-                if (!internalInfo()->component.get(id)) {
-                    return nullptr;
-                }
-                return *rboPropPtr;
+                return internalInfo()->component.get(id);
             }
             const RboProps* get_const(GLuint id) {
-                auto rboPropPtr = internalInfo()->component.get_const(id);
-                if (!rboPropPtr) {
-                    return nullptr;
-                }
-                return rboPropPtr->get();
+                return internalInfo_const()->component.get_const(id);
             }
             void addFresh(GLuint id) {
-                std::shared_ptr<RboProps> props(new RboProps());
-                props->format = GL_NONE;
-                props->multisamples = 0;
-                props->width = 0;
-                props->height = 0;
-                props->previouslyBound = false;
-                props->boundEGLImage = false;
-                props->id = id;
-                internalInfo()->component.add(id, std::move(props));
+                RboProps props;
+                props.format = GL_NONE;
+                props.multisamples = 0;
+                props.width = 0;
+                props.height = 0;
+                props.previouslyBound = false;
+                props.refcount = 1;
+                props.boundEGLImage = false;
+                internalInfo()->component.add(id, props);
             }
-            std::shared_ptr<RboProps> bind(GLuint id) {
-                auto res = get_shared_ptr(id);
-                if (!res) {
-                    addFresh(id);
-                    res = get_shared_ptr(id);
-                }
+            RboProps* bind(GLuint id) {
+                if (!hasRbo(id)) addFresh(id);
+                ref(id);
+                RboProps* res = get(id);
                 res->previouslyBound = true;
                 return res;
             }
-            void remove(GLuint id) {
-                if (id == 0) {
-                    return;
+            void ref(GLuint id) {
+                RboProps* props = get(id);
+                if (!props) return;
+                ++props->refcount;
+            }
+            bool unref(GLuint id) {
+                RboProps* props = get(id);
+                if (!props) return false;
+                if (!props->refcount) return false;
+                --props->refcount;
+                bool gone = 0 == props->refcount;
+                if (gone) {
+                    props->format = 0;
+                    props->multisamples = 0;
+                    props->width = 0;
+                    props->height = 0;
+                    props->previouslyBound = false;
+                    props->boundEGLImage = false;
                 }
-                internalInfo()->component.remove(id);
+                return gone;
             }
     };
 };

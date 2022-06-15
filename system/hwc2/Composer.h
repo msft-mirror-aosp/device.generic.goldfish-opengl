@@ -17,10 +17,7 @@
 #ifndef ANDROID_HWC_COMPOSER_H
 #define ANDROID_HWC_COMPOSER_H
 
-#include <android-base/unique_fd.h>
-
 #include <functional>
-#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -39,9 +36,21 @@ class Composer {
       uint32_t /*height*/, uint32_t /*dpiX*/, uint32_t /*dpiY*/,
       uint32_t /*refreshRate*/)>;
 
-  virtual HWC2::Error init() = 0;
+  virtual HWC2::Error init(const HotplugCallback& cb) = 0;
 
-  virtual HWC2::Error onDisplayCreate(Display* display) = 0;
+  using AddDisplayToDeviceFunction =
+      std::function<HWC2::Error(std::unique_ptr<Display>)>;
+
+  // Queries Cuttlefish/Goldfish/System configurations and creates displays
+  // for the given Device.
+  virtual HWC2::Error createDisplays(
+      Device* device,
+      const AddDisplayToDeviceFunction& addDisplayToDeviceFn) = 0;
+
+  virtual HWC2::Error createDisplay(
+      Device* device, uint32_t displayId, uint32_t width, uint32_t height,
+      uint32_t dpiX, uint32_t dpiY, uint32_t refreshRateHz,
+      const AddDisplayToDeviceFunction& addDisplayToDeviceFn) = 0;
 
   virtual HWC2::Error onDisplayDestroy(Display* display) = 0;
 
@@ -55,9 +64,8 @@ class Composer {
 
   // Performs the actual composition of layers and presents the composed result
   // to the display.
-  virtual std::tuple<HWC2::Error, base::unique_fd> presentDisplay(
-      Display* display) = 0;
-  virtual HWC2::Error onActiveConfigChange(Display* display) = 0;
+  virtual HWC2::Error presentDisplay(Display* display,
+                                     int32_t* outPresentFence) = 0;
 };
 
 }  // namespace android

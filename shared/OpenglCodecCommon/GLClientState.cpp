@@ -1203,7 +1203,7 @@ size_t GLClientState::pixelDataSize(GLsizei width, GLsizei height, GLsizei depth
             pack ? 0 : m_pixelStore.unpack_skip_images);
 }
 
-size_t GLClientState::pboNeededDataSize(GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, int pack) const
+size_t GLClientState::pboNeededDataSize(GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, int pack, int ignoreTrailing) const
 {
     if (width <= 0 || height <= 0 || depth <= 0) return 0;
 
@@ -1231,7 +1231,8 @@ size_t GLClientState::pboNeededDataSize(GLsizei width, GLsizei height, GLsizei d
             pack ? 0 : m_pixelStore.unpack_image_height,
             pack ? m_pixelStore.pack_skip_pixels : m_pixelStore.unpack_skip_pixels,
             pack ? m_pixelStore.pack_skip_rows : m_pixelStore.unpack_skip_rows,
-            pack ? 0 : m_pixelStore.unpack_skip_images);
+            pack ? 0 : m_pixelStore.unpack_skip_images,
+            ignoreTrailing);
 }
 
 
@@ -2101,7 +2102,6 @@ void GLClientState::addRenderbuffers(GLsizei n, GLuint* renderbuffers) {
 }
 
 void GLClientState::removeRenderbuffers(GLsizei n, const GLuint* renderbuffers) {
-    std::vector<std::shared_ptr<RboProps>> to_remove;
     bool unbindCurrent = false;
     {
         RenderbufferInfo::ScopedView view(mRboState.rboData);
@@ -2111,17 +2111,11 @@ void GLClientState::removeRenderbuffers(GLsizei n, const GLuint* renderbuffers) 
                 if (!rboPtr) {
                     continue;
                 }
-                to_remove.push_back(rboPtr);
+                unbindCurrent |=
+                        (mRboState.boundRenderbuffer == rboPtr);
                 setFboCompletenessDirtyForRbo(rboPtr);
+                view.remove(renderbuffers[i]);
             }
-        }
-
-        for (size_t i = 0; i < to_remove.size(); i++) {
-            if (mRboState.boundRenderbuffer == to_remove[i]) {
-                unbindCurrent = true;
-                break;
-            }
-            view.remove(to_remove[i]->id);
         }
     }
 

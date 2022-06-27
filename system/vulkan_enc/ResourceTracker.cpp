@@ -366,6 +366,7 @@ public:
 #ifdef VK_USE_PLATFORM_ANDROID_KHR
         bool hasExternalFormat = false;
         unsigned androidFormat = 0;
+        std::vector<int> pendingQsriSyncFds;
 #endif
 #ifdef VK_USE_PLATFORM_FUCHSIA
         bool isSysmemBackedMemory = false;
@@ -5864,6 +5865,30 @@ public:
     void on_vkDestroyImage(
         void* context,
         VkDevice device, VkImage image, const VkAllocationCallbacks *pAllocator) {
+
+#ifdef VK_USE_PLATFORM_ANDROID_KHR
+        AutoLock<RecursiveLock> lock(mLock);
+
+        // Wait for any pending QSRIs to prevent a race between the Gfxstream host
+        // potentially processing the below `vkDestroyImage()` from the VK encoder
+        // command stream before processing a previously submitted
+        // `VIRTIO_GPU_NATIVE_SYNC_VULKAN_QSRI_EXPORT` from the virtio-gpu command
+        // stream which relies on the image existing.
+        auto imageInfoIt = info_VkImage.find(image);
+        if (imageInfoIt != info_VkImage.end()) {
+            auto& imageInfo = imageInfoIt->second;
+            for (int syncFd : imageInfo.pendingQsriSyncFds) {
+                int syncWaitRet = sync_wait(syncFd, 3000);
+                if (syncWaitRet < 0) {
+                    ALOGE("%s: Failed to wait for pending QSRI sync: sterror: %s errno: %d",
+                          __func__, strerror(errno), errno);
+                }
+                close(syncFd);
+            }
+            imageInfo.pendingQsriSyncFds.clear();
+        }
+#endif
+
         VkEncoder* enc = (VkEncoder*)context;
         enc->vkDestroyImage(device, image, pAllocator, true /* do lock */);
     }
@@ -7775,7 +7800,7 @@ public:
         return res;
     }
 
-    int exportSyncFdForQSRI(VkImage image) {
+    int exportSyncFdForQSRILocked(VkImage image) {
         int fd = -1;
 #if defined(VK_USE_PLATFORM_ANDROID_KHR) || defined(__linux__)
         ALOGV("%s: call for image %p hos timage handle 0x%llx\n", __func__, (void*)image,
@@ -7823,6 +7848,40 @@ public:
         }
         ALOGV("%s: got fd: %d\n", __func__, fd);
 #endif
+
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+        auto imageInfoIt = info_VkImage.find(image);
+        if (imageInfoIt != info_VkImage.end()) {
+            auto& imageInfo = imageInfoIt->second;
+
+            // Remove any pending QSRI sync fds that are already signaled.
+            auto syncFdIt = imageInfo.pendingQsriSyncFds.begin();
+            while (syncFdIt != imageInfo.pendingQsriSyncFds.end()) {
+                int syncFd = *syncFdIt;
+                int syncWaitRet = sync_wait(syncFd, /*timeout msecs*/0);
+                if (syncWaitRet == 0) {
+                    // Sync fd is signaled.
+                    syncFdIt = imageInfo.pendingQsriSyncFds.erase(syncFdIt);
+                    close(syncFd);
+                } else {
+                    if (errno != ETIME) {
+                        ALOGE("%s: Failed to wait for pending QSRI sync: sterror: %s errno: %d",
+                              __func__, strerror(errno), errno);
+                    }
+                    break;
+                }
+            }
+
+            int syncFdDup = dup(fd);
+            if (syncFdDup < 0) {
+                ALOGE("%s: Failed to dup() QSRI sync fd : sterror: %s errno: %d",
+                      __func__, strerror(errno), errno);
+            } else {
+                imageInfo.pendingQsriSyncFds.push_back(syncFdDup);
+            }
+        }
+#endif
+
         return fd;
     }
 
@@ -7858,13 +7917,70 @@ public:
 
         if (pNativeFenceFd) {
             *pNativeFenceFd =
-                exportSyncFdForQSRI(image);
+                exportSyncFdForQSRILocked(image);
         } else {
-            int syncFd = exportSyncFdForQSRI(image);
+            int syncFd = exportSyncFdForQSRILocked(image);
             if (syncFd >= 0) close(syncFd);
         }
 #endif
         return VK_SUCCESS;
+    }
+
+    VkResult on_vkCreateGraphicsPipelines(
+        void* context,
+        VkResult input_result,
+        VkDevice device,
+        VkPipelineCache pipelineCache,
+        uint32_t createInfoCount,
+        const VkGraphicsPipelineCreateInfo* pCreateInfos,
+        const VkAllocationCallbacks* pAllocator,
+        VkPipeline* pPipelines) {
+        (void)input_result;
+        VkEncoder* enc = (VkEncoder*)context;
+        std::vector<VkGraphicsPipelineCreateInfo> localCreateInfos(
+                pCreateInfos, pCreateInfos + createInfoCount);
+        for (VkGraphicsPipelineCreateInfo& graphicsPipelineCreateInfo : localCreateInfos) {
+            // dEQP-VK.api.pipeline.pipeline_invalid_pointers_unused_structs#graphics
+            bool requireViewportState = false;
+            // VUID-VkGraphicsPipelineCreateInfo-rasterizerDiscardEnable-00750
+            requireViewportState |= graphicsPipelineCreateInfo.pRasterizationState != nullptr &&
+                    graphicsPipelineCreateInfo.pRasterizationState->rasterizerDiscardEnable
+                        == VK_FALSE;
+            // VUID-VkGraphicsPipelineCreateInfo-pViewportState-04892
+#ifdef VK_EXT_extended_dynamic_state2
+            if (!requireViewportState && graphicsPipelineCreateInfo.pDynamicState) {
+                for (uint32_t i = 0; i <
+                            graphicsPipelineCreateInfo.pDynamicState->dynamicStateCount; i++) {
+                    if (VK_DYNAMIC_STATE_RASTERIZER_DISCARD_ENABLE_EXT ==
+                                graphicsPipelineCreateInfo.pDynamicState->pDynamicStates[i]) {
+                        requireViewportState = true;
+                        break;
+                    }
+                }
+            }
+#endif // VK_EXT_extended_dynamic_state2
+            if (!requireViewportState) {
+                graphicsPipelineCreateInfo.pViewportState = nullptr;
+            }
+
+            // It has the same requirement as for pViewportState.
+            bool shouldIncludeFragmentShaderState = requireViewportState;
+
+            // VUID-VkGraphicsPipelineCreateInfo-rasterizerDiscardEnable-00751
+            if (!shouldIncludeFragmentShaderState) {
+                graphicsPipelineCreateInfo.pMultisampleState = nullptr;
+            }
+
+            // VUID-VkGraphicsPipelineCreateInfo-renderPass-06043
+            // VUID-VkGraphicsPipelineCreateInfo-renderPass-06044
+            if (graphicsPipelineCreateInfo.renderPass == VK_NULL_HANDLE
+                    || !shouldIncludeFragmentShaderState) {
+                graphicsPipelineCreateInfo.pDepthStencilState = nullptr;
+                graphicsPipelineCreateInfo.pColorBlendState = nullptr;
+            }
+        }
+        return enc->vkCreateGraphicsPipelines(device, pipelineCache, localCreateInfos.size(),
+                localCreateInfos.data(), pAllocator, pPipelines, true /* do lock */);
     }
 
     uint32_t getApiVersionFromInstance(VkInstance instance) const {
@@ -9121,6 +9237,18 @@ VkResult ResourceTracker::on_vkQueueSignalReleaseImageANDROID(
     VkImage image,
     int* pNativeFenceFd) {
     return mImpl->on_vkQueueSignalReleaseImageANDROID(context, input_result, queue, waitSemaphoreCount, pWaitSemaphores, image, pNativeFenceFd);
+}
+
+VkResult ResourceTracker::on_vkCreateGraphicsPipelines(
+    void* context,
+    VkResult input_result,
+    VkDevice device,
+    VkPipelineCache pipelineCache,
+    uint32_t createInfoCount,
+    const VkGraphicsPipelineCreateInfo* pCreateInfos,
+    const VkAllocationCallbacks* pAllocator,
+    VkPipeline* pPipelines) {
+    return mImpl->on_vkCreateGraphicsPipelines(context, input_result, device, pipelineCache, createInfoCount, pCreateInfos, pAllocator, pPipelines);
 }
 
 void ResourceTracker::deviceMemoryTransform_tohost(

@@ -37,38 +37,21 @@ class VkEncoder;
 struct HostVisibleMemoryVirtualizationInfo {
     bool initialized = false;
     bool memoryPropertiesSupported;
-    bool directMemSupported;
-    bool virtualizationSupported;
-    bool virtioGpuNextSupported;
-
-    VkPhysicalDevice physicalDevice;
 
     VkPhysicalDeviceMemoryProperties hostMemoryProperties;
     VkPhysicalDeviceMemoryProperties guestMemoryProperties;
 
     uint32_t memoryTypeIndexMappingToHost[VK_MAX_MEMORY_TYPES];
-    uint32_t memoryHeapIndexMappingToHost[VK_MAX_MEMORY_TYPES];
-
     uint32_t memoryTypeIndexMappingFromHost[VK_MAX_MEMORY_TYPES];
-    uint32_t memoryHeapIndexMappingFromHost[VK_MAX_MEMORY_TYPES];
 
     bool memoryTypeBitsShouldAdvertiseBoth[VK_MAX_MEMORY_TYPES];
 };
 
-bool canFitVirtualHostVisibleMemoryInfo(
-    const VkPhysicalDeviceMemoryProperties* memoryProperties);
-
 void initHostVisibleMemoryVirtualizationInfo(
-    VkPhysicalDevice physicalDevice,
     const VkPhysicalDeviceMemoryProperties* memoryProperties,
-    const EmulatorFeatureInfo* featureInfo,
     HostVisibleMemoryVirtualizationInfo* info_out);
 
 bool isHostVisibleMemoryTypeIndexForGuest(
-    const HostVisibleMemoryVirtualizationInfo* info,
-    uint32_t index);
-
-bool isDeviceLocalMemoryTypeIndexForGuest(
     const HostVisibleMemoryVirtualizationInfo* info,
     uint32_t index);
 

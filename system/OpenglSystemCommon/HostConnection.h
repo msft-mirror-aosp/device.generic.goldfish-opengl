@@ -149,7 +149,7 @@ public:
 // Abstraction for process pipe helper
 class ProcessPipe {
 public:
-    virtual bool processPipeInit(HostConnectionType connType, renderControl_encoder_context_t *rcEnc) = 0;
+    virtual bool processPipeInit(int stream_handle, HostConnectionType connType, renderControl_encoder_context_t *rcEnc) = 0;
     virtual ~ProcessPipe() {}
 };
 
@@ -179,19 +179,12 @@ public:
 
     ~HostConnection();
 
-    HostConnectionType connectionType() const {
-        return m_connectionType;
-    }
-
     GLEncoder *glEncoder();
     GL2Encoder *gl2Encoder();
     goldfish_vk::VkEncoder *vkEncoder();
     ExtendedRCEncoderContext *rcEncoder();
 
-    // Returns rendernode fd, in case the stream is virtio-gpu based.
-    // Otherwise, attempts to create a rendernode fd assuming
-    // virtio-gpu is available.
-    int getOrCreateRendernodeFd();
+    int getRendernodeFd() { return m_rendernodeFd; }
 
     ChecksumCalculator *checksumHelper() { return &m_checksumHelper; }
     Gralloc *grallocHelper() { return m_grallocHelper; }
@@ -288,7 +281,6 @@ private:
     mutable android::Mutex m_lock;
 #endif
     int m_rendernodeFd;
-    bool m_rendernodeFdOwned;
 };
 
 #endif

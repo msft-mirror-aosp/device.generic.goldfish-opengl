@@ -362,6 +362,10 @@ public:
         VkDeviceSize currentBackingSize = 0;
         bool baseRequirementsKnown = false;
         VkMemoryRequirements baseRequirements;
+#ifdef VK_USE_PLATFORM_ANDROID_KHR
+        bool hasExternalFormat = false;
+        unsigned androidFormat = 0;
+#endif
 #ifdef VK_USE_PLATFORM_FUCHSIA
         bool isSysmemBackedMemory = false;
 #endif
@@ -937,17 +941,6 @@ public:
         info.createInfo = *pCreateInfo;
     }
 
-    bool isMemoryTypeHostVisible(VkDevice device, uint32_t typeIndex) const {
-        AutoLock<RecursiveLock> lock(mLock);
-        const auto it = info_VkDevice.find(device);
-
-        if (it == info_VkDevice.end()) return false;
-
-        const auto& info = it->second;
-        return info.memProps.memoryTypes[typeIndex].propertyFlags &
-               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-    }
-
     uint8_t* getMappedPointer(VkDeviceMemory memory) {
         AutoLock<RecursiveLock> lock(mLock);
         const auto it = info_VkDeviceMemory.find(memory);
@@ -1054,36 +1047,8 @@ public:
         }
 #if !defined(HOST_BUILD) && defined(VIRTIO_GPU)
         if (mFeatureInfo->hasVirtioGpuNext) {
-            ALOGD("%s: has virtio-gpu-next; create auxiliary rendernode\n", __func__);
-            mRendernodeFd = drmOpenRender(128 /* RENDERNODE_MINOR */);
-            if (mRendernodeFd < 0) {
-                ALOGE("%s: error: could not init auxiliary rendernode\n", __func__);
-            } else {
-                ALOGD("%s: has virtio-gpu-next; aux context init\n", __func__);
-                struct drm_virtgpu_context_set_param drm_setparams[] = {
-#ifdef __linux__
-                    {
-                        VIRTGPU_CONTEXT_PARAM_CAPSET_ID,
-                        3, /* CAPSET_GFXSTREAM */
-                    },
-#endif
-                    {
-                        VIRTGPU_CONTEXT_PARAM_NUM_RINGS,
-                        2,
-                    },
-                };
-
-                struct drm_virtgpu_context_init drm_ctx_init = {
-                    std::size(drm_setparams),
-                    0,
-                    (uint64_t)(uintptr_t)drm_setparams,
-                };
-
-                int ctxInitret = drmIoctl(mRendernodeFd, DRM_IOCTL_VIRTGPU_CONTEXT_INIT, &drm_ctx_init);
-                if (ctxInitret < 0) {
-                    ALOGE("%s: error: could not ctx init. ret %d errno %d\n", __func__, ctxInitret, errno);
-                }
-            }
+            mRendernodeFd =
+                ResourceTracker::threadingCallbacks.hostConnectionGetFunc()->getRendernodeFd();
         }
 #endif
     }
@@ -1407,6 +1372,7 @@ public:
             "VK_KHR_image_format_list",
             "VK_KHR_incremental_present",
             "VK_KHR_pipeline_executable_properties",
+            "VK_EXT_queue_family_foreign",
 #if defined(VK_USE_PLATFORM_ANDROID_KHR) || defined(__linux__)
             "VK_KHR_external_semaphore",
             "VK_KHR_external_semaphore_fd",
@@ -1521,6 +1487,14 @@ public:
                 VkExtensionProperties { "VK_FUCHSIA_buffer_collection", 1 });
             filteredExts.push_back(
                 VkExtensionProperties { "VK_FUCHSIA_buffer_collection_x", 1});
+#endif
+#if !defined(VK_USE_PLATFORM_ANDROID_KHR) && defined(__linux__)
+            filteredExts.push_back(
+                VkExtensionProperties {
+                   "VK_KHR_external_memory_fd", 1
+                });
+            filteredExts.push_back(
+                VkExtensionProperties { "VK_EXT_external_memory_dma_buf", 1 });
 #endif
         }
 
@@ -1669,6 +1643,19 @@ public:
         VkPhysicalDeviceProperties* pProperties) {
         if (pProperties) {
             pProperties->deviceType = VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU;
+        }
+    }
+
+    void on_vkGetPhysicalDeviceFeatures2(
+        void*,
+        VkPhysicalDevice,
+        VkPhysicalDeviceFeatures2* pFeatures) {
+        if (pFeatures) {
+            VkPhysicalDeviceDeviceMemoryReportFeaturesEXT* memoryReportFeaturesEXT =
+                vk_find_struct<VkPhysicalDeviceDeviceMemoryReportFeaturesEXT>(pFeatures);
+            if (memoryReportFeaturesEXT) {
+                memoryReportFeaturesEXT->deviceMemoryReport = VK_TRUE;
+            }
         }
     }
 
@@ -2611,18 +2598,20 @@ public:
         }
 
         // Get row alignment from host GPU.
-        VkDeviceSize offset;
-        VkDeviceSize rowPitchAlignment;
+        VkDeviceSize offset = 0;
+        VkDeviceSize rowPitchAlignment = 1u;
 
-        VkImageCreateInfo createInfoDup = *createInfo;
-        createInfoDup.pNext = nullptr;
-        enc->vkGetLinearImageLayout2GOOGLE(device, &createInfoDup, &offset,
-                                           &rowPitchAlignment,
-                                           true /* do lock */);
-        ALOGD(
-            "vkGetLinearImageLayout2GOOGLE: format %d offset %lu "
-            "rowPitchAlignment = %lu",
-            (int)createInfo->format, offset, rowPitchAlignment);
+        if (tiling == VK_IMAGE_TILING_LINEAR) {
+            VkImageCreateInfo createInfoDup = *createInfo;
+            createInfoDup.pNext = nullptr;
+            enc->vkGetLinearImageLayout2GOOGLE(device, &createInfoDup, &offset,
+                                            &rowPitchAlignment,
+                                            true /* do lock */);
+            ALOGD(
+                "vkGetLinearImageLayout2GOOGLE: format %d offset %lu "
+                "rowPitchAlignment = %lu",
+                (int)createInfo->format, offset, rowPitchAlignment);
+        }
 
         imageConstraints.min_coded_width = createInfo->extent.width;
         imageConstraints.max_coded_width = 0xfffffff;
@@ -3164,7 +3153,8 @@ public:
                 (out.required_max_coded_width < in.required_max_coded_width) ||
                 (out.required_max_coded_height <
                  in.required_max_coded_height) ||
-                (out.bytes_per_row_divisor % in.bytes_per_row_divisor != 0)) {
+                (in.bytes_per_row_divisor != 0 &&
+                 out.bytes_per_row_divisor % in.bytes_per_row_divisor != 0)) {
                 continue;
             }
             // Check if the out colorspaces are a subset of the in color spaces.
@@ -5069,6 +5059,11 @@ public:
         info.createInfo = *pCreateInfo;
         info.createInfo.pNext = nullptr;
 
+        if (extFormatAndroidPtr && extFormatAndroidPtr->externalFormat) {
+            info.hasExternalFormat = true;
+            info.androidFormat = extFormatAndroidPtr->externalFormat;
+        }
+
         if (supportsCreateResourcesWithRequirements()) {
             info.baseRequirementsKnown = true;
         }
@@ -5197,7 +5192,6 @@ public:
         const VkSamplerCreateInfo* pCreateInfo,
         const VkAllocationCallbacks* pAllocator,
         VkSampler* pSampler) {
-
         VkSamplerCreateInfo localCreateInfo = vk_make_orphan_copy(*pCreateInfo);
         vk_struct_chain_iterator structChainIter = vk_make_chain_iterator(&localCreateInfo);
 
@@ -5207,9 +5201,19 @@ public:
             vk_find_struct<VkSamplerYcbcrConversionInfo>(pCreateInfo);
         if (samplerYcbcrConversionInfo) {
             if (samplerYcbcrConversionInfo->conversion != VK_YCBCR_CONVERSION_DO_NOTHING) {
-                localVkSamplerYcbcrConversionInfo = vk_make_orphan_copy(*samplerYcbcrConversionInfo);
+                localVkSamplerYcbcrConversionInfo =
+                    vk_make_orphan_copy(*samplerYcbcrConversionInfo);
                 vk_append_struct(&structChainIter, &localVkSamplerYcbcrConversionInfo);
             }
+        }
+
+        VkSamplerCustomBorderColorCreateInfoEXT localVkSamplerCustomBorderColorCreateInfo;
+        const VkSamplerCustomBorderColorCreateInfoEXT* samplerCustomBorderColorCreateInfo =
+            vk_find_struct<VkSamplerCustomBorderColorCreateInfoEXT>(pCreateInfo);
+        if (samplerCustomBorderColorCreateInfo) {
+            localVkSamplerCustomBorderColorCreateInfo =
+                vk_make_orphan_copy(*samplerCustomBorderColorCreateInfo);
+            vk_append_struct(&structChainIter, &localVkSamplerCustomBorderColorCreateInfo);
         }
 #endif
 
@@ -7581,14 +7585,24 @@ public:
         (void)input_result;
 
         VkImageViewCreateInfo localCreateInfo = vk_make_orphan_copy(*pCreateInfo);
+        vk_struct_chain_iterator structChainIter = vk_make_chain_iterator(&localCreateInfo);
 
 #if defined(VK_USE_PLATFORM_ANDROID_KHR) || defined(__linux__)
-        const VkExternalFormatANDROID* extFormatAndroidPtr =
-            vk_find_struct<VkExternalFormatANDROID>(pCreateInfo);
-        if (extFormatAndroidPtr) {
-            if (extFormatAndroidPtr->externalFormat) {
-                localCreateInfo.format =
-                    vk_format_from_android(extFormatAndroidPtr->externalFormat);
+        if (pCreateInfo->format == VK_FORMAT_UNDEFINED) {
+            AutoLock<RecursiveLock> lock(mLock);
+
+            auto it = info_VkImage.find(pCreateInfo->image);
+            if (it != info_VkImage.end() && it->second.hasExternalFormat) {
+                localCreateInfo.format = vk_format_from_android(it->second.androidFormat);
+            }
+        }
+        VkSamplerYcbcrConversionInfo localVkSamplerYcbcrConversionInfo;
+        const VkSamplerYcbcrConversionInfo* samplerYcbcrConversionInfo =
+            vk_find_struct<VkSamplerYcbcrConversionInfo>(pCreateInfo);
+        if (samplerYcbcrConversionInfo) {
+            if (samplerYcbcrConversionInfo->conversion != VK_YCBCR_CONVERSION_DO_NOTHING) {
+                localVkSamplerYcbcrConversionInfo = vk_make_orphan_copy(*samplerYcbcrConversionInfo);
+                vk_append_struct(&structChainIter, &localVkSamplerYcbcrConversionInfo);
             }
         }
 #endif
@@ -7704,6 +7718,7 @@ public:
         for (uint32_t i = 0; i < pAllocateInfo->commandBufferCount; ++i) {
             struct goldfish_VkCommandBuffer* cb = as_goldfish_VkCommandBuffer(pCommandBuffers[i]);
             cb->isSecondary = pAllocateInfo->level == VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+            cb->device = device;
         }
 
         return res;
@@ -7801,6 +7816,63 @@ public:
         return VK_SUCCESS;
     }
 
+    VkResult on_vkCreateGraphicsPipelines(
+        void* context,
+        VkResult input_result,
+        VkDevice device,
+        VkPipelineCache pipelineCache,
+        uint32_t createInfoCount,
+        const VkGraphicsPipelineCreateInfo* pCreateInfos,
+        const VkAllocationCallbacks* pAllocator,
+        VkPipeline* pPipelines) {
+        (void)input_result;
+        VkEncoder* enc = (VkEncoder*)context;
+        std::vector<VkGraphicsPipelineCreateInfo> localCreateInfos(
+                pCreateInfos, pCreateInfos + createInfoCount);
+        for (VkGraphicsPipelineCreateInfo& graphicsPipelineCreateInfo : localCreateInfos) {
+            // dEQP-VK.api.pipeline.pipeline_invalid_pointers_unused_structs#graphics
+            bool requireViewportState = false;
+            // VUID-VkGraphicsPipelineCreateInfo-rasterizerDiscardEnable-00750
+            requireViewportState |= graphicsPipelineCreateInfo.pRasterizationState != nullptr &&
+                    graphicsPipelineCreateInfo.pRasterizationState->rasterizerDiscardEnable
+                        == VK_FALSE;
+            // VUID-VkGraphicsPipelineCreateInfo-pViewportState-04892
+#ifdef VK_EXT_extended_dynamic_state2
+            if (!requireViewportState && graphicsPipelineCreateInfo.pDynamicState) {
+                for (uint32_t i = 0; i <
+                            graphicsPipelineCreateInfo.pDynamicState->dynamicStateCount; i++) {
+                    if (VK_DYNAMIC_STATE_RASTERIZER_DISCARD_ENABLE_EXT ==
+                                graphicsPipelineCreateInfo.pDynamicState->pDynamicStates[i]) {
+                        requireViewportState = true;
+                        break;
+                    }
+                }
+            }
+#endif // VK_EXT_extended_dynamic_state2
+            if (!requireViewportState) {
+                graphicsPipelineCreateInfo.pViewportState = nullptr;
+            }
+
+            // It has the same requirement as for pViewportState.
+            bool shouldIncludeFragmentShaderState = requireViewportState;
+
+            // VUID-VkGraphicsPipelineCreateInfo-rasterizerDiscardEnable-00751
+            if (!shouldIncludeFragmentShaderState) {
+                graphicsPipelineCreateInfo.pMultisampleState = nullptr;
+            }
+
+            // VUID-VkGraphicsPipelineCreateInfo-renderPass-06043
+            // VUID-VkGraphicsPipelineCreateInfo-renderPass-06044
+            if (graphicsPipelineCreateInfo.renderPass == VK_NULL_HANDLE
+                    || !shouldIncludeFragmentShaderState) {
+                graphicsPipelineCreateInfo.pDepthStencilState = nullptr;
+                graphicsPipelineCreateInfo.pColorBlendState = nullptr;
+            }
+        }
+        return enc->vkCreateGraphicsPipelines(device, pipelineCache, localCreateInfos.size(),
+                localCreateInfos.data(), pAllocator, pPipelines, true /* do lock */);
+    }
+
     uint32_t getApiVersionFromInstance(VkInstance instance) const {
         AutoLock<RecursiveLock> lock(mLock);
         uint32_t api = kDefaultApiVersion;
@@ -7844,6 +7916,14 @@ public:
 
         return it->second.enabledExtensions.find(name) !=
                it->second.enabledExtensions.end();
+    }
+
+    VkDevice getDevice(VkCommandBuffer commandBuffer) const {
+        struct goldfish_VkCommandBuffer* cb = as_goldfish_VkCommandBuffer(commandBuffer);
+        if (!cb) {
+            return nullptr;
+        }
+        return cb->device;
     }
 
     // Resets staging stream for this command buffer and primary command buffers
@@ -7978,11 +8058,6 @@ ResourceTracker* ResourceTracker::get() {
 
 GOLDFISH_VK_LIST_HANDLE_TYPES(HANDLE_REGISTER_IMPL)
 
-bool ResourceTracker::isMemoryTypeHostVisible(
-    VkDevice device, uint32_t typeIndex) const {
-    return mImpl->isMemoryTypeHostVisible(device, typeIndex);
-}
-
 uint8_t* ResourceTracker::getMappedPointer(VkDeviceMemory memory) {
     return mImpl->getMappedPointer(memory);
 }
@@ -8031,6 +8106,9 @@ bool ResourceTracker::hasInstanceExtension(VkInstance instance, const std::strin
 }
 bool ResourceTracker::hasDeviceExtension(VkDevice device, const std::string &name) const {
     return mImpl->hasDeviceExtension(device, name);
+}
+VkDevice ResourceTracker::getDevice(VkCommandBuffer commandBuffer) const {
+    return mImpl->getDevice(commandBuffer);
 }
 void ResourceTracker::addToCommandPool(VkCommandPool commandPool,
                       uint32_t commandBufferCount,
@@ -8128,6 +8206,22 @@ void ResourceTracker::on_vkGetPhysicalDeviceProperties(
     VkPhysicalDeviceProperties* pProperties) {
     mImpl->on_vkGetPhysicalDeviceProperties(context, physicalDevice,
         pProperties);
+}
+
+void ResourceTracker::on_vkGetPhysicalDeviceFeatures2(
+    void* context,
+    VkPhysicalDevice physicalDevice,
+    VkPhysicalDeviceFeatures2* pFeatures) {
+    mImpl->on_vkGetPhysicalDeviceFeatures2(context, physicalDevice,
+        pFeatures);
+}
+
+void ResourceTracker::on_vkGetPhysicalDeviceFeatures2KHR(
+    void* context,
+    VkPhysicalDevice physicalDevice,
+    VkPhysicalDeviceFeatures2* pFeatures) {
+    mImpl->on_vkGetPhysicalDeviceFeatures2(context, physicalDevice,
+        pFeatures);
 }
 
 void ResourceTracker::on_vkGetPhysicalDeviceProperties2(
@@ -9007,6 +9101,18 @@ VkResult ResourceTracker::on_vkQueueSignalReleaseImageANDROID(
     VkImage image,
     int* pNativeFenceFd) {
     return mImpl->on_vkQueueSignalReleaseImageANDROID(context, input_result, queue, waitSemaphoreCount, pWaitSemaphores, image, pNativeFenceFd);
+}
+
+VkResult ResourceTracker::on_vkCreateGraphicsPipelines(
+    void* context,
+    VkResult input_result,
+    VkDevice device,
+    VkPipelineCache pipelineCache,
+    uint32_t createInfoCount,
+    const VkGraphicsPipelineCreateInfo* pCreateInfos,
+    const VkAllocationCallbacks* pAllocator,
+    VkPipeline* pPipelines) {
+    return mImpl->on_vkCreateGraphicsPipelines(context, input_result, device, pipelineCache, createInfoCount, pCreateInfos, pAllocator, pPipelines);
 }
 
 void ResourceTracker::deviceMemoryTransform_tohost(

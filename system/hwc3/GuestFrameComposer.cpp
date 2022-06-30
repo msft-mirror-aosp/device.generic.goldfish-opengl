@@ -85,8 +85,8 @@ ConverterFunction GetConverterForDrmFormat(uint32_t drmFormat) {
     case DRM_FORMAT_YVU420:
       return &ConvertFromYV12;
   }
-  ALOGW("Unsupported drm format: %d(%s), returning null converter", drmFormat,
-        GetDrmFormatString(drmFormat));
+  DEBUG_LOG("Unsupported drm format: %d(%s), returning null converter",
+            drmFormat, GetDrmFormatString(drmFormat));
   return nullptr;
 }
 
@@ -616,7 +616,6 @@ HWC3::Error GuestFrameComposer::validateDisplay(Display* display,
 
   const std::vector<Layer*>& layers = display->getOrderedLayers();
 
-  auto error = HWC3::Error::None;
   bool fallbackToClientComposition = false;
   for (Layer* layer : layers) {
     const auto layerId = layer->getId();
@@ -633,24 +632,23 @@ HWC3::Error GuestFrameComposer::validateDisplay(Display* display,
         layerCompositionType == Composition::CURSOR ||
         layerCompositionType == Composition::SIDEBAND ||
         layerCompositionType == Composition::SOLID_COLOR) {
-      ALOGW("%s: display:%" PRIu64 " layer:%" PRIu64
-            " has composition type %s, falling back to client composition",
-            __FUNCTION__, displayId, layerId,
-            layerCompositionTypeString.c_str());
+      DEBUG_LOG("%s: display:%" PRIu64 " layer:%" PRIu64
+                " has composition type %s, falling back to client composition",
+                __FUNCTION__, displayId, layerId,
+                layerCompositionTypeString.c_str());
       fallbackToClientComposition = true;
       break;
     }
 
     if (layerCompositionType == Composition::DISPLAY_DECORATION) {
-      error = HWC3::Error::Unsupported;
-      fallbackToClientComposition = true;
-      break;
+      return HWC3::Error::Unsupported;
     }
 
     if (!canComposeLayer(layer)) {
-      ALOGW("%s: display:%" PRIu64 " layer:%" PRIu64
-            " composition not supported, falling back to client composition",
-            __FUNCTION__, displayId, layerId);
+      DEBUG_LOG(
+          "%s: display:%" PRIu64 " layer:%" PRIu64
+          " composition not supported, falling back to client composition",
+          __FUNCTION__, displayId, layerId);
       fallbackToClientComposition = true;
       break;
     }
@@ -706,7 +704,7 @@ HWC3::Error GuestFrameComposer::validateDisplay(Display* display,
     }
   }
 
-  return error;
+  return HWC3::Error::None;
 }
 
 HWC3::Error GuestFrameComposer::presentDisplay(

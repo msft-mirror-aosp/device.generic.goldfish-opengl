@@ -84,13 +84,14 @@ void Composer::onClientDestroyed() {
   mClientDestroyedCondition.notify_all();
 }
 
-binder_status_t Composer::dump(int fd, const char** /*args*/, uint32_t /*numArgs*/) {
-    DEBUG_LOG("%s", __FUNCTION__);
+binder_status_t Composer::dump(int fd, const char** /*args*/,
+                               uint32_t /*numArgs*/) {
+  DEBUG_LOG("%s", __FUNCTION__);
 
-    std::string output("TODO");
+  std::string output("TODO");
 
-    write(fd, output.c_str(), output.size());
-    return STATUS_OK;
+  write(fd, output.c_str(), output.size());
+  return STATUS_OK;
 }
 
 ndk::ScopedAStatus Composer::getCapabilities(std::vector<Capability>* caps) {
@@ -98,6 +99,7 @@ ndk::ScopedAStatus Composer::getCapabilities(std::vector<Capability>* caps) {
 
   caps->clear();
   caps->emplace_back(Capability::PRESENT_FENCE_IS_NOT_RELIABLE);
+  caps->emplace_back(Capability::BOOT_DISPLAY_CONFIG);
 
   return ndk::ScopedAStatus::ok();
 }

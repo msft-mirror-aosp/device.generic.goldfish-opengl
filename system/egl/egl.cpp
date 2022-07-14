@@ -43,16 +43,16 @@
 #include <qemu_pipe_bp.h>
 
 #include "GLEncoder.h"
-#ifdef WITH_GLES2
 #include "GL2Encoder.h"
-#endif
 
 #include <GLES3/gl31.h>
 
 #ifdef VIRTIO_GPU
-#include <drm/virtgpu_drm.h>
 #include <xf86drm.h>
 #include <poll.h>
+
+#include "virtgpu_drm.h"
+
 #endif // VIRTIO_GPU
 
 #ifdef GFXSTREAM
@@ -60,22 +60,7 @@
 #endif
 #include <cutils/trace.h>
 
-#if PLATFORM_SDK_VERSION < 18
-#define override
-#endif
-
-#if PLATFORM_SDK_VERSION >= 16
 #include <system/window.h>
-#else // PLATFORM_SDK_VERSION >= 16
-#include <private/ui/android_natives_priv.h>
-#endif // PLATFORM_SDK_VERSION >= 16
-
-#if PLATFORM_SDK_VERSION <= 16
-#define queueBuffer_DEPRECATED queueBuffer
-#define dequeueBuffer_DEPRECATED dequeueBuffer
-#define cancelBuffer_DEPRECATED cancelBuffer
-#endif // PLATFORM_SDK_VERSION <= 16
-
 #define DEBUG_EGL 0
 
 #if DEBUG_EGL
@@ -352,6 +337,7 @@ struct app_time_metric_t {
             float avgMs = ns2ms(totalAppTime) / numSamples;
             float minMs = ns2ms(minAppTime);
             float maxMs = ns2ms(maxAppTime);
+            // B* needs the following log.
             ALOGD("app_time_stats: avg=%0.2fms min=%0.2fms max=%0.2fms count=%u", avgMs, minMs, maxMs, numSamples);
             totalAppTime = 0;
             minAppTime = 0;
@@ -492,7 +478,17 @@ egl_window_surface_t::egl_window_surface_t (
 
 EGLBoolean egl_window_surface_t::init()
 {
-    if (nativeWindow->dequeueBuffer_DEPRECATED(nativeWindow, &buffer) != NO_ERROR) {
+#ifndef HOST_BUILD
+    int consumerUsage = 0;
+    if (nativeWindow->query(nativeWindow, NATIVE_WINDOW_CONSUMER_USAGE_BITS, &consumerUsage) != 0) {
+        setErrorReturn(EGL_BAD_ALLOC, EGL_FALSE);
+    } else {
+        int producerUsage = GRALLOC_USAGE_HW_RENDER;
+        native_window_set_usage(nativeWindow, consumerUsage | producerUsage);
+    }
+#endif
+
+    if (nativeWindow->dequeueBuffer_DEPRECATED(nativeWindow, &buffer) != 0) {
         setErrorReturn(EGL_BAD_ALLOC, EGL_FALSE);
     }
     setWidth(buffer->width);
@@ -666,7 +662,7 @@ static uint64_t createNativeSync_virtioGpu(
 
         int queue_work_err =
             drmIoctl(
-                hostCon->getOrCreateRendernodeFd(),
+                hostCon->getRendernodeFd(),
                 DRM_IOCTL_VIRTGPU_EXECBUFFER, &createSyncExport);
 
         if (queue_work_err) {
@@ -707,7 +703,6 @@ struct FrameTracingState {
     bool tracingEnabled = false;
     void onSwapBuffersSuccesful(ExtendedRCEncoderContext* rcEnc) {
 #ifdef GFXSTREAM
-        bool current = android::base::isTracingEnabled();
         // edge trigger
         if (android::base::isTracingEnabled() && !tracingEnabled) {
             if (rcEnc->hasHostSideTracing()) {
@@ -781,30 +776,17 @@ EGLBoolean egl_window_surface_t::swapBuffers()
         setErrorReturn(EGL_BAD_SURFACE, EGL_FALSE);
     }
 
-#if PLATFORM_SDK_VERSION <= 16
-    rcEnc->rcFlushWindowColorBuffer(rcEnc, rcSurface);
-    // equivalent to glFinish if no native sync
-    eglWaitClient();
-    nativeWindow->queueBuffer(nativeWindow, buffer);
-#else
     sFlushBufferAndCreateFence(
         hostCon, rcEnc, rcSurface,
         sFrameTracingState.frameNumber, &presentFenceFd);
 
     DPRINT("queueBuffer with fence %d", presentFenceFd);
     nativeWindow->queueBuffer(nativeWindow, buffer, presentFenceFd);
-#endif
 
     appTimeMetric.onQueueBufferReturn();
 
     DPRINT("calling dequeueBuffer...");
 
-#if PLATFORM_SDK_VERSION <= 16
-    if (nativeWindow->dequeueBuffer(nativeWindow, &buffer)) {
-        buffer = NULL;
-        setErrorReturn(EGL_BAD_SURFACE, EGL_FALSE);
-    }
-#else
     int acquireFenceFd = -1;
     if (nativeWindow->dequeueBuffer(nativeWindow, &buffer, &acquireFenceFd)) {
         buffer = NULL;
@@ -816,7 +798,6 @@ EGLBoolean egl_window_surface_t::swapBuffers()
     if (acquireFenceFd > 0) {
         close(acquireFenceFd);
     }
-#endif
 
     rcEnc->rcSetWindowColorBuffer(rcEnc, rcSurface,
             grallocHelper->getHostHandle(buffer->handle));
@@ -1232,30 +1213,12 @@ EGLBoolean eglChooseConfig(EGLDisplay dpy, const EGLint *attrib_list, EGLConfig 
         attrib_list = backup_attribs;
     }
 
-    // API 19 passes EGL_SWAP_BEHAVIOR_PRESERVED_BIT to surface type,
-    // while the host never supports it.
-    // We remove the bit here.
-    EGLint* local_attrib_list = NULL;
-    if (PLATFORM_SDK_VERSION <= 19) {
-        local_attrib_list = new EGLint[attribs_size];
-        memcpy(local_attrib_list, attrib_list, attribs_size * sizeof(EGLint));
-        EGLint* local_attrib_p = local_attrib_list;
-        while (local_attrib_p[0] != EGL_NONE) {
-            if (local_attrib_p[0] == EGL_SURFACE_TYPE) {
-                local_attrib_p[1] &= ~(EGLint)EGL_SWAP_BEHAVIOR_PRESERVED_BIT;
-            }
-            local_attrib_p += 2;
-        }
-    }
-
     uint32_t* tempConfigs[config_size];
     DEFINE_AND_VALIDATE_HOST_CONNECTION(EGL_FALSE);
-    *num_config = rcEnc->rcChooseConfig(rcEnc,
-            local_attrib_list ? local_attrib_list:(EGLint*)attrib_list,
+    *num_config = rcEnc->rcChooseConfig(rcEnc, (EGLint*)attrib_list,
             attribs_size * sizeof(EGLint), (uint32_t*)tempConfigs, config_size);
 
-    if (local_attrib_list) delete [] local_attrib_list;
-    if (*num_config <= 0) {
+    if (*num_config < 0) {
         EGLint err = -(*num_config);
         *num_config = 0;
         switch (err) {
@@ -1288,7 +1251,7 @@ EGLBoolean eglGetConfigAttrib(EGLDisplay dpy, EGLConfig config, EGLint attribute
     }
     else
     {
-        ALOGD("%s: bad attrib 0x%x", __FUNCTION__, attribute);
+        DPRINT("%s: bad attrib 0x%x", __FUNCTION__, attribute);
         RETURN_ERROR(EGL_FALSE, EGL_BAD_ATTRIBUTE);
     }
 }
@@ -1310,12 +1273,12 @@ EGLSurface eglCreateWindowSurface(EGLDisplay dpy, EGLConfig config, EGLNativeWin
         setErrorReturn(EGL_BAD_MATCH, EGL_NO_SURFACE);
     }
 
-    if (static_cast<ANativeWindow*>(win)->common.magic != ANDROID_NATIVE_WINDOW_MAGIC) {
+    if (reinterpret_cast<ANativeWindow*>(win)->common.magic != ANDROID_NATIVE_WINDOW_MAGIC) {
         setErrorReturn(EGL_BAD_NATIVE_WINDOW, EGL_NO_SURFACE);
     }
 
     egl_surface_t* surface = egl_window_surface_t::create(
-            &s_display, config, EGL_WINDOW_BIT, static_cast<ANativeWindow*>(win));
+            &s_display, config, EGL_WINDOW_BIT, reinterpret_cast<ANativeWindow*>(win));
     if (!surface) {
         setErrorReturn(EGL_BAD_ALLOC, EGL_NO_SURFACE);
     }
@@ -1666,7 +1629,7 @@ EGLBoolean eglSurfaceAttrib(EGLDisplay dpy, EGLSurface surface, EGLint attribute
         }
         return true;
     case EGL_TIMESTAMPS_ANDROID:
-        ALOGD("%s: set frame timestamps collecting %d\n", __func__, value);
+        DPRINT("%s: set frame timestamps collecting %d\n", __func__, value);
         p_surface->setCollectingTimestamps(value);
         return true;
     default:
@@ -1888,7 +1851,7 @@ EGLContext eglCreateContext(EGLDisplay dpy, EGLConfig config, EGLContext share_c
     }
 
     EGLContext_t * context = new EGLContext_t(dpy, config, shareCtx, majorVersion, minorVersion);
-    ALOGD("%s: %p: maj %d min %d rcv %d", __FUNCTION__, context, majorVersion, minorVersion, rcMajorVersion);
+    DPRINT("%s: %p: maj %d min %d rcv %d", __FUNCTION__, context, majorVersion, minorVersion, rcMajorVersion);
     if (!context) {
         ALOGE("could not alloc egl context!");
         setErrorReturn(EGL_BAD_ALLOC, EGL_NO_CONTEXT);
@@ -1997,7 +1960,7 @@ EGLBoolean eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLC
             context->getClientState();
 
         if (!hostCon->gl2Encoder()->isInitialized()) {
-            ALOGD("%s: %p: ver %d %d (tinfo %p) (first time)",
+            DPRINT("%s: %p: ver %d %d (tinfo %p) (first time)",
                   __FUNCTION__,
                   context, context->majorVersion, context->minorVersion, tInfo);
             s_display.gles2_iface()->init();
@@ -2087,7 +2050,7 @@ EGLBoolean eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLC
         }
         else {
             if (!hostCon->glEncoder()->isInitialized()) {
-                ALOGD("%s: %p: ver %d %d (tinfo %p) (first time)",
+                DPRINT("%s: %p: ver %d %d (tinfo %p) (first time)",
                       __FUNCTION__,
                       context, context->majorVersion, context->minorVersion, tInfo);
                 s_display.gles_iface()->init();
@@ -2266,6 +2229,9 @@ EGLImageKHR eglCreateImageKHR(EGLDisplay dpy, EGLContext ctx, EGLenum target, EG
 #endif
 #if PLATFORM_SDK_VERSION >= 28
             case HAL_PIXEL_FORMAT_YCBCR_420_888:
+#endif
+#if PLATFORM_SDK_VERSION >= 30
+            case HAL_PIXEL_FORMAT_YCBCR_P010:
 #endif
                 break;
             case HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED:

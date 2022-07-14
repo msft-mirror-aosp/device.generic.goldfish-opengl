@@ -37,38 +37,21 @@ class VkEncoder;
 struct HostVisibleMemoryVirtualizationInfo {
     bool initialized = false;
     bool memoryPropertiesSupported;
-    bool directMemSupported;
-    bool virtualizationSupported;
-    bool virtioGpuNextSupported;
-
-    VkPhysicalDevice physicalDevice;
 
     VkPhysicalDeviceMemoryProperties hostMemoryProperties;
     VkPhysicalDeviceMemoryProperties guestMemoryProperties;
 
     uint32_t memoryTypeIndexMappingToHost[VK_MAX_MEMORY_TYPES];
-    uint32_t memoryHeapIndexMappingToHost[VK_MAX_MEMORY_TYPES];
-
     uint32_t memoryTypeIndexMappingFromHost[VK_MAX_MEMORY_TYPES];
-    uint32_t memoryHeapIndexMappingFromHost[VK_MAX_MEMORY_TYPES];
 
     bool memoryTypeBitsShouldAdvertiseBoth[VK_MAX_MEMORY_TYPES];
 };
 
-bool canFitVirtualHostVisibleMemoryInfo(
-    const VkPhysicalDeviceMemoryProperties* memoryProperties);
-
 void initHostVisibleMemoryVirtualizationInfo(
-    VkPhysicalDevice physicalDevice,
     const VkPhysicalDeviceMemoryProperties* memoryProperties,
-    const EmulatorFeatureInfo* featureInfo,
     HostVisibleMemoryVirtualizationInfo* info_out);
 
 bool isHostVisibleMemoryTypeIndexForGuest(
-    const HostVisibleMemoryVirtualizationInfo* info,
-    uint32_t index);
-
-bool isDeviceLocalMemoryTypeIndexForGuest(
     const HostVisibleMemoryVirtualizationInfo* info,
     uint32_t index);
 
@@ -83,7 +66,9 @@ struct HostMemAlloc {
     VkDeviceSize mappedSize = 0;
     uint8_t* mappedPtr = nullptr;
     android::base::guest::SubAllocator* subAlloc = nullptr;
-    int fd = -1;
+    int rendernodeFd = -1;
+    bool boCreated = false;
+    uint32_t boHandle = 0;
     uint64_t memoryAddr = 0;
     size_t memorySize = 0;
     bool isDeviceAddressMemoryAllocation = false;
@@ -104,7 +89,8 @@ void destroyHostMemAlloc(
     bool freeMemorySyncSupported,
     VkEncoder* enc,
     VkDevice device,
-    HostMemAlloc* toDestroy);
+    HostMemAlloc* toDestroy,
+    bool doLock);
 
 struct SubAlloc {
     uint8_t* mappedPtr = nullptr;

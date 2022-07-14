@@ -29,6 +29,11 @@
 #include <stdbool.h>
 #ifdef VK_USE_PLATFORM_ANDROID_KHR
 #include <system/graphics.h>
+#else
+/* See system/graphics.h. */
+enum {
+    HAL_PIXEL_FORMAT_YV12 = 842094169,
+};
 #endif
 #include <vulkan/vulkan.h>
 #include <vndk/hardware_buffer.h>
@@ -36,6 +41,17 @@
 /* See i915_private_android_types.h in minigbm. */
 #define HAL_PIXEL_FORMAT_NV12_Y_TILED_INTEL 0x100
 
+// TODO(b/167698976): We should not use OMX_COLOR_FormatYUV420Planar
+// but we seem to miss a format translation somewhere.
+
+#define OMX_COLOR_FormatYUV420Planar 0x13
+
+// TODO: update users of this function to query the DRM fourcc
+// code using the standard Gralloc4 metadata type and instead
+// translate the DRM fourcc code to a Vulkan format as Android
+// formats such as AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420 could be
+// either VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM or
+// VK_FORMAT_G8_B8R8_2PLANE_420_UNORM.
 static inline VkFormat
 vk_format_from_android(unsigned android_format)
 {
@@ -53,12 +69,12 @@ vk_format_from_android(unsigned android_format)
    case AHARDWAREBUFFER_FORMAT_R10G10B10A2_UNORM:
       return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
    case HAL_PIXEL_FORMAT_NV12_Y_TILED_INTEL:
+   case AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420:
       return VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
 #ifdef VK_USE_PLATFORM_ANDROID_KHR
    case HAL_PIXEL_FORMAT_YV12:
-      // YUV converter will convert this format to R8G8B8A8
-      // TODO: should we use R8G8B8A8 for other YUV format as well?
-      return VK_FORMAT_R8G8B8A8_UNORM;
+   case OMX_COLOR_FormatYUV420Planar:
+      return VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM;
    case AHARDWAREBUFFER_FORMAT_BLOB:
 #endif
    default:
@@ -82,6 +98,8 @@ android_format_from_vk(VkFormat vk_format)
       return AHARDWAREBUFFER_FORMAT_R10G10B10A2_UNORM;
    case VK_FORMAT_G8_B8R8_2PLANE_420_UNORM:
       return HAL_PIXEL_FORMAT_NV12_Y_TILED_INTEL;
+   case VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM:
+      return HAL_PIXEL_FORMAT_YV12;
    default:
       return AHARDWAREBUFFER_FORMAT_BLOB;
    }
@@ -91,10 +109,26 @@ static inline bool
 android_format_is_yuv(unsigned android_format)
 {
    switch (android_format) {
+   case AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM:
+   case AHARDWAREBUFFER_FORMAT_R8G8B8X8_UNORM:
+   case AHARDWAREBUFFER_FORMAT_R8G8B8_UNORM:
+   case AHARDWAREBUFFER_FORMAT_R5G6B5_UNORM:
+   case AHARDWAREBUFFER_FORMAT_R16G16B16A16_FLOAT:
+   case AHARDWAREBUFFER_FORMAT_R10G10B10A2_UNORM:
+   case AHARDWAREBUFFER_FORMAT_D16_UNORM:
+   case AHARDWAREBUFFER_FORMAT_D24_UNORM:
+   case AHARDWAREBUFFER_FORMAT_D24_UNORM_S8_UINT:
+   case AHARDWAREBUFFER_FORMAT_D32_FLOAT:
+   case AHARDWAREBUFFER_FORMAT_D32_FLOAT_S8_UINT:
+   case AHARDWAREBUFFER_FORMAT_S8_UINT:
+      return false;
    case HAL_PIXEL_FORMAT_NV12_Y_TILED_INTEL:
+   case OMX_COLOR_FormatYUV420Planar:
+   case HAL_PIXEL_FORMAT_YV12:
+   case AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420:
       return true;
-
    default:
+      ALOGE("%s: unhandled format: %d", __FUNCTION__, android_format);
       return false;
    }
 }

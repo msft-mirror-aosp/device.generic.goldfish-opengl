@@ -149,7 +149,9 @@ std::unique_ptr<buffer_manager_t> create_buffer_manager(goldfish_gralloc30_modul
 
 class goldfish_gralloc30_module_t {
 public:
-    goldfish_gralloc30_module_t(): m_hostConn(HostConnection::createUnique()) {
+    // TODO(b/142677230): Use unique pointers instead.
+    goldfish_gralloc30_module_t()
+        : m_hostConn(HostConnection::createUnique().release()) {
         CRASH_IF(!m_hostConn, "m_hostConn cannot be nullptr");
         m_bufferManager = create_buffer_manager(this);
         CRASH_IF(!m_bufferManager, "m_bufferManager cannot be nullptr");
@@ -448,7 +450,7 @@ struct private_module_t {
             RETURN_ERROR(nullptr);
         }
 
-        if ((m->id == GRALLOC_HARDWARE_MODULE_ID) && (m->name == GOLDFISH_GRALLOC_MODULE_NAME)) {
+        if (strcmp(m->id, GRALLOC_HARDWARE_MODULE_ID) == 0 && m->name == GOLDFISH_GRALLOC_MODULE_NAME) {
             return reinterpret_cast<private_module_t*>(const_cast<hw_module_t*>(m));
         } else {
             RETURN_ERROR(nullptr);

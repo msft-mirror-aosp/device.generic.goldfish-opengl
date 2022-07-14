@@ -23,8 +23,10 @@
 #endif
 
 #include <string>
-
 #include <dlfcn.h>
+#include <GLES3/gl31.h>
+
+#include <system/graphics.h>
 
 static const int systemEGLVersionMajor = 1;
 static const int systemEGLVersionMinor = 4;
@@ -73,7 +75,9 @@ eglDisplay::eglDisplay() :
     m_gles2_iface(NULL),
     m_versionString(NULL),
     m_vendorString(NULL),
-    m_extensionString(NULL)
+    m_extensionString(NULL),
+    m_hostDriverCaps_knownMajorVersion(0),
+    m_hostDriverCaps_knownMinorVersion(0)
 {
     pthread_mutex_init(&m_lock, NULL);
     pthread_mutex_init(&m_ctxLock, NULL);
@@ -107,13 +111,9 @@ bool eglDisplay::initialize(EGLClient_eglInterface *eglIface)
             return false;
         }
 
-#ifdef WITH_GLES2
         m_gles2_iface = loadGLESClientAPI("libGLESv2_emulation",
                                           eglIface,
                                           &s_gles2_lib);
-        // Note that if loading gles2 failed, we can still run with no
-        // GLES2 support, having GLES2 is not mandatory.
-#endif
 
         //
         // establish connection with the host
@@ -171,7 +171,6 @@ bool eglDisplay::initialize(EGLClient_eglInterface *eglIface)
 
         uint32_t nInts = m_numConfigAttribs * (m_numConfigs + 1);
         EGLint tmp_buf[nInts];
-        uint32_t configCount = nInts - m_numConfigAttribs;
 
         m_configs = new EGLint[nInts-m_numConfigAttribs];
 
@@ -208,7 +207,7 @@ void eglDisplay::processConfigs()
 {
     for (intptr_t i=0; i<m_numConfigs; i++) {
         EGLConfig config = getConfigAtIndex(i);
-        PixelFormat format;
+        uint32_t format;
         if (getConfigNativePixelFormat(config, &format)) {
             setConfigAttrib(config, EGL_NATIVE_VISUAL_ID, format);
         }
@@ -357,11 +356,11 @@ static char *buildExtensionString()
 
         std::string dynamicEGLExtensions;
 
-        if (hcon->rcEncoder()->hasNativeSync() &&
+        if ((hcon->rcEncoder()->hasVirtioGpuNativeSync() || hcon->rcEncoder()->hasNativeSync()) &&
             !strstr(initialEGLExts, kDynamicEGLExtNativeSync)) {
             dynamicEGLExtensions += kDynamicEGLExtNativeSync;
 
-            if (hcon->rcEncoder()->hasNativeSyncV3()) {
+            if (hcon->rcEncoder()->hasVirtioGpuNativeSync() || hcon->rcEncoder()->hasNativeSyncV3()) {
                 dynamicEGLExtensions += kDynamicEGLExtWaitSync;
             }
         }
@@ -541,7 +540,7 @@ EGLBoolean eglDisplay::setConfigAttrib(EGLConfig config, EGLint attrib, EGLint v
 }
 
 
-EGLBoolean eglDisplay::getConfigNativePixelFormat(EGLConfig config, PixelFormat * format)
+EGLBoolean eglDisplay::getConfigNativePixelFormat(EGLConfig config, uint32_t * format)
 {
     EGLint redSize, blueSize, greenSize, alphaSize;
 
@@ -567,11 +566,9 @@ EGLBoolean eglDisplay::getConfigNativePixelFormat(EGLConfig config, PixelFormat 
     }
 
     //calculate the GL internal format
-    if ((redSize==8)&&(greenSize==8)&&(blueSize==8)&&(alphaSize==8)) *format = PIXEL_FORMAT_RGBA_8888; //XXX: BGR?
-    else if ((redSize==8)&&(greenSize==8)&&(blueSize==8)&&(alphaSize==0)) *format = PIXEL_FORMAT_RGBX_8888; //XXX or PIXEL_FORMAT_RGB_888
-    else if ((redSize==5)&&(greenSize==6)&&(blueSize==5)&&(alphaSize==0)) *format = PIXEL_FORMAT_RGB_565;
-    else if ((redSize==5)&&(greenSize==5)&&(blueSize==5)&&(alphaSize==1)) *format = PIXEL_FORMAT_RGBA_5551;
-    else if ((redSize==4)&&(greenSize==4)&&(blueSize==4)&&(alphaSize==4)) *format = PIXEL_FORMAT_RGBA_4444;
+    if ((redSize==8)&&(greenSize==8)&&(blueSize==8)&&(alphaSize==8)) *format = HAL_PIXEL_FORMAT_RGBA_8888; //XXX: BGR?
+    else if ((redSize==8)&&(greenSize==8)&&(blueSize==8)&&(alphaSize==0)) *format = HAL_PIXEL_FORMAT_RGBX_8888; //XXX or HAL_PIXEL_FORMAT_RGB_888
+    else if ((redSize==5)&&(greenSize==6)&&(blueSize==5)&&(alphaSize==0)) *format = HAL_PIXEL_FORMAT_RGB_565;
     else {
         return EGL_FALSE;
     }
@@ -654,3 +651,55 @@ bool eglDisplay::isSurface(EGLSurface surface) {
     pthread_mutex_unlock(&m_surfaceLock);
     return res;
 }
+
+HostDriverCaps eglDisplay::getHostDriverCaps(int majorVersion, int minorVersion) {
+    pthread_mutex_lock(&m_lock);
+    if (majorVersion <= m_hostDriverCaps_knownMajorVersion &&
+        minorVersion <= m_hostDriverCaps_knownMinorVersion) {
+        pthread_mutex_unlock(&m_lock);
+        return m_hostDriverCaps;
+    }
+
+    memset(&m_hostDriverCaps, 0x0, sizeof(m_hostDriverCaps));
+
+    m_hostDriverCaps.max_color_attachments = 8;
+
+    // Can we query gles2?
+    if (majorVersion >= 1) {
+        m_gles2_iface->getIntegerv(GL_MAX_VERTEX_ATTRIBS, &m_hostDriverCaps.max_vertex_attribs);
+        m_gles2_iface->getIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &m_hostDriverCaps.max_combined_texture_image_units);
+
+        m_gles2_iface->getIntegerv(GL_MAX_TEXTURE_SIZE, &m_hostDriverCaps.max_texture_size);
+        m_gles2_iface->getIntegerv(GL_MAX_CUBE_MAP_TEXTURE_SIZE, &m_hostDriverCaps.max_texture_size_cube_map);
+        m_gles2_iface->getIntegerv(GL_MAX_RENDERBUFFER_SIZE, &m_hostDriverCaps.max_renderbuffer_size);
+        m_hostDriverCaps_knownMajorVersion = 2;
+    }
+
+    // Can we query gles3.0?
+    if (majorVersion >= 3) {
+        m_gles2_iface->getIntegerv(GL_MAX_COLOR_ATTACHMENTS, &m_hostDriverCaps.max_color_attachments);
+        m_gles2_iface->getIntegerv(GL_MAX_DRAW_BUFFERS, &m_hostDriverCaps.max_draw_buffers);
+        m_gles2_iface->getIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &m_hostDriverCaps.ubo_offset_alignment);
+        m_gles2_iface->getIntegerv(GL_MAX_UNIFORM_BUFFER_BINDINGS, &m_hostDriverCaps.max_uniform_buffer_bindings);
+        m_gles2_iface->getIntegerv(GL_MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS, &m_hostDriverCaps.max_transform_feedback_separate_attribs);
+        m_gles2_iface->getIntegerv(GL_MAX_3D_TEXTURE_SIZE, &m_hostDriverCaps.max_texture_size_3d);
+        m_gles2_iface->getIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &m_hostDriverCaps.max_array_texture_layers);
+
+        m_hostDriverCaps_knownMajorVersion = 3;
+
+        // Can we query gles3.1?
+        if (minorVersion >= 1) {
+            m_gles2_iface->getIntegerv(GL_MAX_ATOMIC_COUNTER_BUFFER_BINDINGS, &m_hostDriverCaps.max_atomic_counter_buffer_bindings);
+            m_gles2_iface->getIntegerv(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS, &m_hostDriverCaps.max_shader_storage_buffer_bindings);
+            m_gles2_iface->getIntegerv(GL_MAX_VERTEX_ATTRIB_BINDINGS, &m_hostDriverCaps.max_vertex_attrib_bindings);
+            m_gles2_iface->getIntegerv(GL_MAX_VERTEX_ATTRIB_STRIDE, &m_hostDriverCaps.max_vertex_attrib_stride);
+            m_gles2_iface->getIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &m_hostDriverCaps.ssbo_offset_alignment);
+            m_hostDriverCaps_knownMinorVersion = 1;
+        }
+    }
+
+    pthread_mutex_unlock(&m_lock);
+
+    return m_hostDriverCaps;
+}
+

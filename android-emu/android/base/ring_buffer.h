@@ -116,13 +116,11 @@ long ring_buffer_view_read(
 bool ring_buffer_wait_write(
     const struct ring_buffer* r,
     const struct ring_buffer_view* v,
-    uint32_t bytes,
-    uint64_t timeout_us);
+    uint32_t bytes);
 bool ring_buffer_wait_read(
     const struct ring_buffer* r,
     const struct ring_buffer_view* v,
-    uint32_t bytes,
-    uint64_t timeout_us);
+    uint32_t bytes);
 
 // read/write fully, blocking if there is nothing to read/write.
 void ring_buffer_write_fully(
@@ -228,5 +226,5 @@ void ring_buffer_consumer_wait_producer_idle(struct ring_buffer* r);
 void ring_buffer_consumer_hung_up(struct ring_buffer* r);
 
 // Convenient function to reschedule thread
-void ring_buffer_yield();
+void ring_buffer_yield(void);
 ANDROID_END_HEADER

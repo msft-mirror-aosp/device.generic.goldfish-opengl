@@ -17,48 +17,47 @@
 #if defined(__ANDROID__) || defined(HOST_BUILD)
 
 #include <cutils/trace.h>
+#define TRACE_TAG ATRACE_TAG_GRAPHICS
 
-#define VK_TRACE_TAG ATRACE_TAG_GRAPHICS
+#elif defined(__Fuchsia__) && !defined(FUCHSIA_NO_TRACE)
 
-namespace android {
-namespace base {
-
-void ScopedTrace::beginTraceImpl(const char* name) {
-    atrace_begin(VK_TRACE_TAG, name);
-}
-
-void ScopedTrace::endTraceImpl(const char*) {
-    atrace_end(VK_TRACE_TAG);
-}
-
-} // namespace base
-} // namespace android
-
-#elif __Fuchsia__
-
-#ifndef FUCHSIA_NO_TRACE
 #include <lib/trace/event.h>
-#endif
+#define TRACE_TAG "gfx"
 
-#define VK_TRACE_TAG "gfx"
+#else
+#endif
 
 namespace android {
 namespace base {
 
-void ScopedTrace::beginTraceImpl(const char* name) {
-#ifndef FUCHSIA_NO_TRACE
-    TRACE_DURATION_BEGIN(VK_TRACE_TAG, name);
+bool isTracingEnabled() {
+#if defined(__ANDROID__) || defined(HOST_BUILD)
+    return atrace_is_tag_enabled(TRACE_TAG);
+#else
+    // TODO: Fuchsia + Linux
+    return false;
 #endif
 }
 
-void ScopedTrace::endTraceImpl(const char* name) {
-#ifndef FUCHSIA_NO_TRACE
-    TRACE_DURATION_END(VK_TRACE_TAG, name);
+void ScopedTraceGuest::beginTraceImpl(const char* name) {
+#if defined(__ANDROID__) || defined(HOST_BUILD)
+    atrace_begin(TRACE_TAG, name);
+#elif defined(__Fuchsia__) && !defined(FUCHSIA_NO_TRACE)
+    TRACE_DURATION_BEGIN(TRACE_TAG, name);
+#else
+    // No-op
+#endif
+}
+
+void ScopedTraceGuest::endTraceImpl(const char* name) {
+#if defined(__ANDROID__) || defined(HOST_BUILD)
+    atrace_end(TRACE_TAG);
+#elif defined(__Fuchsia__) && !defined(FUCHSIA_NO_TRACE)
+    TRACE_DURATION_END(TRACE_TAG, name);
+#else
+    // No-op
 #endif
 }
 
 } // namespace base
 } // namespace android
-
-#endif
-

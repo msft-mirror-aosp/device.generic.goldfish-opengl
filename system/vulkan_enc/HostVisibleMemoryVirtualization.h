@@ -37,38 +37,21 @@ class VkEncoder;
 struct HostVisibleMemoryVirtualizationInfo {
     bool initialized = false;
     bool memoryPropertiesSupported;
-    bool directMemSupported;
-    bool virtualizationSupported;
-    bool virtioGpuNextSupported;
-
-    VkPhysicalDevice physicalDevice;
 
     VkPhysicalDeviceMemoryProperties hostMemoryProperties;
     VkPhysicalDeviceMemoryProperties guestMemoryProperties;
 
     uint32_t memoryTypeIndexMappingToHost[VK_MAX_MEMORY_TYPES];
-    uint32_t memoryHeapIndexMappingToHost[VK_MAX_MEMORY_TYPES];
-
     uint32_t memoryTypeIndexMappingFromHost[VK_MAX_MEMORY_TYPES];
-    uint32_t memoryHeapIndexMappingFromHost[VK_MAX_MEMORY_TYPES];
 
     bool memoryTypeBitsShouldAdvertiseBoth[VK_MAX_MEMORY_TYPES];
 };
 
-bool canFitVirtualHostVisibleMemoryInfo(
-    const VkPhysicalDeviceMemoryProperties* memoryProperties);
-
 void initHostVisibleMemoryVirtualizationInfo(
-    VkPhysicalDevice physicalDevice,
     const VkPhysicalDeviceMemoryProperties* memoryProperties,
-    const EmulatorFeatureInfo* featureInfo,
     HostVisibleMemoryVirtualizationInfo* info_out);
 
 bool isHostVisibleMemoryTypeIndexForGuest(
-    const HostVisibleMemoryVirtualizationInfo* info,
-    uint32_t index);
-
-bool isDeviceLocalMemoryTypeIndexForGuest(
     const HostVisibleMemoryVirtualizationInfo* info,
     uint32_t index);
 
@@ -83,6 +66,13 @@ struct HostMemAlloc {
     VkDeviceSize mappedSize = 0;
     uint8_t* mappedPtr = nullptr;
     android::base::guest::SubAllocator* subAlloc = nullptr;
+    int rendernodeFd = -1;
+    bool boCreated = false;
+    uint32_t boHandle = 0;
+    uint64_t memoryAddr = 0;
+    size_t memorySize = 0;
+    bool isDeviceAddressMemoryAllocation = false;
+    bool isDedicated = false;
 };
 
 VkResult finishHostMemAllocInit(
@@ -99,7 +89,8 @@ void destroyHostMemAlloc(
     bool freeMemorySyncSupported,
     VkEncoder* enc,
     VkDevice device,
-    HostMemAlloc* toDestroy);
+    HostMemAlloc* toDestroy,
+    bool doLock);
 
 struct SubAlloc {
     uint8_t* mappedPtr = nullptr;
@@ -110,6 +101,8 @@ struct SubAlloc {
     VkDeviceSize baseOffset = 0;
     android::base::guest::SubAllocator* subAlloc = nullptr;
     VkDeviceMemory subMemory = VK_NULL_HANDLE;
+    bool isDeviceAddressMemoryAllocation = false;
+    uint32_t memoryTypeIndex = 0;
 };
 
 void subAllocHostMemory(
@@ -117,7 +110,9 @@ void subAllocHostMemory(
     const VkMemoryAllocateInfo* pAllocateInfo,
     SubAlloc* out);
 
-void subFreeHostMemory(SubAlloc* toFree);
+// Returns true if the block would have been emptied.
+// In that case, we can then go back and tear down the block itself.
+bool subFreeHostMemory(SubAlloc* toFree);
 
 bool canSubAlloc(android::base::guest::SubAllocator* subAlloc, VkDeviceSize size);
 

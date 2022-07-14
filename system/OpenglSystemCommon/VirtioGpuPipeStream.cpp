@@ -15,8 +15,8 @@
  */
 
 #include "VirtioGpuPipeStream.h"
+#include "virtgpu_drm.h"
 
-#include <drm/virtgpu_drm.h>
 #include <xf86drm.h>
 
 #include <sys/types.h>
@@ -49,7 +49,21 @@ VirtioGpuPipeStream::VirtioGpuPipeStream(size_t bufSize) :
     m_buf(nullptr),
     m_read(0),
     m_readLeft(0),
-    m_writtenPos(0) { }
+    m_writtenPos(0),
+    m_fd_owned(true) { }
+
+VirtioGpuPipeStream::VirtioGpuPipeStream(size_t bufSize, int stream_handle) :
+    IOStream(bufSize),
+    m_fd(stream_handle),
+    m_virtio_rh(~0U),
+    m_virtio_bo(0),
+    m_virtio_mapped(nullptr),
+    m_bufsize(bufSize),
+    m_buf(nullptr),
+    m_read(0),
+    m_readLeft(0),
+    m_writtenPos(0),
+    m_fd_owned(false) { }
 
 VirtioGpuPipeStream::~VirtioGpuPipeStream()
 {
@@ -64,7 +78,7 @@ VirtioGpuPipeStream::~VirtioGpuPipeStream()
         drmIoctl(m_fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
     }
 
-    if (m_fd >= 0) {
+    if (m_fd >= 0 && m_fd_owned) {
         close(m_fd);
     }
 
@@ -74,7 +88,7 @@ VirtioGpuPipeStream::~VirtioGpuPipeStream()
 int VirtioGpuPipeStream::connect(const char* serviceName)
 {
     if (m_fd < 0) {
-        m_fd = drmOpenRender(RENDERNODE_MINOR);
+        m_fd = VirtioGpuPipeStream::openRendernode();
         if (m_fd < 0) {
             ERR("%s: failed with fd %d (%s)", __func__, m_fd, strerror(errno));
             return -1;
@@ -120,9 +134,9 @@ int VirtioGpuPipeStream::connect(const char* serviceName)
     }
 
     if (!m_virtio_mapped) {
-        drm_virtgpu_map map = {
-            .handle = m_virtio_bo,
-        };
+        drm_virtgpu_map map;
+        memset(&map, 0, sizeof(map));
+        map.handle = m_virtio_bo;
 
         int ret = drmIoctl(m_fd, DRM_IOCTL_VIRTGPU_MAP, &map);
         if (ret) {
@@ -152,6 +166,15 @@ int VirtioGpuPipeStream::connect(const char* serviceName)
         writeFully(kPipeString, sizeof(kPipeString));
     }
     return 0;
+}
+
+int VirtioGpuPipeStream::openRendernode() {
+    int fd = drmOpenRender(RENDERNODE_MINOR);
+    if (fd < 0) {
+            ERR("%s: failed with fd %d (%s)", __func__, fd, strerror(errno));
+        return -1;
+    }
+    return fd;
 }
 
 uint64_t VirtioGpuPipeStream::initProcessPipe() {

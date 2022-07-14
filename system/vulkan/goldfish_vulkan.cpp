@@ -18,21 +18,21 @@
 #include <errno.h>
 #include <string.h>
 #ifdef VK_USE_PLATFORM_FUCHSIA
-#include <fuchsia/logger/llcpp/fidl.h>
+#include <fidl/fuchsia.logger/cpp/wire.h>
 #include <lib/syslog/global.h>
 #include <lib/zx/channel.h>
 #include <lib/zx/socket.h>
 #include <lib/zxio/zxio.h>
-#include <lib/zxio/inception.h>
 #include <unistd.h>
 
+#include "TraceProviderFuchsia.h"
 #include "services/service_connector.h"
 #endif
 
 #include "HostConnection.h"
+#include "ProcessPipe.h"
 #include "ResourceTracker.h"
 #include "VkEncoder.h"
-
 #include "func_table.h"
 
 // Used when there is no Vulkan support on the host.
@@ -197,35 +197,100 @@ ImportSemaphoreZirconHandleFUCHSIA(VkDevice /*device*/,
     return VK_SUCCESS;
 }
 
-VkResult
-CreateBufferCollectionFUCHSIA(VkDevice /*device*/,
-                              const VkBufferCollectionCreateInfoFUCHSIA* /*pInfo*/,
-                              const VkAllocationCallbacks* /*pAllocator*/,
-                              VkBufferCollectionFUCHSIA* /*pCollection*/) {
+VkResult CreateBufferCollectionFUCHSIA(
+    VkDevice /*device*/,
+    const VkBufferCollectionCreateInfoFUCHSIA* /*pInfo*/,
+    const VkAllocationCallbacks* /*pAllocator*/,
+    VkBufferCollectionFUCHSIA* /*pCollection*/) {
     AEMU_SCOPED_TRACE("vkstubhal::CreateBufferCollectionFUCHSIA");
     return VK_SUCCESS;
 }
 
-void
-DestroyBufferCollectionFUCHSIA(VkDevice /*device*/,
-                               VkBufferCollectionFUCHSIA /*collection*/,
-                               const VkAllocationCallbacks* /*pAllocator*/) {
+void DestroyBufferCollectionFUCHSIA(
+    VkDevice /*device*/,
+    VkBufferCollectionFUCHSIA /*collection*/,
+    const VkAllocationCallbacks* /*pAllocator*/) {
     AEMU_SCOPED_TRACE("vkstubhal::DestroyBufferCollectionFUCHSIA");
 }
 
-VkResult
-SetBufferCollectionConstraintsFUCHSIA(VkDevice /*device*/,
-                                      VkBufferCollectionFUCHSIA /*collection*/,
-                                      const VkImageCreateInfo* /*pImageInfo*/) {
-    AEMU_SCOPED_TRACE("vkstubhal::SetBufferCollectionConstraintsFUCHSIA");
+VkResult SetBufferCollectionImageConstraintsFUCHSIA(
+    VkDevice /*device*/,
+    VkBufferCollectionFUCHSIA /*collection*/,
+    const VkImageConstraintsInfoFUCHSIA* /*pImageConstraintsInfo*/) {
+    AEMU_SCOPED_TRACE("vkstubhal::SetBufferCollectionImageConstraintsFUCHSIA");
     return VK_SUCCESS;
 }
 
-VkResult
-GetBufferCollectionPropertiesFUCHSIA(VkDevice /*device*/,
-                                     VkBufferCollectionFUCHSIA /*collection*/,
-                                     VkBufferCollectionPropertiesFUCHSIA* /*pProperties*/) {
+VkResult SetBufferCollectionBufferConstraintsFUCHSIA(
+    VkDevice /*device*/,
+    VkBufferCollectionFUCHSIA /*collection*/,
+    const VkBufferConstraintsInfoFUCHSIA* /*pBufferConstraintsInfo*/) {
+    AEMU_SCOPED_TRACE("vkstubhal::SetBufferCollectionBufferConstraintsFUCHSIA");
+    return VK_SUCCESS;
+}
+
+VkResult GetBufferCollectionPropertiesFUCHSIA(
+    VkDevice /*device*/,
+    VkBufferCollectionFUCHSIA /*collection*/,
+    VkBufferCollectionPropertiesFUCHSIA* /*pProperties*/) {
     AEMU_SCOPED_TRACE("vkstubhal::GetBufferCollectionPropertiesFUCHSIA");
+    return VK_SUCCESS;
+}
+
+VkResult CreateBufferCollectionFUCHSIAX(
+    VkDevice /*device*/,
+    const VkBufferCollectionCreateInfoFUCHSIAX* /*pInfo*/,
+    const VkAllocationCallbacks* /*pAllocator*/,
+    VkBufferCollectionFUCHSIAX* /*pCollection*/) {
+    AEMU_SCOPED_TRACE("vkstubhal::CreateBufferCollectionFUCHSIAX");
+    return VK_SUCCESS;
+}
+
+void DestroyBufferCollectionFUCHSIAX(
+    VkDevice /*device*/,
+    VkBufferCollectionFUCHSIAX /*collection*/,
+    const VkAllocationCallbacks* /*pAllocator*/) {
+    AEMU_SCOPED_TRACE("vkstubhal::DestroyBufferCollectionFUCHSIAX");
+}
+
+VkResult SetBufferCollectionConstraintsFUCHSIAX(
+    VkDevice /*device*/,
+    VkBufferCollectionFUCHSIAX /*collection*/,
+    const VkImageCreateInfo* /*pImageInfo*/) {
+    AEMU_SCOPED_TRACE("vkstubhal::SetBufferCollectionConstraintsFUCHSIAX");
+    return VK_SUCCESS;
+}
+
+VkResult SetBufferCollectionImageConstraintsFUCHSIAX(
+    VkDevice /*device*/,
+    VkBufferCollectionFUCHSIAX /*collection*/,
+    const VkImageConstraintsInfoFUCHSIAX* /*pImageConstraintsInfo*/) {
+    AEMU_SCOPED_TRACE("vkstubhal::SetBufferCollectionImageConstraintsFUCHSIAX");
+    return VK_SUCCESS;
+}
+
+VkResult SetBufferCollectionBufferConstraintsFUCHSIAX(
+    VkDevice /*device*/,
+    VkBufferCollectionFUCHSIAX /*collection*/,
+    const VkBufferConstraintsInfoFUCHSIAX* /*pBufferConstraintsInfo*/) {
+    AEMU_SCOPED_TRACE(
+        "vkstubhal::SetBufferCollectionBufferConstraintsFUCHSIAX");
+    return VK_SUCCESS;
+}
+
+VkResult GetBufferCollectionPropertiesFUCHSIAX(
+    VkDevice /*device*/,
+    VkBufferCollectionFUCHSIAX /*collection*/,
+    VkBufferCollectionPropertiesFUCHSIAX* /*pProperties*/) {
+    AEMU_SCOPED_TRACE("vkstubhal::GetBufferCollectionPropertiesFUCHSIAX");
+    return VK_SUCCESS;
+}
+
+VkResult GetBufferCollectionProperties2FUCHSIAX(
+    VkDevice /*device*/,
+    VkBufferCollectionFUCHSIAX /*collection*/,
+    VkBufferCollectionProperties2FUCHSIAX* /*pProperties*/) {
+    AEMU_SCOPED_TRACE("vkstubhal::GetBufferCollectionProperties2FUCHSIAX");
     return VK_SUCCESS;
 }
 #endif
@@ -274,13 +339,41 @@ PFN_vkVoidFunction GetInstanceProcAddr(VkInstance instance,
     if (strcmp(name, "vkImportSemaphoreZirconHandleFUCHSIA") == 0)
         return reinterpret_cast<PFN_vkVoidFunction>(ImportSemaphoreZirconHandleFUCHSIA);
     if (strcmp(name, "vkCreateBufferCollectionFUCHSIA") == 0)
-        return reinterpret_cast<PFN_vkVoidFunction>(CreateBufferCollectionFUCHSIA);
+        return reinterpret_cast<PFN_vkVoidFunction>(
+            CreateBufferCollectionFUCHSIA);
     if (strcmp(name, "vkDestroyBufferCollectionFUCHSIA") == 0)
-        return reinterpret_cast<PFN_vkVoidFunction>(DestroyBufferCollectionFUCHSIA);
-    if (strcmp(name, "vkSetBufferCollectionConstraintsFUCHSIA") == 0)
-        return reinterpret_cast<PFN_vkVoidFunction>(SetBufferCollectionConstraintsFUCHSIA);
+        return reinterpret_cast<PFN_vkVoidFunction>(
+            DestroyBufferCollectionFUCHSIA);
+    if (strcmp(name, "vkSetBufferCollectionImageConstraintsFUCHSIA") == 0)
+        return reinterpret_cast<PFN_vkVoidFunction>(
+            SetBufferCollectionImageConstraintsFUCHSIA);
+    if (strcmp(name, "vkSetBufferCollectionBufferConstraintsFUCHSIA") == 0)
+        return reinterpret_cast<PFN_vkVoidFunction>(
+            SetBufferCollectionBufferConstraintsFUCHSIA);
     if (strcmp(name, "vkGetBufferCollectionPropertiesFUCHSIA") == 0)
-        return reinterpret_cast<PFN_vkVoidFunction>(GetBufferCollectionPropertiesFUCHSIA);
+        return reinterpret_cast<PFN_vkVoidFunction>(
+            GetBufferCollectionPropertiesFUCHSIA);
+    if (strcmp(name, "vkCreateBufferCollectionFUCHSIAX") == 0)
+        return reinterpret_cast<PFN_vkVoidFunction>(
+            CreateBufferCollectionFUCHSIAX);
+    if (strcmp(name, "vkDestroyBufferCollectionFUCHSIAX") == 0)
+        return reinterpret_cast<PFN_vkVoidFunction>(
+            DestroyBufferCollectionFUCHSIAX);
+    if (strcmp(name, "vkSetBufferCollectionConstraintsFUCHSIAX") == 0)
+        return reinterpret_cast<PFN_vkVoidFunction>(
+            SetBufferCollectionConstraintsFUCHSIAX);
+    if (strcmp(name, "vkSetBufferCollectionImageConstraintsFUCHSIAX") == 0)
+        return reinterpret_cast<PFN_vkVoidFunction>(
+            SetBufferCollectionImageConstraintsFUCHSIAX);
+    if (strcmp(name, "vkSetBufferCollectionBufferConstraintsFUCHSIAX") == 0)
+        return reinterpret_cast<PFN_vkVoidFunction>(
+            SetBufferCollectionBufferConstraintsFUCHSIAX);
+    if (strcmp(name, "vkGetBufferCollectionPropertiesFUCHSIAX") == 0)
+        return reinterpret_cast<PFN_vkVoidFunction>(
+            GetBufferCollectionPropertiesFUCHSIAX);
+    if (strcmp(name, "vkGetBufferCollectionProperties2FUCHSIAX") == 0)
+        return reinterpret_cast<PFN_vkVoidFunction>(
+            GetBufferCollectionProperties2FUCHSIAX);
 #endif
     // Return NoOp for entrypoints that should never be called.
     if (strcmp(name, "vkGetPhysicalDeviceFeatures") == 0 ||
@@ -342,7 +435,7 @@ int CloseDevice(struct hw_device_t* /*device*/) {
 #endif
 
 #define VK_HOST_CONNECTION(ret) \
-    HostConnection *hostCon = HostConnection::get(); \
+    HostConnection *hostCon = HostConnection::getOrCreate(VIRTIO_GPU_CAPSET_GFXSTREAM); \
     if (!hostCon) { \
         ALOGE("vulkan: Failed to get host connection\n"); \
         return ret; \
@@ -352,14 +445,17 @@ int CloseDevice(struct hw_device_t* /*device*/) {
         ALOGE("vulkan: Failed to get renderControl encoder context\n"); \
         return ret; \
     } \
-    goldfish_vk::ResourceTracker::get()->setupFeatures(rcEnc->featureInfo_const()); \
     goldfish_vk::ResourceTracker::ThreadingCallbacks threadingCallbacks = { \
-        [] { auto hostCon = HostConnection::get(); \
-            ExtendedRCEncoderContext *rcEnc = hostCon->rcEncoder(); \
-            return hostCon; }, \
+        [] { \
+          auto hostCon = HostConnection::get(); \
+          hostCon->rcEncoder(); \
+          return hostCon; \
+        }, \
         [](HostConnection* hostCon) { return hostCon->vkEncoder(); }, \
     }; \
     goldfish_vk::ResourceTracker::get()->setThreadingCallbacks(threadingCallbacks); \
+    goldfish_vk::ResourceTracker::get()->setupFeatures(rcEnc->featureInfo_const()); \
+    goldfish_vk::ResourceTracker::get()->setSeqnoPtr(getSeqnoPtrForProcess()); \
     auto hostSupportsVulkan = goldfish_vk::ResourceTracker::get()->hostSupportsVulkan(); \
     goldfish_vk::VkEncoder *vkEnc = hostCon->vkEncoder(); \
     if (!vkEnc) { \
@@ -405,7 +501,7 @@ VkResult CreateInstance(const VkInstanceCreateInfo* create_info,
         return vkstubhal::CreateInstance(create_info, allocator, out_instance);
     }
 
-    VkResult res = vkEnc->vkCreateInstance(create_info, nullptr, out_instance);
+    VkResult res = vkEnc->vkCreateInstance(create_info, nullptr, out_instance, true /* do lock */);
 
     return res;
 }
@@ -504,51 +600,77 @@ VkResult CreateBufferCollectionFUCHSIA(
     VK_HOST_CONNECTION(VK_ERROR_DEVICE_LOST)
 
     if (!hostSupportsVulkan) {
-        return vkstubhal::CreateBufferCollectionFUCHSIA(device, pInfo, pAllocator, pCollection);
+        return vkstubhal::CreateBufferCollectionFUCHSIA(
+            device, pInfo, pAllocator, pCollection);
     }
 
-    VkResult res = goldfish_vk::ResourceTracker::get()->
-        on_vkCreateBufferCollectionFUCHSIA(
+    VkResult res =
+        goldfish_vk::ResourceTracker::get()->on_vkCreateBufferCollectionFUCHSIA(
             vkEnc, VK_SUCCESS, device, pInfo, pAllocator, pCollection);
 
     return res;
 }
 
 VKAPI_ATTR
-void DestroyBufferCollectionFUCHSIA(
-    VkDevice device,
-    VkBufferCollectionFUCHSIA collection,
-    const VkAllocationCallbacks* pAllocator) {
+void DestroyBufferCollectionFUCHSIA(VkDevice device,
+                                    VkBufferCollectionFUCHSIA collection,
+                                    const VkAllocationCallbacks* pAllocator) {
     AEMU_SCOPED_TRACE("goldfish_vulkan::DestroyBufferCollectionFUCHSIA");
 
     VK_HOST_CONNECTION()
 
     if (!hostSupportsVulkan) {
-        vkstubhal::DestroyBufferCollectionFUCHSIA(device, collection, pAllocator);
+        vkstubhal::DestroyBufferCollectionFUCHSIA(device, collection,
+                                                  pAllocator);
         return;
     }
 
-    goldfish_vk::ResourceTracker::get()->
-        on_vkDestroyBufferCollectionFUCHSIA(
-            vkEnc, VK_SUCCESS, device, collection, pAllocator);
+    goldfish_vk::ResourceTracker::get()->on_vkDestroyBufferCollectionFUCHSIA(
+        vkEnc, VK_SUCCESS, device, collection, pAllocator);
 }
 
 VKAPI_ATTR
-VkResult SetBufferCollectionConstraintsFUCHSIA(
+VkResult SetBufferCollectionBufferConstraintsFUCHSIA(
     VkDevice device,
     VkBufferCollectionFUCHSIA collection,
-    const VkImageCreateInfo* pImageInfo) {
-    AEMU_SCOPED_TRACE("goldfish_vulkan::SetBufferCollectionConstraintsFUCHSIA");
+    const VkBufferConstraintsInfoFUCHSIA* pBufferConstraintsInfo) {
+    AEMU_SCOPED_TRACE(
+        "goldfish_vulkan::SetBufferCollectionBufferConstraintsFUCHSIA");
 
     VK_HOST_CONNECTION(VK_ERROR_DEVICE_LOST)
 
     if (!hostSupportsVulkan) {
-        return vkstubhal::SetBufferCollectionConstraintsFUCHSIA(device, collection, pImageInfo);
+        return vkstubhal::SetBufferCollectionBufferConstraintsFUCHSIA(
+            device, collection, pBufferConstraintsInfo);
     }
 
-    VkResult res = goldfish_vk::ResourceTracker::get()->
-        on_vkSetBufferCollectionConstraintsFUCHSIA(
-            vkEnc, VK_SUCCESS, device, collection, pImageInfo);
+    VkResult res =
+        goldfish_vk::ResourceTracker::get()
+            ->on_vkSetBufferCollectionBufferConstraintsFUCHSIA(
+                vkEnc, VK_SUCCESS, device, collection, pBufferConstraintsInfo);
+
+    return res;
+}
+
+VKAPI_ATTR
+VkResult SetBufferCollectionImageConstraintsFUCHSIA(
+    VkDevice device,
+    VkBufferCollectionFUCHSIA collection,
+    const VkImageConstraintsInfoFUCHSIA* pImageConstraintsInfo) {
+    AEMU_SCOPED_TRACE(
+        "goldfish_vulkan::SetBufferCollectionBufferConstraintsFUCHSIA");
+
+    VK_HOST_CONNECTION(VK_ERROR_DEVICE_LOST)
+
+    if (!hostSupportsVulkan) {
+        return vkstubhal::SetBufferCollectionImageConstraintsFUCHSIA(
+            device, collection, pImageConstraintsInfo);
+    }
+
+    VkResult res =
+        goldfish_vk::ResourceTracker::get()
+            ->on_vkSetBufferCollectionImageConstraintsFUCHSIA(
+                vkEnc, VK_SUCCESS, device, collection, pImageConstraintsInfo);
 
     return res;
 }
@@ -563,16 +685,220 @@ VkResult GetBufferCollectionPropertiesFUCHSIA(
     VK_HOST_CONNECTION(VK_ERROR_DEVICE_LOST)
 
     if (!hostSupportsVulkan) {
-        return vkstubhal::GetBufferCollectionPropertiesFUCHSIA(device, collection, pProperties);
+        return vkstubhal::GetBufferCollectionPropertiesFUCHSIA(
+            device, collection, pProperties);
     }
 
-    VkResult res = goldfish_vk::ResourceTracker::get()->
-        on_vkGetBufferCollectionPropertiesFUCHSIA(
-            vkEnc, VK_SUCCESS, device, collection, pProperties);
+    VkResult res = goldfish_vk::ResourceTracker::get()
+                       ->on_vkGetBufferCollectionPropertiesFUCHSIA(
+                           vkEnc, VK_SUCCESS, device, collection, pProperties);
+
+    return res;
+}
+
+VKAPI_ATTR
+VkResult CreateBufferCollectionFUCHSIAX(
+    VkDevice device,
+    const VkBufferCollectionCreateInfoFUCHSIAX* pInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkBufferCollectionFUCHSIAX* pCollection) {
+    AEMU_SCOPED_TRACE("goldfish_vulkan::CreateBufferCollectionFUCHSIAX");
+
+    VK_HOST_CONNECTION(VK_ERROR_DEVICE_LOST)
+
+    if (!hostSupportsVulkan) {
+        return vkstubhal::CreateBufferCollectionFUCHSIAX(
+            device, pInfo, pAllocator, pCollection);
+    }
+
+    VkResult res =
+        goldfish_vk::ResourceTracker::get()
+            ->on_vkCreateBufferCollectionFUCHSIAX(
+                vkEnc, VK_SUCCESS, device, pInfo, pAllocator, pCollection);
+
+    return res;
+}
+
+VKAPI_ATTR
+void DestroyBufferCollectionFUCHSIAX(VkDevice device,
+                                     VkBufferCollectionFUCHSIAX collection,
+                                     const VkAllocationCallbacks* pAllocator) {
+    AEMU_SCOPED_TRACE("goldfish_vulkan::DestroyBufferCollectionFUCHSIAX");
+
+    VK_HOST_CONNECTION()
+
+    if (!hostSupportsVulkan) {
+        vkstubhal::DestroyBufferCollectionFUCHSIAX(device, collection,
+                                                   pAllocator);
+        return;
+    }
+
+    goldfish_vk::ResourceTracker::get()->on_vkDestroyBufferCollectionFUCHSIAX(
+        vkEnc, VK_SUCCESS, device, collection, pAllocator);
+}
+
+VKAPI_ATTR
+VkResult SetBufferCollectionConstraintsFUCHSIAX(
+    VkDevice device,
+    VkBufferCollectionFUCHSIAX collection,
+    const VkImageCreateInfo* pImageInfo) {
+    AEMU_SCOPED_TRACE(
+        "goldfish_vulkan::SetBufferCollectionConstraintsFUCHSIAX");
+
+    VK_HOST_CONNECTION(VK_ERROR_DEVICE_LOST)
+
+    if (!hostSupportsVulkan) {
+        return vkstubhal::SetBufferCollectionConstraintsFUCHSIAX(
+            device, collection, pImageInfo);
+    }
+
+    VkResult res = goldfish_vk::ResourceTracker::get()
+                       ->on_vkSetBufferCollectionConstraintsFUCHSIAX(
+                           vkEnc, VK_SUCCESS, device, collection, pImageInfo);
+
+    return res;
+}
+
+VKAPI_ATTR
+VkResult SetBufferCollectionBufferConstraintsFUCHSIAX(
+    VkDevice device,
+    VkBufferCollectionFUCHSIAX collection,
+    const VkBufferConstraintsInfoFUCHSIAX* pBufferConstraintsInfo) {
+    AEMU_SCOPED_TRACE(
+        "goldfish_vulkan::SetBufferCollectionBufferConstraintsFUCHSIAX");
+
+    VK_HOST_CONNECTION(VK_ERROR_DEVICE_LOST)
+
+    if (!hostSupportsVulkan) {
+        return vkstubhal::SetBufferCollectionBufferConstraintsFUCHSIAX(
+            device, collection, pBufferConstraintsInfo);
+    }
+
+    VkResult res =
+        goldfish_vk::ResourceTracker::get()
+            ->on_vkSetBufferCollectionBufferConstraintsFUCHSIAX(
+                vkEnc, VK_SUCCESS, device, collection, pBufferConstraintsInfo);
+
+    return res;
+}
+
+VKAPI_ATTR
+VkResult SetBufferCollectionImageConstraintsFUCHSIAX(
+    VkDevice device,
+    VkBufferCollectionFUCHSIAX collection,
+    const VkImageConstraintsInfoFUCHSIAX* pImageConstraintsInfo) {
+    AEMU_SCOPED_TRACE(
+        "goldfish_vulkan::SetBufferCollectionBufferConstraintsFUCHSIAX");
+
+    VK_HOST_CONNECTION(VK_ERROR_DEVICE_LOST)
+
+    if (!hostSupportsVulkan) {
+        return vkstubhal::SetBufferCollectionImageConstraintsFUCHSIAX(
+            device, collection, pImageConstraintsInfo);
+    }
+
+    VkResult res =
+        goldfish_vk::ResourceTracker::get()
+            ->on_vkSetBufferCollectionImageConstraintsFUCHSIAX(
+                vkEnc, VK_SUCCESS, device, collection, pImageConstraintsInfo);
+
+    return res;
+}
+
+VKAPI_ATTR
+VkResult GetBufferCollectionPropertiesFUCHSIAX(
+    VkDevice device,
+    VkBufferCollectionFUCHSIAX collection,
+    VkBufferCollectionPropertiesFUCHSIAX* pProperties) {
+    AEMU_SCOPED_TRACE("goldfish_vulkan::GetBufferCollectionPropertiesFUCHSIAX");
+
+    VK_HOST_CONNECTION(VK_ERROR_DEVICE_LOST)
+
+    if (!hostSupportsVulkan) {
+        return vkstubhal::GetBufferCollectionPropertiesFUCHSIAX(
+            device, collection, pProperties);
+    }
+
+    VkResult res = goldfish_vk::ResourceTracker::get()
+                       ->on_vkGetBufferCollectionPropertiesFUCHSIAX(
+                           vkEnc, VK_SUCCESS, device, collection, pProperties);
+
+    return res;
+}
+
+VKAPI_ATTR
+VkResult GetBufferCollectionProperties2FUCHSIAX(
+    VkDevice device,
+    VkBufferCollectionFUCHSIAX collection,
+    VkBufferCollectionProperties2FUCHSIAX* pProperties) {
+    AEMU_SCOPED_TRACE(
+        "goldfish_vulkan::GetBufferCollectionProperties2FUCHSIAX");
+
+    VK_HOST_CONNECTION(VK_ERROR_DEVICE_LOST)
+
+    if (!hostSupportsVulkan) {
+        return vkstubhal::GetBufferCollectionProperties2FUCHSIAX(
+            device, collection, pProperties);
+    }
+
+    VkResult res = goldfish_vk::ResourceTracker::get()
+                       ->on_vkGetBufferCollectionProperties2FUCHSIAX(
+                           vkEnc, VK_SUCCESS, device, collection, pProperties);
 
     return res;
 }
 #endif
+
+uint64_t currGuestTimeNs() {
+    struct timespec ts;
+#ifdef __APPLE__
+    clock_gettime(CLOCK_REALTIME, &ts);
+#else
+    clock_gettime(CLOCK_BOOTTIME, &ts);
+#endif
+    uint64_t res = (uint64_t)(ts.tv_sec * 1000000000ULL + ts.tv_nsec);
+    return res;
+}
+
+struct FrameTracingState {
+    uint32_t frameNumber = 0;
+    bool tracingEnabled = false;
+    void onSwapBuffersSuccessful(ExtendedRCEncoderContext* rcEnc) {
+#ifdef GFXSTREAM
+        bool current = android::base::isTracingEnabled();
+        // edge trigger
+        if (current && !tracingEnabled) {
+            if (rcEnc->hasHostSideTracing()) {
+                rcEnc->rcSetTracingForPuid(rcEnc, getPuid(), 1, currGuestTimeNs());
+            }
+        }
+        if (!current && tracingEnabled) {
+            if (rcEnc->hasHostSideTracing()) {
+                rcEnc->rcSetTracingForPuid(rcEnc, getPuid(), 0, currGuestTimeNs());
+            }
+        }
+        tracingEnabled = current;
+#endif
+        ++frameNumber;
+    }
+};
+
+static FrameTracingState sFrameTracingState;
+
+static PFN_vkVoidFunction sQueueSignalReleaseImageAndroidImpl = 0;
+
+static VkResult
+QueueSignalReleaseImageANDROID(
+    VkQueue queue,
+    uint32_t waitSemaphoreCount,
+    const VkSemaphore* pWaitSemaphores,
+    VkImage image,
+    int* pNativeFenceFd)
+{
+    sFrameTracingState.onSwapBuffersSuccessful(HostConnection::get()->rcEncoder());
+    ((PFN_vkQueueSignalReleaseImageANDROID)sQueueSignalReleaseImageAndroidImpl)(queue, waitSemaphoreCount, pWaitSemaphores, image, pNativeFenceFd);
+    return VK_SUCCESS;
+}
 
 static PFN_vkVoidFunction GetDeviceProcAddr(VkDevice device, const char* name) {
     AEMU_SCOPED_TRACE("goldfish_vulkan::GetDeviceProcAddr");
@@ -602,13 +928,45 @@ static PFN_vkVoidFunction GetDeviceProcAddr(VkDevice device, const char* name) {
     if (!strcmp(name, "vkDestroyBufferCollectionFUCHSIA")) {
         return (PFN_vkVoidFunction)DestroyBufferCollectionFUCHSIA;
     }
-    if (!strcmp(name, "vkSetBufferCollectionConstraintsFUCHSIA")) {
-        return (PFN_vkVoidFunction)SetBufferCollectionConstraintsFUCHSIA;
+    if (!strcmp(name, "vkSetBufferCollectionImageConstraintsFUCHSIA")) {
+        return (PFN_vkVoidFunction)SetBufferCollectionImageConstraintsFUCHSIA;
+    }
+    if (!strcmp(name, "vkSetBufferCollectionBufferConstraintsFUCHSIA")) {
+        return (PFN_vkVoidFunction)SetBufferCollectionBufferConstraintsFUCHSIA;
     }
     if (!strcmp(name, "vkGetBufferCollectionPropertiesFUCHSIA")) {
         return (PFN_vkVoidFunction)GetBufferCollectionPropertiesFUCHSIA;
     }
+    if (!strcmp(name, "vkCreateBufferCollectionFUCHSIAX")) {
+        return (PFN_vkVoidFunction)CreateBufferCollectionFUCHSIAX;
+    }
+    if (!strcmp(name, "vkDestroyBufferCollectionFUCHSIAX")) {
+        return (PFN_vkVoidFunction)DestroyBufferCollectionFUCHSIAX;
+    }
+    if (!strcmp(name, "vkSetBufferCollectionConstraintsFUCHSIAX")) {
+        return (PFN_vkVoidFunction)SetBufferCollectionConstraintsFUCHSIAX;
+    }
+    if (!strcmp(name, "vkSetBufferCollectionImageConstraintsFUCHSIAX")) {
+        return (PFN_vkVoidFunction)SetBufferCollectionImageConstraintsFUCHSIAX;
+    }
+    if (!strcmp(name, "vkSetBufferCollectionBufferConstraintsFUCHSIAX")) {
+        return (PFN_vkVoidFunction)SetBufferCollectionBufferConstraintsFUCHSIAX;
+    }
+    if (!strcmp(name, "vkGetBufferCollectionPropertiesFUCHSIAX")) {
+        return (PFN_vkVoidFunction)GetBufferCollectionPropertiesFUCHSIAX;
+    }
+    if (!strcmp(name, "vkGetBufferCollectionProperties2FUCHSIAX")) {
+        return (PFN_vkVoidFunction)GetBufferCollectionProperties2FUCHSIAX;
+    }
 #endif
+    if (!strcmp(name, "vkQueueSignalReleaseImageANDROID")) {
+        if (!sQueueSignalReleaseImageAndroidImpl) {
+            sQueueSignalReleaseImageAndroidImpl =
+                (PFN_vkVoidFunction)(
+                    goldfish_vk::goldfish_vulkan_get_device_proc_address(device, "vkQueueSignalReleaseImageANDROID"));
+        }
+        return (PFN_vkVoidFunction)QueueSignalReleaseImageANDROID;
+    }
     if (!strcmp(name, "vkGetDeviceProcAddr")) {
         return (PFN_vkVoidFunction)(GetDeviceProcAddr);
     }
@@ -633,6 +991,14 @@ PFN_vkVoidFunction GetInstanceProcAddr(VkInstance instance, const char* name) {
     }
     if (!strcmp(name, "vkGetDeviceProcAddr")) {
         return (PFN_vkVoidFunction)(GetDeviceProcAddr);
+    }
+    if (!strcmp(name, "vkQueueSignalReleaseImageANDROID")) {
+        if (!sQueueSignalReleaseImageAndroidImpl) {
+            sQueueSignalReleaseImageAndroidImpl =
+                (PFN_vkVoidFunction)(
+                    goldfish_vk::goldfish_vulkan_get_instance_proc_address(instance, "vkQueueSignalReleaseImageANDROID"));
+        }
+        return (PFN_vkVoidFunction)QueueSignalReleaseImageANDROID;
     }
     return (PFN_vkVoidFunction)(goldfish_vk::goldfish_vulkan_get_instance_proc_address(instance, name));
 }
@@ -664,14 +1030,13 @@ int OpenDevice(const hw_module_t* /*module*/,
     return -ENOENT;
 }
 
-#endif
-
-#ifdef VK_USE_PLATFORM_FUCHSIA
+#elif VK_USE_PLATFORM_FUCHSIA
 
 class VulkanDevice {
 public:
     VulkanDevice() : mHostSupportsGoldfish(IsAccessible(QEMU_PIPE_PATH)) {
         InitLogger();
+        InitTraceProvider();
         goldfish_vk::ResourceTracker::get();
     }
 
@@ -683,13 +1048,11 @@ public:
             return false;
 
         zxio_storage_t io_storage;
-        zx_status_t status = zxio_remote_init(&io_storage, handle, ZX_HANDLE_INVALID);
+        zx_status_t status = zxio_create(handle, &io_storage);
         if (status != ZX_OK)
             return false;
 
-        zxio_node_attr_t attr;
-        status = zxio_attr_get(&io_storage.io, &attr);
-        zxio_close(&io_storage.io);
+        status = zxio_close(&io_storage.io);
         if (status != ZX_OK)
             return false;
 
@@ -709,33 +1072,49 @@ public:
     }
 
 private:
+    void InitTraceProvider();
+
+    TraceProviderFuchsia mTraceProvider;
     const bool mHostSupportsGoldfish;
 };
 
 void VulkanDevice::InitLogger() {
-   zx_handle_t channel = GetConnectToServiceFunction()("/svc/fuchsia.logger.LogSink");
-   if (channel == ZX_HANDLE_INVALID)
-      return;
+  auto log_socket = ([] () -> std::optional<zx::socket> {
+    fidl::ClientEnd<fuchsia_logger::LogSink> channel{zx::channel{
+      GetConnectToServiceFunction()("/svc/fuchsia.logger.LogSink")}};
+    if (!channel.is_valid())
+      return std::nullopt;
 
-  zx::socket local_socket, remote_socket;
-  zx_status_t status = zx::socket::create(ZX_SOCKET_DATAGRAM, &local_socket, &remote_socket);
-  if (status != ZX_OK)
+    zx::socket local_socket, remote_socket;
+    zx_status_t status = zx::socket::create(ZX_SOCKET_DATAGRAM, &local_socket, &remote_socket);
+    if (status != ZX_OK)
+      return std::nullopt;
+
+    auto result = fidl::WireCall(channel)->Connect(std::move(remote_socket));
+
+    if (!result.ok())
+      return std::nullopt;
+
+    return local_socket;
+  })();
+  if (!log_socket)
     return;
 
-  auto result = llcpp::fuchsia::logger::LogSink::Call::Connect(
-      zx::unowned_channel(channel), std::move(remote_socket));
-  zx_handle_close(channel);
+  fx_logger_config_t config = {
+      .min_severity = FX_LOG_INFO,
+      .console_fd = -1,
+      .log_sink_socket = log_socket->release(),
+      .tags = nullptr,
+      .num_tags = 0,
+  };
 
-  if (result.status() != ZX_OK)
-    return;
+  fx_log_reconfigure(&config);
+}
 
-  fx_logger_config_t config = {.min_severity = FX_LOG_INFO,
-                               .console_fd = -1,
-                               .log_service_channel = local_socket.release(),
-                               .tags = nullptr,
-                               .num_tags = 0};
-
-  fx_log_init_with_config(&config);
+void VulkanDevice::InitTraceProvider() {
+    if (!mTraceProvider.Initialize()) {
+        ALOGE("Trace provider failed to initialize");
+    }
 }
 
 extern "C" __attribute__((visibility("default"))) PFN_vkVoidFunction
@@ -749,11 +1128,11 @@ vk_icdNegotiateLoaderICDInterfaceVersion(uint32_t* pSupportedVersion) {
     return VK_SUCCESS;
 }
 
-typedef VkResult(VKAPI_PTR *PFN_vkConnectToServiceAddr)(const char *pName, uint32_t handle);
+typedef VkResult(VKAPI_PTR *PFN_vkOpenInNamespaceAddr)(const char *pName, uint32_t handle);
 
 namespace {
 
-PFN_vkConnectToServiceAddr g_vulkan_connector;
+PFN_vkOpenInNamespaceAddr g_vulkan_connector;
 
 zx_handle_t LocalConnectToServiceFunction(const char* pName) {
     zx::channel remote_endpoint, local_endpoint;
@@ -772,9 +1151,37 @@ zx_handle_t LocalConnectToServiceFunction(const char* pName) {
 }
 
 extern "C" __attribute__((visibility("default"))) void
-vk_icdInitializeConnectToServiceCallback(PFN_vkConnectToServiceAddr callback) {
+vk_icdInitializeOpenInNamespaceCallback(PFN_vkOpenInNamespaceAddr callback) {
     g_vulkan_connector = callback;
     SetConnectToServiceFunction(&LocalConnectToServiceFunction);
+}
+
+#else
+class VulkanDevice {
+public:
+    VulkanDevice() {
+        goldfish_vk::ResourceTracker::get();
+    }
+
+    static VulkanDevice& GetInstance() {
+        static VulkanDevice g_instance;
+        return g_instance;
+    }
+
+    PFN_vkVoidFunction GetInstanceProcAddr(VkInstance instance, const char* name) {
+        return ::GetInstanceProcAddr(instance, name);
+    }
+};
+
+extern "C" __attribute__((visibility("default"))) PFN_vkVoidFunction
+vk_icdGetInstanceProcAddr(VkInstance instance, const char* name) {
+    return VulkanDevice::GetInstance().GetInstanceProcAddr(instance, name);
+}
+
+extern "C" __attribute__((visibility("default"))) VkResult
+vk_icdNegotiateLoaderICDInterfaceVersion(uint32_t* pSupportedVersion) {
+    *pSupportedVersion = std::min(*pSupportedVersion, 3u);
+    return VK_SUCCESS;
 }
 
 #endif

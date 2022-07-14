@@ -29,13 +29,12 @@ GOLDFISH_OPENGL_LIB_SUFFIX :=
 # See the definition of emugl-begin-module in common.mk
 EMUGL_COMMON_INCLUDES := $(GOLDFISH_OPENGL_PATH)/host/include/libOpenglRender $(GOLDFISH_OPENGL_PATH)/system/include
 
-# common cflags used by several modules
 # This is always set to a module's LOCAL_CFLAGS
 # See the definition of emugl-begin-module in common.mk
-EMUGL_COMMON_CFLAGS := -DWITH_GLES2
+EMUGL_COMMON_CFLAGS :=
 
 # Whether or not to build the Vulkan library.
-BUILD_EMULATOR_VULKAN := false
+GFXSTREAM := false
 
 # Host build
 ifeq (true,$(GOLDFISH_OPENGL_BUILD_FOR_HOST))
@@ -43,7 +42,7 @@ ifeq (true,$(GOLDFISH_OPENGL_BUILD_FOR_HOST))
 GOLDFISH_OPENGL_SHOULD_BUILD := true
 GOLDFISH_OPENGL_LIB_SUFFIX := _host
 
-BUILD_EMULATOR_VULKAN := true
+GFXSTREAM := true
 
 # Set modern defaults for the codename, version, etc.
 PLATFORM_VERSION_CODENAME:=Q
@@ -57,13 +56,12 @@ EMUGL_COMMON_INCLUDES += $(HOST_EMUGL_PATH)/guest
 EMUGL_COMMON_CFLAGS += \
     -DPLATFORM_SDK_VERSION=29 \
     -DGOLDFISH_HIDL_GRALLOC \
-    -DEMULATOR_OPENGL_POST_O=1 \
     -DHOST_BUILD \
     -DANDROID \
     -DGL_GLEXT_PROTOTYPES \
     -fvisibility=default \
     -DPAGE_SIZE=4096 \
-    -DGOLDFISH_VULKAN \
+    -DGFXSTREAM \
     -Wno-unused-parameter
 
 endif # GOLDFISH_OPENGL_BUILD_FOR_HOST
@@ -82,10 +80,6 @@ ifeq ($(shell test $(PLATFORM_SDK_VERSION) -gt 25 && echo isApi26OrHigher),isApi
 EMUGL_COMMON_CFLAGS += -DGOLDFISH_HIDL_GRALLOC
 endif
 
-ifdef IS_AT_LEAST_OPD1
-    EMUGL_COMMON_CFLAGS += -DEMULATOR_OPENGL_POST_O=1
-endif
-
 ifeq ($(shell test $(PLATFORM_SDK_VERSION) -lt 18 && echo PreJellyBeanMr2),PreJellyBeanMr2)
     ifeq ($(ARCH_ARM_HAVE_TLS_REGISTER),true)
         EMUGL_COMMON_CFLAGS += -DHAVE_ARM_TLS_REGISTER
@@ -100,8 +94,8 @@ ifeq ($(shell test $(PLATFORM_SDK_VERSION) -lt 16 && echo PreJellyBean),PreJelly
 endif
 
 ifeq ($(shell test $(PLATFORM_SDK_VERSION) -gt 27 && echo isApi28OrHigher),isApi28OrHigher)
-    BUILD_EMULATOR_VULKAN := true
-    EMUGL_COMMON_CFLAGS += -DGOLDFISH_VULKAN
+    GFXSTREAM := true
+    EMUGL_COMMON_CFLAGS += -DGFXSTREAM
 endif
 
 # Include common definitions used by all the modules included later
@@ -133,6 +127,11 @@ ifeq (true,$(GOLDFISH_OPENGL_SHOULD_BUILD))
 include $(GOLDFISH_OPENGL_PATH)/shared/qemupipe/Android.mk
 include $(GOLDFISH_OPENGL_PATH)/shared/gralloc_cb/Android.mk
 include $(GOLDFISH_OPENGL_PATH)/shared/GoldfishAddressSpace/Android.mk
+
+ifeq (true,$(GFXSTREAM)) # android-emu
+    include $(GOLDFISH_OPENGL_PATH)/android-emu/Android.mk
+endif
+
 include $(GOLDFISH_OPENGL_PATH)/shared/OpenglCodecCommon/Android.mk
 
 # Encoder shared libraries
@@ -140,12 +139,14 @@ include $(GOLDFISH_OPENGL_PATH)/system/GLESv1_enc/Android.mk
 include $(GOLDFISH_OPENGL_PATH)/system/GLESv2_enc/Android.mk
 include $(GOLDFISH_OPENGL_PATH)/system/renderControl_enc/Android.mk
 
-ifeq (true,$(BUILD_EMULATOR_VULKAN)) # Vulkan libs
-    include $(GOLDFISH_OPENGL_PATH)/android-emu/Android.mk
+ifeq (true,$(GFXSTREAM)) # Vulkan libs
     include $(GOLDFISH_OPENGL_PATH)/system/vulkan_enc/Android.mk
 endif
 
 include $(GOLDFISH_OPENGL_PATH)/system/OpenglSystemCommon/Android.mk
+
+# Profiler library
+include $(GOLDFISH_OPENGL_PATH)/system/profiler/Android.mk
 
 # System shared libraries
 include $(GOLDFISH_OPENGL_PATH)/system/GLESv1/Android.mk
@@ -159,7 +160,7 @@ endif
 
 include $(GOLDFISH_OPENGL_PATH)/system/egl/Android.mk
 
-ifeq (true,$(BUILD_EMULATOR_VULKAN)) # Vulkan libs
+ifeq (true,$(GFXSTREAM)) # Vulkan libs
     include $(GOLDFISH_OPENGL_PATH)/system/vulkan/Android.mk
 endif
 

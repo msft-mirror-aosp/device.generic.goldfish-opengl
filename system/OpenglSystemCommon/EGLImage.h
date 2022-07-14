@@ -23,19 +23,15 @@
 #include <hardware/hardware.h>
 #include <hardware/gralloc.h>
 
-#if PLATFORM_SDK_VERSION >= 16
-#if EMULATOR_OPENGL_POST_O >= 1
 #include <nativebase/nativebase.h>
-#endif
 #include <cutils/native_handle.h>
-#else // PLATFORM_SDK_VERSION >= 16
-#include <private/ui/android_natives_priv.h>
-#endif // PLATFORM_SDK_VERSION >= 16
 
 struct EGLImage_t
 {
     EGLDisplay dpy;
     EGLenum target;
+    int width;
+    int height;
 
     union
     {

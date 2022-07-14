@@ -18,6 +18,11 @@
 
 #include <GLES/gl.h>
 #include <map>
+#include <memory>
+
+#include "android/base/synchronization/AndroidLock.h"
+
+using android::base::guest::ReadWriteLock;
 
 struct TextureDims {
     std::map<GLsizei, GLsizei> widths;
@@ -35,8 +40,23 @@ struct TextureRec {
     TextureDims* dims;
     bool immutable;
     bool boundEGLImage;
+    bool hasStorage;
+    bool hasCubeNegX;
+    bool hasCubePosX;
+    bool hasCubeNegY;
+    bool hasCubePosY;
+    bool hasCubeNegZ;
+    bool hasCubePosZ;
 };
 
-typedef std::map<GLuint, TextureRec*> SharedTextureDataMap;
+struct SharedTextureDataMap {
+  using MapType = std::map<GLuint, std::shared_ptr<TextureRec>>;
+
+  using iterator = MapType::iterator;
+  using const_iterator = MapType::const_iterator;
+
+  MapType map;
+  ReadWriteLock lock;
+};
 
 #endif

@@ -15,9 +15,8 @@
  */
 
 #include "VirtioGpuStream.h"
+#include "virtgpu_drm.h"
 
-#include <cros_gralloc_handle.h>
-#include <drm/virtgpu_drm.h>
 #include <xf86drm.h>
 
 #include <sys/types.h>
@@ -52,19 +51,21 @@ struct VirtioGpuCmd {
     unsigned char buf[0];
 } __attribute__((packed));
 
-bool VirtioGpuProcessPipe::processPipeInit(HostConnectionType, renderControl_encoder_context_t *rcEnc)
-{
-  union {
-      uint64_t proto;
-      struct {
-          int pid;
-          int tid;
+union process_pipe_info {
+    uint64_t proto;
+    struct {
+       int pid;
+       int tid;
       } id;
-  } puid = {
-      .id.pid = getpid(),
-      .id.tid = gettid(),
-  };
-  rcEnc->rcSetPuid(rcEnc, puid.proto);
+};
+
+bool VirtioGpuProcessPipe::processPipeInit(int stream_handle, HostConnectionType, renderControl_encoder_context_t *rcEnc)
+{
+  union process_pipe_info info;
+
+  info.id.pid = getpid();
+  info.id.tid = gettid();
+  rcEnc->rcSetPuid(rcEnc, info.proto);
   return true;
 }
 
@@ -149,9 +150,10 @@ int VirtioGpuStream::connect()
     }
 
     if (!m_cmdResp) {
-        drm_virtgpu_map map = {
-            .handle = m_cmdResp_bo,
-        };
+        drm_virtgpu_map map;
+        memset(&map, 0, sizeof(map));
+        map.handle = m_cmdResp_bo;
+
         int ret = drmIoctl(m_fd, DRM_IOCTL_VIRTGPU_MAP, &map);
         if (ret) {
             ERR("%s: failed with %d mapping command response buffer (%s)",
@@ -282,7 +284,7 @@ int VirtioGpuStream::writeFully(const void *buf, size_t len)
 
     if (m_flushPos + len > cmd->cmdSize) {
         ERR("%s: writeFully len %zu would overflow the command bounds, "
-            "cmd_pos=%zu, flush_pos=%zu, cmdsize=%zu, lethal error, exiting",
+            "cmd_pos=%zu, flush_pos=%zu, cmdsize=%" PRIu32 ", lethal error, exiting",
             __func__, len, m_cmdPos, m_flushPos, cmd->cmdSize);
         abort();
     }
@@ -344,7 +346,7 @@ const unsigned char *VirtioGpuStream::readFully(void *buf, size_t len)
 
     // Most likely a protocol implementation error
     if (m_cmdResp->cmdSize - sizeof(*m_cmdResp) < m_cmdRespPos + len) {
-        ERR("%s: failed, op %zu, len %zu, cmdSize %zu, pos %zu, lethal "
+        ERR("%s: failed, op %" PRIu32 ", len %zu, cmdSize %" PRIu32 ", pos %zu, lethal "
             "error, exiting.", __func__, m_cmdResp->op, len,
             m_cmdResp->cmdSize, m_cmdRespPos);
         abort();
@@ -380,7 +382,7 @@ int VirtioGpuStream::commitAll()
 
         // Should never happen
         if (pos + cmd->cmdSize > m_bufSize) {
-            ERR("%s: failed, pos %zu, cmdSize %zu, bufSize %zu, lethal "
+            ERR("%s: failed, pos %zu, cmdSize %" PRIu32 ", bufSize %zu, lethal "
                 "error, exiting.", __func__, pos, cmd->cmdSize, m_bufSize);
             abort();
         }

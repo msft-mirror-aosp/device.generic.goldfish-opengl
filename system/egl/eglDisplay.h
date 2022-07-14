@@ -22,6 +22,7 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include "EGLClientIface.h"
+#include "GLClientState.h"
 
 #if __cplusplus >= 201103L
 #include <unordered_set>
@@ -30,8 +31,6 @@
 #endif
 
 #include <map>
-
-#include <ui/PixelFormat.h>
 
 #define ATTRIBUTE_NONE (-1)
 //FIXME: are we in this namespace?
@@ -64,7 +63,7 @@ public:
     EGLBoolean  getConfigAttrib(EGLConfig config, EGLint attrib, EGLint * value);
     EGLBoolean  setConfigAttrib(EGLConfig config, EGLint attrib, EGLint value);
     EGLBoolean getConfigGLPixelFormat(EGLConfig config, GLenum * format);
-    EGLBoolean getConfigNativePixelFormat(EGLConfig config, PixelFormat * format);
+    EGLBoolean getConfigNativePixelFormat(EGLConfig config, uint32_t * format);
 
     void     dumpConfig(EGLConfig config);
 
@@ -76,6 +75,10 @@ public:
 
     bool isContext(EGLContext ctx);
     bool isSurface(EGLSurface ctx);
+
+    // Needs a current context (put this near eglMakeCurrent)
+    HostDriverCaps getHostDriverCaps(int majorVersion, int minorVersion);
+
 private:
     EGLClient_glesInterface *loadGLESClientAPI(const char *libName,
                                                EGLClient_eglInterface *eglIface,
@@ -118,6 +121,10 @@ private:
     EGLSurfaceSet m_surfaces;
     pthread_mutex_t m_ctxLock;
     pthread_mutex_t m_surfaceLock;
+
+    int m_hostDriverCaps_knownMajorVersion;
+    int m_hostDriverCaps_knownMinorVersion;
+    HostDriverCaps m_hostDriverCaps;
 };
 
 #endif

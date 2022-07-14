@@ -25,46 +25,23 @@
 
 #include <set>
 
+#if defined(__ANDROID__) || defined(__linux__)
+#include <unistd.h>
+#include <errno.h>
+#endif
+
+#include <sys/mman.h>
+
+#if !defined(HOST_BUILD) && defined(VIRTIO_GPU)
+#include <xf86drm.h>
+#endif
+
 using android::base::guest::SubAllocator;
 
 namespace goldfish_vk {
 
-bool canFitVirtualHostVisibleMemoryInfo(
-    const VkPhysicalDeviceMemoryProperties* memoryProperties) {
-    uint32_t typeCount =
-        memoryProperties->memoryTypeCount;
-    uint32_t heapCount =
-        memoryProperties->memoryHeapCount;
-
-    bool canFit = true;
-
-    if (typeCount == VK_MAX_MEMORY_TYPES) {
-        canFit = false;
-        ALOGE("Underlying device has no free memory types");
-    }
-
-    if (heapCount == VK_MAX_MEMORY_HEAPS) {
-        canFit = false;
-        ALOGE("Underlying device has no free memory heaps");
-    }
-
-    uint32_t numFreeMemoryTypes = VK_MAX_MEMORY_TYPES - typeCount;
-    uint32_t hostVisibleMemoryTypeCount = 0;
-
-    if (hostVisibleMemoryTypeCount > numFreeMemoryTypes) {
-        ALOGE("Underlying device has too many host visible memory types (%u)"
-              "and not enough free types (%u)",
-              hostVisibleMemoryTypeCount, numFreeMemoryTypes);
-        canFit = false;
-    }
-
-    return canFit;
-}
-
 void initHostVisibleMemoryVirtualizationInfo(
-    VkPhysicalDevice physicalDevice,
     const VkPhysicalDeviceMemoryProperties* memoryProperties,
-    const EmulatorFeatureInfo* featureInfo,
     HostVisibleMemoryVirtualizationInfo* info_out) {
 
     if (info_out->initialized) return;
@@ -72,22 +49,6 @@ void initHostVisibleMemoryVirtualizationInfo(
     info_out->hostMemoryProperties = *memoryProperties;
     info_out->initialized = true;
 
-    info_out->memoryPropertiesSupported =
-        canFitVirtualHostVisibleMemoryInfo(memoryProperties);
-
-    info_out->directMemSupported = featureInfo->hasDirectMem;
-    info_out->virtioGpuNextSupported = featureInfo->hasVirtioGpuNext;
-
-    if (!info_out->memoryPropertiesSupported ||
-        (!info_out->directMemSupported &&
-         !info_out->virtioGpuNextSupported)) {
-        info_out->virtualizationSupported = false;
-        return;
-    }
-
-    info_out->virtualizationSupported = true;
-
-    info_out->physicalDevice = physicalDevice;
     info_out->guestMemoryProperties = *memoryProperties;
 
     uint32_t typeCount =
@@ -103,10 +64,7 @@ void initHostVisibleMemoryVirtualizationInfo(
         // Set up identity mapping and not-both
         // by default, to be edited later.
         info_out->memoryTypeIndexMappingToHost[i] = i;
-        info_out->memoryHeapIndexMappingToHost[i] = i;
-
         info_out->memoryTypeIndexMappingFromHost[i] = i;
-        info_out->memoryHeapIndexMappingFromHost[i] = i;
 
         info_out->memoryTypeBitsShouldAdvertiseBoth[i] = false;
 
@@ -154,10 +112,7 @@ void initHostVisibleMemoryVirtualizationInfo(
             newVirtualMemoryHeap.size = VIRTUAL_HOST_VISIBLE_HEAP_SIZE;
 
             info_out->memoryTypeIndexMappingToHost[firstFreeTypeIndex] = i;
-            info_out->memoryHeapIndexMappingToHost[firstFreeHeapIndex] = i;
-
             info_out->memoryTypeIndexMappingFromHost[i] = firstFreeTypeIndex;
-            info_out->memoryHeapIndexMappingFromHost[i] = firstFreeHeapIndex;
 
             // Was the original memory type also a device local type? If so,
             // advertise both types in resulting type bits.
@@ -185,24 +140,8 @@ bool isHostVisibleMemoryTypeIndexForGuest(
     const HostVisibleMemoryVirtualizationInfo* info,
     uint32_t index) {
 
-    const auto& props =
-        info->virtualizationSupported ?
-        info->guestMemoryProperties :
-        info->hostMemoryProperties;
-
+    const auto& props = info->guestMemoryProperties;
     return props.memoryTypes[index].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-}
-
-bool isDeviceLocalMemoryTypeIndexForGuest(
-    const HostVisibleMemoryVirtualizationInfo* info,
-    uint32_t index) {
-
-    const auto& props =
-        info->virtualizationSupported ?
-        info->guestMemoryProperties :
-        info->hostMemoryProperties;
-
-    return props.memoryTypes[index].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 }
 
 VkResult finishHostMemAllocInit(
@@ -253,15 +192,45 @@ void destroyHostMemAlloc(
     bool freeMemorySyncSupported,
     VkEncoder* enc,
     VkDevice device,
-    HostMemAlloc* toDestroy) {
+    HostMemAlloc* toDestroy,
+    bool doLock) {
+#if !defined(HOST_BUILD) && defined(VIRTIO_GPU)
+    if (toDestroy->rendernodeFd >= 0) {
+
+        if (toDestroy->memoryAddr) {
+            int ret = munmap((void*)toDestroy->memoryAddr, toDestroy->memorySize);
+            if (ret != 0) {
+                ALOGE("%s: fail to unmap addr = 0x%" PRIx64", size = %d, ret = "
+                      "%d, errno = %d", __func__, toDestroy->memoryAddr,
+                      (int32_t)toDestroy->memorySize, ret, errno);
+            }
+        }
+
+        if (toDestroy->boCreated) {
+            ALOGV("%s: trying to destroy bo = %u\n", __func__,
+                  toDestroy->boHandle);
+            struct drm_gem_close drmGemClose = {};
+            drmGemClose.handle = toDestroy->boHandle;
+            int ret = drmIoctl(toDestroy->rendernodeFd, DRM_IOCTL_GEM_CLOSE, &drmGemClose);
+            if (ret != 0) {
+                ALOGE("%s: fail to close gem = %u, ret = %d, errno = %d\n",
+                      __func__, toDestroy->boHandle, ret, errno);
+            } else {
+                ALOGV("%s: successfully close gem = %u, ret = %d\n", __func__,
+                      toDestroy->boHandle, ret);
+            }
+        }
+    }
+#endif
 
     if (toDestroy->initResult != VK_SUCCESS) return;
     if (!toDestroy->initialized) return;
 
+
     if (freeMemorySyncSupported) {
-        enc->vkFreeMemorySyncGOOGLE(device, toDestroy->memory, nullptr);
+        enc->vkFreeMemorySyncGOOGLE(device, toDestroy->memory, nullptr, doLock);
     } else {
-        enc->vkFreeMemory(device, toDestroy->memory, nullptr);
+        enc->vkFreeMemory(device, toDestroy->memory, nullptr, doLock);
     }
 
     delete toDestroy->subAlloc;
@@ -294,12 +263,19 @@ void subAllocHostMemory(
 
     out->subMemory = new_from_host_VkDeviceMemory(VK_NULL_HANDLE);
     out->subAlloc = alloc->subAlloc;
+    out->isDeviceAddressMemoryAllocation = alloc->isDeviceAddressMemoryAllocation;
+    out->memoryTypeIndex = alloc->memoryTypeIndex;
 }
 
-void subFreeHostMemory(SubAlloc* toFree) {
+bool subFreeHostMemory(SubAlloc* toFree) {
     delete_goldfish_VkDeviceMemory(toFree->subMemory);
     toFree->subAlloc->free(toFree->mappedPtr);
+    bool nowEmpty = toFree->subAlloc->empty();
+    if (nowEmpty) {
+        ALOGV("%s: We have an empty suballoc, time to free the block perhaps?\n", __func__);
+    }
     memset(toFree, 0x0, sizeof(SubAlloc));
+    return nowEmpty;
 }
 
 bool canSubAlloc(android::base::guest::SubAllocator* subAlloc, VkDeviceSize size) {
@@ -312,10 +288,7 @@ bool canSubAlloc(android::base::guest::SubAllocator* subAlloc, VkDeviceSize size
 bool isNoFlagsMemoryTypeIndexForGuest(
     const HostVisibleMemoryVirtualizationInfo* info,
     uint32_t index) {
-    const auto& props =
-        info->virtualizationSupported ?
-        info->guestMemoryProperties :
-        info->hostMemoryProperties;
+    const auto& props = info->guestMemoryProperties;
     return props.memoryTypes[index].propertyFlags == 0;
 }
 

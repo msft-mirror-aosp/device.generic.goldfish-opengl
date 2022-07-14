@@ -24,16 +24,21 @@
 #include <cstdlib>
 #include <errno.h>
 #include <memory>
+#include <cstring>
 
 #ifdef VIRTIO_GPU
-#include <drm/virtgpu_drm.h>
 #include <xf86drm.h>
 #endif
 
 #include <log/log.h>
 
 #include "goldfish_address_space.h"
-#include "virtio_gpu_next.h"
+#include "virtgpu_drm.h"
+
+// See virgl_hw.h and p_defines.h
+#define VIRGL_FORMAT_R8_UNORM 64
+#define VIRGL_BIND_CUSTOM (1 << 17)
+#define PIPE_BUFFER 0
 
 namespace {
 
@@ -85,7 +90,7 @@ long set_address_space_subdevice_type(int fd, uint64_t type)
 {
     struct address_space_ping request;
     ::memset(&request, 0, sizeof(request));
-    request.version = sizeof(request);
+    request.threadID = sizeof(request);
     request.metadata = type;
 
     long ret = ioctl_ping(fd, &request);
@@ -369,7 +374,7 @@ long GoldfishAddressSpaceHostMemoryAllocator::hostMalloc(GoldfishAddressSpaceBlo
     if (m_useSharedSlots) {
         // shared memory slots are supported
         ::memset(&request, 0, sizeof(request));
-        request.version = sizeof(request);
+        request.threadID = sizeof(request);
         request.size = size;
         request.metadata = HOST_MEMORY_ALLOCATOR_COMMAND_ALLOCATE_ID;
 
@@ -390,7 +395,7 @@ long GoldfishAddressSpaceHostMemoryAllocator::hostMalloc(GoldfishAddressSpaceBlo
         }
 
         ::memset(&request, 0, sizeof(request));
-        request.version = sizeof(request);
+        request.threadID = sizeof(request);
         request.offset = block->offset();
         request.size = block->size();
         request.metadata = HOST_MEMORY_ALLOCATOR_COMMAND_ALLOCATE_ID;
@@ -423,7 +428,7 @@ void GoldfishAddressSpaceHostMemoryAllocator::hostFree(GoldfishAddressSpaceBlock
     if (block->guestPtr()) {
         struct address_space_ping request;
         ::memset(&request, 0, sizeof(request));
-        request.version = sizeof(request);
+        request.threadID = sizeof(request);
         request.offset = block->offset();
         request.metadata = HOST_MEMORY_ALLOCATOR_COMMAND_UNALLOCATE_ID;
 
@@ -542,23 +547,25 @@ bool goldfish_address_space_ping(
     return true;
 }
 
-// virtio-gpu version
+#define CAPSET_GFXSTREAM 3
+
+
 address_space_handle_t virtgpu_address_space_open() {
-return drmOpenRender(128);
+    return -EINVAL;
 }
 
 void virtgpu_address_space_close(address_space_handle_t fd) {
-close(fd);
+    close(fd);
 }
 
 // kVirtioGpuAddressSpaceContextCreateWithSubdevice | subdeviceType
 const uint32_t kVirtioGpuAddressSpaceContextCreateWithSubdevice = 0x1001;
 
-// kVirtioGpuAddressSpacePing | offset_lo | offset_hi | size_lo | size_hi | metadata_lo | metadata_hi | version | wait_fd | wait_flags | direction
+// kVirtioGpuAddressSpacePing | offset_lo | offset_hi | size_lo | size_hi | metadata_lo | metadata_hi | threadID | wait_fd | wait_flags | direction
 // no output
 const uint32_t kVirtioGpuAddressSpacePing = 0x1002;
 
-// kVirtioGpuAddressSpacePingWithResponse | resp_resid | offset_lo | offset_hi | metadata_lo | metadata_hi | version | wait_fd | wait_flags | direction
+// kVirtioGpuAddressSpacePingWithResponse | resp_resid | offset_lo | offset_hi | metadata_lo | metadata_hi | threadID | wait_fd | wait_flags | direction
 // out: same as input then | out: error
 const uint32_t kVirtioGpuAddressSpacePingWithResponse = 0x1003;
 
@@ -570,7 +577,7 @@ bool virtgpu_address_space_ping(address_space_handle_t fd, struct address_space_
         (uint32_t)(info->offset), (uint32_t)(info->offset >> 32),
         (uint32_t)(info->size), (uint32_t)(info->size >> 32),
         (uint32_t)(info->metadata), (uint32_t)(info->metadata >> 32),
-        (uint32_t)(info->version), (uint32_t)(info->wait_fd),
+        (uint32_t)(info->threadID), (uint32_t)(info->wait_fd),
         (uint32_t)(info->wait_flags), (uint32_t)(info->direction),
     };
 
@@ -680,8 +687,8 @@ bool virtgpu_address_space_allocate_hostmem(
     struct address_space_virtgpu_hostmem_info* hostmem_info_out) {
 
     struct drm_virtgpu_resource_create_blob drm_rc_blob = {};
-    drm_rc_blob.blob_mem = VIRTGPU_BLOB_MEM_HOST;
-    drm_rc_blob.blob_flags = VIRTGPU_BLOB_FLAG_MAPPABLE;
+    drm_rc_blob.blob_mem = VIRTGPU_BLOB_MEM_HOST3D;
+    drm_rc_blob.blob_flags = VIRTGPU_BLOB_FLAG_USE_MAPPABLE;
     drm_rc_blob.blob_id = hostmem_id;
     drm_rc_blob.size = size;
 
@@ -707,7 +714,7 @@ bool virtgpu_address_space_allocate_hostmem(
 
     void* directMappedAddr = mmap64(0, size, PROT_WRITE, MAP_SHARED, fd, map.offset);
 
-    if (!directMappedAddr) {
+    if (directMappedAddr == MAP_FAILED) {
         ALOGE("%s: mmap of virtio gpu resource failed\n", __func__);
         abort();
     }
@@ -749,7 +756,7 @@ bool virtgpu_address_space_ping_with_response(
         (uint32_t)(ping->offset), (uint32_t)(ping->offset >> 32),
         (uint32_t)(ping->size), (uint32_t)(ping->size >> 32),
         (uint32_t)(ping->metadata), (uint32_t)(ping->metadata >> 32),
-        (uint32_t)(ping->version), (uint32_t)(ping->wait_fd),
+        (uint32_t)(ping->threadID), (uint32_t)(ping->wait_fd),
         (uint32_t)(ping->wait_flags), (uint32_t)(ping->direction),
     };
 
@@ -785,7 +792,7 @@ bool virtgpu_address_space_ping_with_response(
     ping->offset = buildu64(respWords[0], respWords[1]);
     ping->size = buildu64(respWords[2], respWords[3]);
     ping->metadata = buildu64(respWords[4], respWords[5]);
-    ping->version = respWords[6];
+    ping->threadID = respWords[6];
     ping->wait_fd = respWords[7];
     ping->wait_flags = respWords[8];
     ping->direction = respWords[9];

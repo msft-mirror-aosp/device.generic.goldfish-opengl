@@ -24,7 +24,14 @@
 class AddressSpaceStream;
 
 AddressSpaceStream* createAddressSpaceStream(size_t bufSize);
-AddressSpaceStream* createVirtioGpuAddressSpaceStream(size_t bufSize);
+
+#if defined(VIRTIO_GPU) && !defined(HOST_BUILD)
+struct StreamCreate {
+   int streamHandle;
+};
+
+AddressSpaceStream* createVirtioGpuAddressSpaceStream(const struct StreamCreate &streamCreate);
+#endif
 
 class AddressSpaceStream : public IOStream {
 public:
@@ -54,6 +61,10 @@ public:
         if (!m_virtioMode) return -1;
         return m_handle;
 #endif
+    }
+
+    void setThreadID(uint32_t id) {
+        m_threadID = id;
     }
 
 private:
@@ -100,6 +111,9 @@ private:
 
     uint64_t m_backoffIters;
     uint64_t m_backoffFactor;
+
+    size_t m_ringStorageSize;
+    uint32_t m_threadID = 0;
 };
 
 #endif

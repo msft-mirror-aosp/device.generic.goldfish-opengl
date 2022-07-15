@@ -34,14 +34,17 @@ else
 
 ifeq (true,$(GFXSTREAM))
 
-LOCAL_HEADER_LIBRARIES += vulkan_headers
-
 LOCAL_CFLAGS += -DVIRTIO_GPU
 LOCAL_SRC_FILES += \
     VirtioGpuStream.cpp \
     VirtioGpuPipeStream.cpp \
 
-LOCAL_C_INCLUDES += external/libdrm external/minigbm/cros_gralloc
+LOCAL_C_INCLUDES += \
+    external/libdrm \
+    external/minigbm/cros_gralloc \
+    device/generic/goldfish-opengl/host/include \
+    device/generic/goldfish-opengl/host/include/vulkan \
+    
 LOCAL_SHARED_LIBRARIES += libdrm
 
 endif

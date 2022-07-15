@@ -19,9 +19,12 @@ ifneq (true,$(GOLDFISH_OPENGL_BUILD_FOR_HOST))
 # if building for host, we already import android-emu.
 $(call emugl-export,SHARED_LIBRARIES,libandroidemu)
 
+LOCAL_C_INCLUDES += \
+    device/generic/goldfish-opengl/host/include \
+    device/generic/goldfish-opengl/host/include/vulkan \
+
 LOCAL_HEADER_LIBRARIES += \
     hwvulkan_headers \
-    vulkan_headers \
 
 endif
 

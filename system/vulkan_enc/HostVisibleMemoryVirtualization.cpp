@@ -40,42 +40,8 @@ using android::base::guest::SubAllocator;
 
 namespace goldfish_vk {
 
-bool canFitVirtualHostVisibleMemoryInfo(
-    const VkPhysicalDeviceMemoryProperties* memoryProperties) {
-    uint32_t typeCount =
-        memoryProperties->memoryTypeCount;
-    uint32_t heapCount =
-        memoryProperties->memoryHeapCount;
-
-    bool canFit = true;
-
-    if (typeCount == VK_MAX_MEMORY_TYPES) {
-        canFit = false;
-        ALOGE("Underlying device has no free memory types");
-    }
-
-    if (heapCount == VK_MAX_MEMORY_HEAPS) {
-        canFit = false;
-        ALOGE("Underlying device has no free memory heaps");
-    }
-
-    uint32_t numFreeMemoryTypes = VK_MAX_MEMORY_TYPES - typeCount;
-    uint32_t hostVisibleMemoryTypeCount = 0;
-
-    if (hostVisibleMemoryTypeCount > numFreeMemoryTypes) {
-        ALOGE("Underlying device has too many host visible memory types (%u)"
-              "and not enough free types (%u)",
-              hostVisibleMemoryTypeCount, numFreeMemoryTypes);
-        canFit = false;
-    }
-
-    return canFit;
-}
-
 void initHostVisibleMemoryVirtualizationInfo(
-    VkPhysicalDevice physicalDevice,
     const VkPhysicalDeviceMemoryProperties* memoryProperties,
-    const EmulatorFeatureInfo* featureInfo,
     HostVisibleMemoryVirtualizationInfo* info_out) {
 
     if (info_out->initialized) return;
@@ -83,22 +49,6 @@ void initHostVisibleMemoryVirtualizationInfo(
     info_out->hostMemoryProperties = *memoryProperties;
     info_out->initialized = true;
 
-    info_out->memoryPropertiesSupported =
-        canFitVirtualHostVisibleMemoryInfo(memoryProperties);
-
-    info_out->directMemSupported = featureInfo->hasDirectMem;
-    info_out->virtioGpuNextSupported = featureInfo->hasVirtioGpuNext;
-
-    if (!info_out->memoryPropertiesSupported ||
-        (!info_out->directMemSupported &&
-         !info_out->virtioGpuNextSupported)) {
-        info_out->virtualizationSupported = false;
-        return;
-    }
-
-    info_out->virtualizationSupported = true;
-
-    info_out->physicalDevice = physicalDevice;
     info_out->guestMemoryProperties = *memoryProperties;
 
     uint32_t typeCount =
@@ -114,10 +64,7 @@ void initHostVisibleMemoryVirtualizationInfo(
         // Set up identity mapping and not-both
         // by default, to be edited later.
         info_out->memoryTypeIndexMappingToHost[i] = i;
-        info_out->memoryHeapIndexMappingToHost[i] = i;
-
         info_out->memoryTypeIndexMappingFromHost[i] = i;
-        info_out->memoryHeapIndexMappingFromHost[i] = i;
 
         info_out->memoryTypeBitsShouldAdvertiseBoth[i] = false;
 
@@ -165,10 +112,7 @@ void initHostVisibleMemoryVirtualizationInfo(
             newVirtualMemoryHeap.size = VIRTUAL_HOST_VISIBLE_HEAP_SIZE;
 
             info_out->memoryTypeIndexMappingToHost[firstFreeTypeIndex] = i;
-            info_out->memoryHeapIndexMappingToHost[firstFreeHeapIndex] = i;
-
             info_out->memoryTypeIndexMappingFromHost[i] = firstFreeTypeIndex;
-            info_out->memoryHeapIndexMappingFromHost[i] = firstFreeHeapIndex;
 
             // Was the original memory type also a device local type? If so,
             // advertise both types in resulting type bits.
@@ -196,24 +140,8 @@ bool isHostVisibleMemoryTypeIndexForGuest(
     const HostVisibleMemoryVirtualizationInfo* info,
     uint32_t index) {
 
-    const auto& props =
-        info->virtualizationSupported ?
-        info->guestMemoryProperties :
-        info->hostMemoryProperties;
-
+    const auto& props = info->guestMemoryProperties;
     return props.memoryTypes[index].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-}
-
-bool isDeviceLocalMemoryTypeIndexForGuest(
-    const HostVisibleMemoryVirtualizationInfo* info,
-    uint32_t index) {
-
-    const auto& props =
-        info->virtualizationSupported ?
-        info->guestMemoryProperties :
-        info->hostMemoryProperties;
-
-    return props.memoryTypes[index].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 }
 
 VkResult finishHostMemAllocInit(
@@ -360,10 +288,7 @@ bool canSubAlloc(android::base::guest::SubAllocator* subAlloc, VkDeviceSize size
 bool isNoFlagsMemoryTypeIndexForGuest(
     const HostVisibleMemoryVirtualizationInfo* info,
     uint32_t index) {
-    const auto& props =
-        info->virtualizationSupported ?
-        info->guestMemoryProperties :
-        info->hostMemoryProperties;
+    const auto& props = info->guestMemoryProperties;
     return props.memoryTypes[index].propertyFlags == 0;
 }
 

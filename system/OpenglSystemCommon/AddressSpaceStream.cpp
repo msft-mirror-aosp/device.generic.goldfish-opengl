@@ -256,8 +256,6 @@ AddressSpaceStream* createVirtioGpuAddressSpaceStream(const struct StreamCreate 
         .open = virtgpu_address_space_open,
         .close = virtgpu_address_space_close,
         .ping = virtgpu_address_space_ping,
-        .allocate_hostmem = virtgpu_address_space_allocate_hostmem,
-        .ping_with_response = virtgpu_address_space_ping_with_response,
     };
 
     if (virtgpu_info.resp_mapped_ptr) {
@@ -675,6 +673,7 @@ void AddressSpaceStream::notifyAvailable() {
     AEMU_SCOPED_TRACE("PING");
     struct address_space_ping request;
     request.metadata = ASG_NOTIFY_AVAILABLE;
+    request.threadID = m_threadID;
     m_ops.ping(m_handle, &request);
     ++m_notifs;
 }

@@ -263,8 +263,8 @@ public:
         return ((cros_gralloc_handle *)handle)->droid_format;
     }
 
-    virtual std::optional<uint32_t> getFormatDrmFourcc(native_handle_t const* handle) override {
-        return ((cros_gralloc_handle *)handle)->format;
+    virtual uint32_t getFormatDrmFourcc(native_handle_t const* handle) override {
+	return ((cros_gralloc_handle *)handle)->format;
     }
 
     virtual size_t getAllocatedSize(native_handle_t const* handle) {

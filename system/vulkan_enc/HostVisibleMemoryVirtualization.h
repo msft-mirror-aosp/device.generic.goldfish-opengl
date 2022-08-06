@@ -16,7 +16,11 @@
 
 #include <vulkan/vulkan.h>
 
-#define VIRTUAL_HOST_VISIBLE_HEAP_SIZE 512ULL * (1048576ULL)
+constexpr uint64_t kMegaBtye = 1048576;
+// This needs to be a power of 2 that is at least the min alignment needed in HostVisibleMemoryVirtualization.cpp.
+constexpr uint64_t kLargestPageSize = 65536;
+constexpr uint64_t kDefaultHostMemBlockSize = 16 * kMegaBtye; // 16 mb
+constexpr uint64_t kHostVisibleHeapSize = 512 * kMegaBtye;    // 512 mb
 
 struct EmulatorFeatureInfo;
 
@@ -36,7 +40,6 @@ class VkEncoder;
 
 struct HostVisibleMemoryVirtualizationInfo {
     bool initialized = false;
-    bool memoryPropertiesSupported;
 
     VkPhysicalDeviceMemoryProperties hostMemoryProperties;
     VkPhysicalDeviceMemoryProperties guestMemoryProperties;
@@ -62,7 +65,6 @@ struct HostMemAlloc {
     uint32_t memoryTypeIndex = 0;
     VkDeviceSize nonCoherentAtomSize = 0;
     VkDeviceMemory memory = VK_NULL_HANDLE;
-    VkDeviceSize allocSize = 0;
     VkDeviceSize mappedSize = 0;
     uint8_t* mappedPtr = nullptr;
     android::base::guest::SubAllocator* subAlloc = nullptr;
@@ -71,7 +73,6 @@ struct HostMemAlloc {
     uint32_t boHandle = 0;
     uint64_t memoryAddr = 0;
     size_t memorySize = 0;
-    bool isDeviceAddressMemoryAllocation = false;
     bool isDedicated = false;
 };
 
@@ -80,7 +81,6 @@ VkResult finishHostMemAllocInit(
     VkDevice device,
     uint32_t memoryTypeIndex,
     VkDeviceSize nonCoherentAtomSize,
-    VkDeviceSize allocSize,
     VkDeviceSize mappedSize,
     uint8_t* mappedPtr,
     HostMemAlloc* out);

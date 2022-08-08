@@ -836,9 +836,6 @@ public:
         info.physdev = physdev;
         info.props = props;
         info.memProps = memProps;
-        initHostVisibleMemoryVirtualizationInfo(
-            &memProps,
-            &mHostVisibleMemoryVirtInfo);
         info.apiVersion = props.apiVersion;
 
         const VkBaseInStructure *extensionCreateInfo =
@@ -938,19 +935,6 @@ public:
 
         const auto& info = it->second;
         return info.mappedSize;
-    }
-
-    VkDeviceSize getNonCoherentExtendedSize(VkDevice device, VkDeviceSize basicSize) const {
-        AutoLock<RecursiveLock> lock(mLock);
-        const auto it = info_VkDevice.find(device);
-        if (it == info_VkDevice.end()) return basicSize;
-        const auto& info = it->second;
-
-        VkDeviceSize nonCoherentAtomSize =
-            info.props.limits.nonCoherentAtomSize;
-        VkDeviceSize atoms =
-            (basicSize + nonCoherentAtomSize - 1) / nonCoherentAtomSize;
-        return atoms * nonCoherentAtomSize;
     }
 
     bool isValidMemoryRange(const VkMappedMemoryRange& range) const {
@@ -1676,14 +1660,7 @@ public:
         VkPhysicalDevice physdev,
         VkPhysicalDeviceMemoryProperties2* out) {
 
-        (void)physdev;
-        // If the device supports VK_MAX_MEMORY_HEAPS heaps and VK_MAX_MEMORY_TYPES, the current
-        // logic will break unless refactored (see b:233803018 for progress).
-        initHostVisibleMemoryVirtualizationInfo(
-            &out->memoryProperties,
-            &mHostVisibleMemoryVirtInfo);
-
-        out->memoryProperties = mHostVisibleMemoryVirtInfo.guestMemoryProperties;
+        on_vkGetPhysicalDeviceMemoryProperties(nullptr, physdev, &out->memoryProperties);
     }
 
     void on_vkGetDeviceQueue(void*,
@@ -3589,7 +3566,6 @@ public:
                     if (blocks[i].initialized &&
                         blocks[i].initResult == VK_SUCCESS &&
                         !blocks[i].isDedicated &&
-                        blocks[i].isDeviceAddressMemoryAllocation == isDeviceAddressMemoryAllocation &&
                         canSubAlloc(
                             blocks[i].subAlloc,
                             pAllocateInfo->allocationSize)) {
@@ -3605,26 +3581,15 @@ public:
             auto& hostMemAlloc = blocks.back();
 
             hostMemAlloc.isDedicated = isDedicated;
-
-            // Uninitialized block; allocate on host.
-            static constexpr VkDeviceSize oneMb = 1048576;
-            // This needs to be a power of 2 that is at least the min alignment needed in HostVisibleMemoryVirtualization.cpp.
-            static constexpr VkDeviceSize biggestPage = 65536;
-            static constexpr VkDeviceSize kDefaultHostMemBlockSize =
-                16 * oneMb; // 16 mb
             VkDeviceSize roundedUpAllocSize =
-                oneMb * ((pAllocateInfo->allocationSize + oneMb - 1) / oneMb);
+                kMegaBtye * ((pAllocateInfo->allocationSize + kMegaBtye - 1) / kMegaBtye);
 
             // If dedicated, use a smaller "page rounded alloc size".
             VkDeviceSize pageRoundedAllocSize =
-                biggestPage * ((pAllocateInfo->allocationSize + biggestPage - 1) / biggestPage);
-
-            VkDeviceSize virtualHeapSize = VIRTUAL_HOST_VISIBLE_HEAP_SIZE;
+                kLargestPageSize * ((pAllocateInfo->allocationSize + kLargestPageSize - 1) / kLargestPageSize);
 
             VkDeviceSize blockSizeNeeded =
-                std::max(roundedUpAllocSize,
-                    std::min(virtualHeapSize,
-                             kDefaultHostMemBlockSize));
+                std::max(roundedUpAllocSize, kDefaultHostMemBlockSize);
 
             VkMemoryAllocateInfo allocInfoForHost = vk_make_orphan_copy(*pAllocateInfo);
             vk_struct_chain_iterator structChainIter = vk_make_chain_iterator(&allocInfoForHost);
@@ -3639,7 +3604,6 @@ public:
 
             // Support device address capture/replay allocations
             if (isDeviceAddressMemoryAllocation) {
-                hostMemAlloc.isDeviceAddressMemoryAllocation = true;
                 if (allocFlagsInfoPtr) {
                     ALOGV("%s: has alloc flags\n", __func__);
                     allocFlagsInfo = *allocFlagsInfoPtr;
@@ -3778,7 +3742,6 @@ public:
                     device,
                     pAllocateInfo->memoryTypeIndex,
                     nonCoherentAtomSize,
-                    hostMemInfo.allocationSize,
                     hostMemInfo.mappedSize,
                     hostMemInfo.mappedPtr,
                     &hostMemAlloc);
@@ -8166,10 +8129,6 @@ uint8_t* ResourceTracker::getMappedPointer(VkDeviceMemory memory) {
 
 VkDeviceSize ResourceTracker::getMappedSize(VkDeviceMemory memory) {
     return mImpl->getMappedSize(memory);
-}
-
-VkDeviceSize ResourceTracker::getNonCoherentExtendedSize(VkDevice device, VkDeviceSize basicSize) const {
-    return mImpl->getNonCoherentExtendedSize(device, basicSize);
 }
 
 bool ResourceTracker::isValidMemoryRange(const VkMappedMemoryRange& range) const {

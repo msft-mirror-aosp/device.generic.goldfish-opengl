@@ -38,25 +38,7 @@ namespace goldfish_vk {
 
 class VkEncoder;
 
-struct HostVisibleMemoryVirtualizationInfo {
-    bool initialized = false;
-
-    VkPhysicalDeviceMemoryProperties hostMemoryProperties;
-    VkPhysicalDeviceMemoryProperties guestMemoryProperties;
-
-    uint32_t memoryTypeIndexMappingToHost[VK_MAX_MEMORY_TYPES];
-    uint32_t memoryTypeIndexMappingFromHost[VK_MAX_MEMORY_TYPES];
-
-    bool memoryTypeBitsShouldAdvertiseBoth[VK_MAX_MEMORY_TYPES];
-};
-
-void initHostVisibleMemoryVirtualizationInfo(
-    const VkPhysicalDeviceMemoryProperties* memoryProperties,
-    HostVisibleMemoryVirtualizationInfo* info_out);
-
-bool isHostVisibleMemoryTypeIndexForGuest(
-    const HostVisibleMemoryVirtualizationInfo* info,
-    uint32_t index);
+bool isHostVisible(const VkPhysicalDeviceMemoryProperties *memoryProps, uint32_t index);
 
 struct HostMemAlloc {
     bool initialized = false;
@@ -113,9 +95,5 @@ void subAllocHostMemory(
 bool subFreeHostMemory(SubAlloc* toFree);
 
 bool canSubAlloc(android::base::guest::SubAllocator* subAlloc, VkDeviceSize size);
-
-bool isNoFlagsMemoryTypeIndexForGuest(
-    const HostVisibleMemoryVirtualizationInfo* info,
-    uint32_t index);
 
 } // namespace goldfish_vk

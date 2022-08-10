@@ -106,13 +106,9 @@ VkResult createAndroidHardwareBuffer(
   return VK_SUCCESS;
 }
 
-namespace goldfish_vk {
-struct HostVisibleMemoryVirtualizationInfo;
-}
-
 VkResult getAndroidHardwareBufferPropertiesANDROID(
     Gralloc *grallocHelper,
-    const goldfish_vk::HostVisibleMemoryVirtualizationInfo*,
+    const VkPhysicalDeviceMemoryProperties* memProps,
     VkDevice,
     const AHardwareBuffer*,
     VkAndroidHardwareBufferPropertiesANDROID*) { return VK_SUCCESS; }
@@ -1083,9 +1079,10 @@ public:
         (void)memoryCount;
         (void)offsetCount;
         (void)sizeCount;
-
-        const auto& hostVirt =
-            mHostVisibleMemoryVirtInfo;
+        (void)typeIndex;
+        (void)typeIndexCount;
+        (void)typeBits;
+        (void)typeBitsCount;
 
         if (memory) {
             AutoLock<RecursiveLock> lock (mLock);
@@ -1118,22 +1115,6 @@ public:
                 (void)size;
             }
         }
-
-        for (uint32_t i = 0; i < typeIndexCount; ++i) {
-            typeIndex[i] =
-                hostVirt.memoryTypeIndexMappingToHost[typeIndex[i]];
-        }
-
-        for (uint32_t i = 0; i < typeBitsCount; ++i) {
-            uint32_t bits = 0;
-            for (uint32_t j = 0; j < VK_MAX_MEMORY_TYPES; ++j) {
-                bool guestHas = typeBits[i] & (1 << j);
-                uint32_t hostIndex =
-                    hostVirt.memoryTypeIndexMappingToHost[j];
-                bits |= guestHas ? (1 << hostIndex) : 0;
-            }
-            typeBits[i] = bits;
-        }
     }
 
     void deviceMemoryTransform_fromhost(
@@ -1143,41 +1124,16 @@ public:
         uint32_t* typeIndex, uint32_t typeIndexCount,
         uint32_t* typeBits, uint32_t typeBitsCount) {
 
+        (void)memory;
         (void)memoryCount;
+        (void)offset;
         (void)offsetCount;
+        (void)size;
         (void)sizeCount;
-
-        const auto& hostVirt =
-            mHostVisibleMemoryVirtInfo;
-
-        AutoLock<RecursiveLock> lock (mLock);
-
-        for (uint32_t i = 0; i < memoryCount; ++i) {
-            // TODO
-            (void)memory;
-            (void)offset;
-            (void)size;
-        }
-
-        for (uint32_t i = 0; i < typeIndexCount; ++i) {
-            typeIndex[i] =
-                hostVirt.memoryTypeIndexMappingFromHost[typeIndex[i]];
-        }
-
-        for (uint32_t i = 0; i < typeBitsCount; ++i) {
-            uint32_t bits = 0;
-            for (uint32_t j = 0; j < VK_MAX_MEMORY_TYPES; ++j) {
-                bool hostHas = typeBits[i] & (1 << j);
-                uint32_t guestIndex =
-                    hostVirt.memoryTypeIndexMappingFromHost[j];
-                bits |= hostHas ? (1 << guestIndex) : 0;
-
-                if (hostVirt.memoryTypeBitsShouldAdvertiseBoth[j]) {
-                    bits |= hostHas ? (1 << j) : 0;
-                }
-            }
-            typeBits[i] = bits;
-        }
+        (void)typeIndex;
+        (void)typeIndexCount;
+        (void)typeBits;
+        (void)typeBitsCount;
     }
 
     void transformImpl_VkExternalMemoryProperties_fromhost(
@@ -1646,13 +1602,9 @@ public:
         VkPhysicalDeviceMemoryProperties* out) {
 
         (void)physdev;
-        // If the device supports VK_MAX_MEMORY_HEAPS heaps and VK_MAX_MEMORY_TYPES, the current
-        // logic will break unless refactored (see b:233803018 for progress).
-        initHostVisibleMemoryVirtualizationInfo(
-            out,
-            &mHostVisibleMemoryVirtInfo);
-
-        *out = mHostVisibleMemoryVirtInfo.guestMemoryProperties;
+        // gfxstream decides which physical device to expose to the guest on startup.
+        // Otherwise, we would need a physical device to properties mapping.
+        mMemoryProps = *out;
     }
 
     void on_vkGetPhysicalDeviceMemoryProperties2(
@@ -1764,7 +1716,7 @@ public:
             ResourceTracker::threadingCallbacks.hostConnectionGetFunc()->grallocHelper();
         return getAndroidHardwareBufferPropertiesANDROID(
             grallocHelper,
-            &mHostVisibleMemoryVirtInfo,
+            &mMemoryProps,
             device, buffer, pProperties);
     }
 
@@ -3887,15 +3839,13 @@ public:
 
 #if defined(VK_USE_PLATFORM_ANDROID_KHR) || defined(__linux__)
         shouldPassThroughDedicatedAllocInfo &=
-            !isHostVisibleMemoryTypeIndexForGuest(
-                &mHostVisibleMemoryVirtInfo, pAllocateInfo->memoryTypeIndex);
+            !isHostVisible(&mMemoryProps, pAllocateInfo->memoryTypeIndex);
 
         if (!exportAllocateInfoPtr &&
             (importAhbInfoPtr || importBufferCollectionInfoPtr ||
              importBufferCollectionInfoPtrX || importVmoInfoPtr) &&
             dedicatedAllocInfoPtr &&
-            isHostVisibleMemoryTypeIndexForGuest(
-                &mHostVisibleMemoryVirtInfo, pAllocateInfo->memoryTypeIndex)) {
+            isHostVisible(&mMemoryProps, pAllocateInfo->memoryTypeIndex)) {
             ALOGE(
                 "FATAL: It is not yet supported to import-allocate "
                 "external memory that is both host visible and dedicated.");
@@ -4243,9 +4193,8 @@ public:
                     abort();
                 }
 
-                bool isHostVisible = isHostVisibleMemoryTypeIndexForGuest(
-                    &mHostVisibleMemoryVirtInfo,
-                    pAllocateInfo->memoryTypeIndex);
+                bool isHostVisible = isHostVisible(&mMemoryProps,
+                                                   pAllocateInfo->memoryTypeIndex);
 
                 // Only device-local images need to create color buffer; for
                 // host-visible images, the color buffer is already created when
@@ -4378,9 +4327,7 @@ public:
         }
 #endif
 
-        if (!isHostVisibleMemoryTypeIndexForGuest(
-                &mHostVisibleMemoryVirtInfo,
-                finalAllocInfo.memoryTypeIndex)) {
+        if (!isHostVisible(&mMemoryProps, finalAllocInfo.memoryTypeIndex)) {
             input_result =
                 enc->vkAllocateMemory(
                     device, &finalAllocInfo, pAllocator, pMemory, true /* do lock */);
@@ -4437,10 +4384,6 @@ public:
                 return VK_ERROR_OUT_OF_HOST_MEMORY;
             }
 
-            D("host visible alloc (external): "
-              "size 0x%llx host ptr %p mapped size 0x%llx",
-              (unsigned long long)finalAllocInfo.allocationSize, mappedPtr,
-              (unsigned long long)mappedSize);
             setDeviceMemoryInfo(device, *pMemory,
                 finalAllocInfo.allocationSize, finalAllocInfo.allocationSize,
                 reinterpret_cast<uint8_t*>(addr), finalAllocInfo.memoryTypeIndex,
@@ -4672,8 +4615,7 @@ public:
         for (uint32_t i = 0; i < VK_MAX_MEMORY_TYPES; ++i) {
             bool shouldAcceptMemoryIndex = normalBits & (1 << i);
 #if defined(VK_USE_PLATFORM_ANDROID_KHR) || defined(__linux__)
-            shouldAcceptMemoryIndex &= !isHostVisibleMemoryTypeIndexForGuest(
-                &mHostVisibleMemoryVirtInfo, i);
+            shouldAcceptMemoryIndex &= !isHostVisible(&mMemoryProps, i);
 #endif  // VK_USE_PLATFORM_FUCHSIA
 
             if (shouldAcceptMemoryIndex) {
@@ -8062,7 +8004,7 @@ public:
 
 private:
     mutable RecursiveLock mLock;
-    HostVisibleMemoryVirtualizationInfo mHostVisibleMemoryVirtInfo;
+    VkPhysicalDeviceMemoryProperties mMemoryProps;
     std::unique_ptr<EmulatorFeatureInfo> mFeatureInfo;
     std::unique_ptr<GoldfishAddressSpaceBlockProvider> mGoldfishAddressSpaceBlockProvider;
 

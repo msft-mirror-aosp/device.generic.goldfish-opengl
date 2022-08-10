@@ -40,40 +40,8 @@ using android::base::guest::SubAllocator;
 
 namespace goldfish_vk {
 
-void initHostVisibleMemoryVirtualizationInfo(
-    const VkPhysicalDeviceMemoryProperties* memoryProperties,
-    HostVisibleMemoryVirtualizationInfo* info_out) {
-
-    if (info_out->initialized) return;
-
-    info_out->hostMemoryProperties = *memoryProperties;
-    info_out->initialized = true;
-
-    info_out->guestMemoryProperties = *memoryProperties;
-
-    uint32_t typeCount =
-        memoryProperties->memoryTypeCount;
-    uint32_t heapCount =
-        memoryProperties->memoryHeapCount;
-
-    uint32_t firstFreeTypeIndex = typeCount;
-    uint32_t firstFreeHeapIndex = heapCount;
-
-    for (uint32_t i = 0; i < typeCount; ++i) {
-
-        // Set up identity mapping and not-both
-        // by default, to be edited later.
-        info_out->memoryTypeIndexMappingToHost[i] = i;
-        info_out->memoryTypeIndexMappingFromHost[i] = i;
-    }
-}
-
-bool isHostVisibleMemoryTypeIndexForGuest(
-    const HostVisibleMemoryVirtualizationInfo* info,
-    uint32_t index) {
-
-    const auto& props = info->guestMemoryProperties;
-    return props.memoryTypes[index].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+bool isHostVisible(const VkPhysicalDeviceMemoryProperties* memoryProps, uint32_t index) {
+    return memoryProps->memoryTypes[index].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 }
 
 VkResult finishHostMemAllocInit(
@@ -212,13 +180,5 @@ bool canSubAlloc(android::base::guest::SubAllocator* subAlloc, VkDeviceSize size
     subAlloc->free(ptr);
     return true;
 }
-
-bool isNoFlagsMemoryTypeIndexForGuest(
-    const HostVisibleMemoryVirtualizationInfo* info,
-    uint32_t index) {
-    const auto& props = info->guestMemoryProperties;
-    return props.memoryTypes[index].propertyFlags == 0;
-}
-
 
 } // namespace goldfish_vk

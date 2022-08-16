@@ -40,108 +40,8 @@ using android::base::guest::SubAllocator;
 
 namespace goldfish_vk {
 
-void initHostVisibleMemoryVirtualizationInfo(
-    const VkPhysicalDeviceMemoryProperties* memoryProperties,
-    HostVisibleMemoryVirtualizationInfo* info_out) {
-
-    if (info_out->initialized) return;
-
-    info_out->hostMemoryProperties = *memoryProperties;
-    info_out->initialized = true;
-
-    info_out->guestMemoryProperties = *memoryProperties;
-
-    uint32_t typeCount =
-        memoryProperties->memoryTypeCount;
-    uint32_t heapCount =
-        memoryProperties->memoryHeapCount;
-
-    uint32_t firstFreeTypeIndex = typeCount;
-    uint32_t firstFreeHeapIndex = heapCount;
-
-    for (uint32_t i = 0; i < typeCount; ++i) {
-
-        // Set up identity mapping and not-both
-        // by default, to be edited later.
-        info_out->memoryTypeIndexMappingToHost[i] = i;
-        info_out->memoryTypeIndexMappingFromHost[i] = i;
-
-        info_out->memoryTypeBitsShouldAdvertiseBoth[i] = false;
-
-        const auto& type = memoryProperties->memoryTypes[i];
-
-        if (type.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
-            uint32_t heapIndex = type.heapIndex;
-
-            auto& guestMemoryType =
-                info_out->guestMemoryProperties.memoryTypes[i];
-
-            auto& newVirtualMemoryType =
-                info_out->guestMemoryProperties.memoryTypes[firstFreeTypeIndex];
-
-            auto& newVirtualMemoryHeap =
-                info_out->guestMemoryProperties.memoryHeaps[firstFreeHeapIndex];
-
-            // Remove all references to host visible in the guest memory type at
-            // index i, while transferring them to the new virtual memory type.
-            newVirtualMemoryType = type;
-
-            // Set this memory type to have a separate heap.
-            newVirtualMemoryType.heapIndex = firstFreeHeapIndex;
-
-            newVirtualMemoryType.propertyFlags =
-                type.propertyFlags &
-                ~(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-            guestMemoryType.propertyFlags =
-                type.propertyFlags & \
-                ~(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
-                  VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
-
-            // In the corresponding new memory heap, copy the information over,
-            // remove device local flags, and resize it based on what is
-            // supported by the PCI device.
-            newVirtualMemoryHeap =
-                memoryProperties->memoryHeaps[heapIndex];
-            newVirtualMemoryHeap.flags =
-                newVirtualMemoryHeap.flags &
-                ~(VK_MEMORY_HEAP_DEVICE_LOCAL_BIT);
-
-            // TODO: Figure out how to support bigger sizes
-            newVirtualMemoryHeap.size = VIRTUAL_HOST_VISIBLE_HEAP_SIZE;
-
-            info_out->memoryTypeIndexMappingToHost[firstFreeTypeIndex] = i;
-            info_out->memoryTypeIndexMappingFromHost[i] = firstFreeTypeIndex;
-
-            // Was the original memory type also a device local type? If so,
-            // advertise both types in resulting type bits.
-            info_out->memoryTypeBitsShouldAdvertiseBoth[i] =
-                type.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT ||
-                type.propertyFlags == 0;
-
-            ++firstFreeTypeIndex;
-
-            // Explicitly only create one new heap.
-            // ++firstFreeHeapIndex;
-        }
-    }
-
-    info_out->guestMemoryProperties.memoryTypeCount = firstFreeTypeIndex;
-    info_out->guestMemoryProperties.memoryHeapCount = firstFreeHeapIndex + 1;
-
-    for (uint32_t i = info_out->guestMemoryProperties.memoryTypeCount; i < VK_MAX_MEMORY_TYPES; ++i) {
-        memset(&info_out->guestMemoryProperties.memoryTypes[i],
-               0x0, sizeof(VkMemoryType));
-    }
-}
-
-bool isHostVisibleMemoryTypeIndexForGuest(
-    const HostVisibleMemoryVirtualizationInfo* info,
-    uint32_t index) {
-
-    const auto& props = info->guestMemoryProperties;
-    return props.memoryTypes[index].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+bool isHostVisible(const VkPhysicalDeviceMemoryProperties* memoryProps, uint32_t index) {
+    return memoryProps->memoryTypes[index].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 }
 
 VkResult finishHostMemAllocInit(
@@ -149,7 +49,6 @@ VkResult finishHostMemAllocInit(
     VkDevice device,
     uint32_t memoryTypeIndex,
     VkDeviceSize nonCoherentAtomSize,
-    VkDeviceSize allocSize,
     VkDeviceSize mappedSize,
     uint8_t* mappedPtr,
     HostMemAlloc* out) {
@@ -157,7 +56,6 @@ VkResult finishHostMemAllocInit(
     out->device = device;
     out->memoryTypeIndex = memoryTypeIndex;
     out->nonCoherentAtomSize = nonCoherentAtomSize;
-    out->allocSize = allocSize;
     out->mappedSize = mappedSize;
     out->mappedPtr = mappedPtr;
 
@@ -263,8 +161,6 @@ void subAllocHostMemory(
 
     out->subMemory = new_from_host_VkDeviceMemory(VK_NULL_HANDLE);
     out->subAlloc = alloc->subAlloc;
-    out->isDeviceAddressMemoryAllocation = alloc->isDeviceAddressMemoryAllocation;
-    out->memoryTypeIndex = alloc->memoryTypeIndex;
 }
 
 bool subFreeHostMemory(SubAlloc* toFree) {
@@ -284,13 +180,5 @@ bool canSubAlloc(android::base::guest::SubAllocator* subAlloc, VkDeviceSize size
     subAlloc->free(ptr);
     return true;
 }
-
-bool isNoFlagsMemoryTypeIndexForGuest(
-    const HostVisibleMemoryVirtualizationInfo* info,
-    uint32_t index) {
-    const auto& props = info->guestMemoryProperties;
-    return props.memoryTypes[index].propertyFlags == 0;
-}
-
 
 } // namespace goldfish_vk

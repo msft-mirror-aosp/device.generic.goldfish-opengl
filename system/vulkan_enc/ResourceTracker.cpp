@@ -106,13 +106,9 @@ VkResult createAndroidHardwareBuffer(
   return VK_SUCCESS;
 }
 
-namespace goldfish_vk {
-struct HostVisibleMemoryVirtualizationInfo;
-}
-
 VkResult getAndroidHardwareBufferPropertiesANDROID(
     Gralloc *grallocHelper,
-    const goldfish_vk::HostVisibleMemoryVirtualizationInfo*,
+    const VkPhysicalDeviceMemoryProperties* memProps,
     VkDevice,
     const AHardwareBuffer*,
     VkAndroidHardwareBufferPropertiesANDROID*) { return VK_SUCCESS; }
@@ -182,8 +178,6 @@ inline_memfd_create(const char *name, unsigned int flags) {
 #endif
 #endif
 
-using android::aligned_buf_alloc;
-using android::aligned_buf_free;
 using android::base::Optional;
 using android::base::guest::AutoLock;
 using android::base::guest::RecursiveLock;
@@ -323,21 +317,14 @@ public:
         std::vector<std::pair<PFN_vkDeviceMemoryReportCallbackEXT, void *>> deviceMemoryReportCallbacks;
     };
 
-    struct VirtioGpuHostmemResourceInfo {
-        uint32_t resourceId = 0;
-        int primeFd = -1;
-    };
-
     struct VkDeviceMemory_Info {
         VkDeviceSize allocationSize = 0;
         VkDeviceSize mappedSize = 0;
         uint8_t* mappedPtr = nullptr;
         uint32_t memoryTypeIndex = 0;
-        bool virtualHostVisibleBacking = false;
         bool directMapped = false;
         GoldfishAddressSpaceBlock*
             goldfishAddressSpaceBlock = nullptr;
-        VirtioGpuHostmemResourceInfo resInfo;
         SubAlloc subAlloc;
         AHardwareBuffer* ahw = nullptr;
         bool imported = false;
@@ -563,17 +550,6 @@ public:
 
         if (memInfo.vmoHandle != ZX_HANDLE_INVALID) {
             zx_handle_close(memInfo.vmoHandle);
-        }
-
-        if (memInfo.mappedPtr &&
-            !memInfo.virtualHostVisibleBacking &&
-            !memInfo.directMapped) {
-            aligned_buf_free(memInfo.mappedPtr);
-        }
-
-        if (memInfo.directMapped) {
-            ALOGE("%s: warning: direct mapped memory never goes to unregister!\n", __func__);
-            subFreeHostMemory(&memInfo.subAlloc);
         }
 
         delete memInfo.goldfishAddressSpaceBlock;
@@ -856,9 +832,6 @@ public:
         info.physdev = physdev;
         info.props = props;
         info.memProps = memProps;
-        initHostVisibleMemoryVirtualizationInfo(
-            &memProps,
-            &mHostVisibleMemoryVirtInfo);
         info.apiVersion = props.apiVersion;
 
         const VkBaseInStructure *extensionCreateInfo =
@@ -958,19 +931,6 @@ public:
 
         const auto& info = it->second;
         return info.mappedSize;
-    }
-
-    VkDeviceSize getNonCoherentExtendedSize(VkDevice device, VkDeviceSize basicSize) const {
-        AutoLock<RecursiveLock> lock(mLock);
-        const auto it = info_VkDevice.find(device);
-        if (it == info_VkDevice.end()) return basicSize;
-        const auto& info = it->second;
-
-        VkDeviceSize nonCoherentAtomSize =
-            info.props.limits.nonCoherentAtomSize;
-        VkDeviceSize atoms =
-            (basicSize + nonCoherentAtomSize - 1) / nonCoherentAtomSize;
-        return atoms * nonCoherentAtomSize;
     }
 
     bool isValidMemoryRange(const VkMappedMemoryRange& range) const {
@@ -1119,9 +1079,10 @@ public:
         (void)memoryCount;
         (void)offsetCount;
         (void)sizeCount;
-
-        const auto& hostVirt =
-            mHostVisibleMemoryVirtInfo;
+        (void)typeIndex;
+        (void)typeIndexCount;
+        (void)typeBits;
+        (void)typeBitsCount;
 
         if (memory) {
             AutoLock<RecursiveLock> lock (mLock);
@@ -1154,22 +1115,6 @@ public:
                 (void)size;
             }
         }
-
-        for (uint32_t i = 0; i < typeIndexCount; ++i) {
-            typeIndex[i] =
-                hostVirt.memoryTypeIndexMappingToHost[typeIndex[i]];
-        }
-
-        for (uint32_t i = 0; i < typeBitsCount; ++i) {
-            uint32_t bits = 0;
-            for (uint32_t j = 0; j < VK_MAX_MEMORY_TYPES; ++j) {
-                bool guestHas = typeBits[i] & (1 << j);
-                uint32_t hostIndex =
-                    hostVirt.memoryTypeIndexMappingToHost[j];
-                bits |= guestHas ? (1 << hostIndex) : 0;
-            }
-            typeBits[i] = bits;
-        }
     }
 
     void deviceMemoryTransform_fromhost(
@@ -1179,41 +1124,16 @@ public:
         uint32_t* typeIndex, uint32_t typeIndexCount,
         uint32_t* typeBits, uint32_t typeBitsCount) {
 
+        (void)memory;
         (void)memoryCount;
+        (void)offset;
         (void)offsetCount;
+        (void)size;
         (void)sizeCount;
-
-        const auto& hostVirt =
-            mHostVisibleMemoryVirtInfo;
-
-        AutoLock<RecursiveLock> lock (mLock);
-
-        for (uint32_t i = 0; i < memoryCount; ++i) {
-            // TODO
-            (void)memory;
-            (void)offset;
-            (void)size;
-        }
-
-        for (uint32_t i = 0; i < typeIndexCount; ++i) {
-            typeIndex[i] =
-                hostVirt.memoryTypeIndexMappingFromHost[typeIndex[i]];
-        }
-
-        for (uint32_t i = 0; i < typeBitsCount; ++i) {
-            uint32_t bits = 0;
-            for (uint32_t j = 0; j < VK_MAX_MEMORY_TYPES; ++j) {
-                bool hostHas = typeBits[i] & (1 << j);
-                uint32_t guestIndex =
-                    hostVirt.memoryTypeIndexMappingFromHost[j];
-                bits |= hostHas ? (1 << guestIndex) : 0;
-
-                if (hostVirt.memoryTypeBitsShouldAdvertiseBoth[j]) {
-                    bits |= hostHas ? (1 << j) : 0;
-                }
-            }
-            typeBits[i] = bits;
-        }
+        (void)typeIndex;
+        (void)typeIndexCount;
+        (void)typeBits;
+        (void)typeBitsCount;
     }
 
     void transformImpl_VkExternalMemoryProperties_fromhost(
@@ -1379,6 +1299,10 @@ public:
             "VK_KHR_external_fence_fd",
             "VK_EXT_device_memory_report",
 #endif
+#if !defined(VK_USE_PLATFORM_ANDROID_KHR) && defined(__linux__)
+           "VK_KHR_create_renderpass2",
+           "VK_KHR_imageless_framebuffer",
+#endif
         };
 
         VkEncoder* enc = (VkEncoder*)context;
@@ -1405,9 +1329,9 @@ public:
             getHostDeviceExtensionIndex(
                 "VK_KHR_external_semaphore_fd") != -1;
 
-        ALOGD("%s: host has ext semaphore? win32 %d posix %d\n", __func__,
-                hostHasWin32ExternalSemaphore,
-                hostHasPosixExternalSemaphore);
+        D("%s: host has ext semaphore? win32 %d posix %d\n", __func__,
+          hostHasWin32ExternalSemaphore,
+          hostHasPosixExternalSemaphore);
 
         bool hostSupportsExternalSemaphore =
             hostHasWin32ExternalSemaphore ||
@@ -1678,13 +1602,9 @@ public:
         VkPhysicalDeviceMemoryProperties* out) {
 
         (void)physdev;
-        // If the device supports VK_MAX_MEMORY_HEAPS heaps and VK_MAX_MEMORY_TYPES, the current
-        // logic will break unless refactored (see b:233803018 for progress).
-        initHostVisibleMemoryVirtualizationInfo(
-            out,
-            &mHostVisibleMemoryVirtInfo);
-
-        *out = mHostVisibleMemoryVirtInfo.guestMemoryProperties;
+        // gfxstream decides which physical device to expose to the guest on startup.
+        // Otherwise, we would need a physical device to properties mapping.
+        mMemoryProps = *out;
     }
 
     void on_vkGetPhysicalDeviceMemoryProperties2(
@@ -1692,14 +1612,7 @@ public:
         VkPhysicalDevice physdev,
         VkPhysicalDeviceMemoryProperties2* out) {
 
-        (void)physdev;
-        // If the device supports VK_MAX_MEMORY_HEAPS heaps and VK_MAX_MEMORY_TYPES, the current
-        // logic will break unless refactored (see b:233803018 for progress).
-        initHostVisibleMemoryVirtualizationInfo(
-            &out->memoryProperties,
-            &mHostVisibleMemoryVirtInfo);
-
-        out->memoryProperties = mHostVisibleMemoryVirtInfo.guestMemoryProperties;
+        on_vkGetPhysicalDeviceMemoryProperties(nullptr, physdev, &out->memoryProperties);
     }
 
     void on_vkGetDeviceQueue(void*,
@@ -1803,7 +1716,7 @@ public:
             ResourceTracker::threadingCallbacks.hostConnectionGetFunc()->grallocHelper();
         return getAndroidHardwareBufferPropertiesANDROID(
             grallocHelper,
-            &mHostVisibleMemoryVirtInfo,
+            &mMemoryProps,
             device, buffer, pProperties);
     }
 
@@ -2602,10 +2515,9 @@ public:
             enc->vkGetLinearImageLayout2GOOGLE(device, &createInfoDup, &offset,
                                             &rowPitchAlignment,
                                             true /* do lock */);
-            ALOGD(
-                "vkGetLinearImageLayout2GOOGLE: format %d offset %lu "
-                "rowPitchAlignment = %lu",
-                (int)createInfo->format, offset, rowPitchAlignment);
+            D("vkGetLinearImageLayout2GOOGLE: format %d offset %lu "
+              "rowPitchAlignment = %lu",
+              (int)createInfo->format, offset, rowPitchAlignment);
         }
 
         imageConstraints.min_coded_width = createInfo->extent.width;
@@ -3606,7 +3518,6 @@ public:
                     if (blocks[i].initialized &&
                         blocks[i].initResult == VK_SUCCESS &&
                         !blocks[i].isDedicated &&
-                        blocks[i].isDeviceAddressMemoryAllocation == isDeviceAddressMemoryAllocation &&
                         canSubAlloc(
                             blocks[i].subAlloc,
                             pAllocateInfo->allocationSize)) {
@@ -3622,26 +3533,15 @@ public:
             auto& hostMemAlloc = blocks.back();
 
             hostMemAlloc.isDedicated = isDedicated;
-
-            // Uninitialized block; allocate on host.
-            static constexpr VkDeviceSize oneMb = 1048576;
-            // This needs to be a power of 2 that is at least the min alignment needed in HostVisibleMemoryVirtualization.cpp.
-            static constexpr VkDeviceSize biggestPage = 65536;
-            static constexpr VkDeviceSize kDefaultHostMemBlockSize =
-                16 * oneMb; // 16 mb
             VkDeviceSize roundedUpAllocSize =
-                oneMb * ((pAllocateInfo->allocationSize + oneMb - 1) / oneMb);
+                kMegaBtye * ((pAllocateInfo->allocationSize + kMegaBtye - 1) / kMegaBtye);
 
             // If dedicated, use a smaller "page rounded alloc size".
             VkDeviceSize pageRoundedAllocSize =
-                biggestPage * ((pAllocateInfo->allocationSize + biggestPage - 1) / biggestPage);
-
-            VkDeviceSize virtualHeapSize = VIRTUAL_HOST_VISIBLE_HEAP_SIZE;
+                kLargestPageSize * ((pAllocateInfo->allocationSize + kLargestPageSize - 1) / kLargestPageSize);
 
             VkDeviceSize blockSizeNeeded =
-                std::max(roundedUpAllocSize,
-                    std::min(virtualHeapSize,
-                             kDefaultHostMemBlockSize));
+                std::max(roundedUpAllocSize, kDefaultHostMemBlockSize);
 
             VkMemoryAllocateInfo allocInfoForHost = vk_make_orphan_copy(*pAllocateInfo);
             vk_struct_chain_iterator structChainIter = vk_make_chain_iterator(&allocInfoForHost);
@@ -3656,7 +3556,6 @@ public:
 
             // Support device address capture/replay allocations
             if (isDeviceAddressMemoryAllocation) {
-                hostMemAlloc.isDeviceAddressMemoryAllocation = true;
                 if (allocFlagsInfoPtr) {
                     ALOGV("%s: has alloc flags\n", __func__);
                     allocFlagsInfo = *allocFlagsInfoPtr;
@@ -3715,10 +3614,10 @@ public:
                 enc->vkGetMemoryHostAddressInfoGOOGLE(
                         device, hostMemAlloc.memory,
                         &hvaSizeId[0], &hvaSizeId[1], &hvaSizeId[2], true /* do lock */);
-                ALOGD("%s: hvaOff, size: 0x%llx 0x%llx id: 0x%llx\n", __func__,
-                        (unsigned long long)hvaSizeId[0],
-                        (unsigned long long)hvaSizeId[1],
-                        (unsigned long long)hvaSizeId[2]);
+                D("%s: hvaOff, size: 0x%llx 0x%llx id: 0x%llx\n", __func__,
+                  (unsigned long long)hvaSizeId[0],
+                  (unsigned long long)hvaSizeId[1],
+                  (unsigned long long)hvaSizeId[2]);
                 mLock.lock();
 
                 struct drm_virtgpu_resource_create_blob drm_rc_blob = { 0 };
@@ -3787,7 +3686,6 @@ public:
 
             hostMemInfo.mappedPtr =
                 (uint8_t*)(uintptr_t)directMappedAddr;
-            hostMemInfo.virtualHostVisibleBacking = true;
             ALOGV("%s: Set mapped ptr to %p\n", __func__, hostMemInfo.mappedPtr);
 
             VkResult hostMemAllocRes =
@@ -3796,7 +3694,6 @@ public:
                     device,
                     pAllocateInfo->memoryTypeIndex,
                     nonCoherentAtomSize,
-                    hostMemInfo.allocationSize,
                     hostMemInfo.mappedSize,
                     hostMemInfo.mappedPtr,
                     &hostMemAlloc);
@@ -3942,15 +3839,13 @@ public:
 
 #if defined(VK_USE_PLATFORM_ANDROID_KHR) || defined(__linux__)
         shouldPassThroughDedicatedAllocInfo &=
-            !isHostVisibleMemoryTypeIndexForGuest(
-                &mHostVisibleMemoryVirtInfo, pAllocateInfo->memoryTypeIndex);
+            !isHostVisible(&mMemoryProps, pAllocateInfo->memoryTypeIndex);
 
         if (!exportAllocateInfoPtr &&
             (importAhbInfoPtr || importBufferCollectionInfoPtr ||
              importBufferCollectionInfoPtrX || importVmoInfoPtr) &&
             dedicatedAllocInfoPtr &&
-            isHostVisibleMemoryTypeIndexForGuest(
-                &mHostVisibleMemoryVirtInfo, pAllocateInfo->memoryTypeIndex)) {
+            isHostVisible(&mMemoryProps, pAllocateInfo->memoryTypeIndex)) {
             ALOGE(
                 "FATAL: It is not yet supported to import-allocate "
                 "external memory that is both host visible and dedicated.");
@@ -4004,6 +3899,7 @@ public:
         bool isImport = importAhb || importBufferCollection ||
                         importBufferCollectionX || importVmo;
 
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
         if (exportAhb) {
             bool hasDedicatedImage = dedicatedAllocInfoPtr &&
                 (dedicatedAllocInfoPtr->image != VK_NULL_HANDLE);
@@ -4073,13 +3969,22 @@ public:
         }
 
         if (ahw) {
-            ALOGD("%s: Import AHardwareBuffer", __func__);
-            importCbInfo.colorBuffer =
-                ResourceTracker::threadingCallbacks.hostConnectionGetFunc()->grallocHelper()->
-                    getHostHandle(AHardwareBuffer_getNativeHandle(ahw));
-            vk_append_struct(&structChainIter, &importCbInfo);
-        }
+            D("%s: Import AHardwareBuffer", __func__);
+            const uint32_t hostHandle =
+                ResourceTracker::threadingCallbacks.hostConnectionGetFunc()->grallocHelper()
+                    ->getHostHandle(AHardwareBuffer_getNativeHandle(ahw));
 
+            AHardwareBuffer_Desc ahbDesc = {};
+            AHardwareBuffer_describe(ahw, &ahbDesc);
+            if (ahbDesc.format == AHARDWAREBUFFER_FORMAT_BLOB) {
+                importBufferInfo.buffer = hostHandle;
+                vk_append_struct(&structChainIter, &importBufferInfo);
+            } else {
+                importCbInfo.colorBuffer = hostHandle;
+                vk_append_struct(&structChainIter, &importCbInfo);
+            }
+        }
+#endif
         zx_handle_t vmo_handle = ZX_HANDLE_INVALID;
 
 #ifdef VK_USE_PLATFORM_FUCHSIA
@@ -4288,17 +4193,15 @@ public:
                     abort();
                 }
 
-                bool isHostVisible = isHostVisibleMemoryTypeIndexForGuest(
-                    &mHostVisibleMemoryVirtInfo,
-                    pAllocateInfo->memoryTypeIndex);
-
-                // Only device-local images need to create color buffer; for
-                // host-visible images, the color buffer is already created when
-                // sysmem allocates memory.
-                if (!isHostVisible) {
-                    if (pImageCreateInfo) {
-                        fuchsia_hardware_goldfish::wire::
-                            ColorBufferFormatType format;
+                if (pImageCreateInfo) {
+                    // Only device-local images need to create color buffer; for
+                    // host-visible images, the color buffer is already created
+                    // when sysmem allocates memory. Here we use the |tiling|
+                    // field of image creation info to determine if it uses
+                    // host-visible memory.
+                    bool isLinear = pImageCreateInfo->tiling == VK_IMAGE_TILING_LINEAR;
+                    if (!isLinear) {
+                        fuchsia_hardware_goldfish::wire::ColorBufferFormatType format;
                         switch (pImageCreateInfo->format) {
                             case VK_FORMAT_B8G8R8A8_SINT:
                             case VK_FORMAT_B8G8R8A8_UNORM:
@@ -4306,8 +4209,8 @@ public:
                             case VK_FORMAT_B8G8R8A8_SNORM:
                             case VK_FORMAT_B8G8R8A8_SSCALED:
                             case VK_FORMAT_B8G8R8A8_USCALED:
-                                format = fuchsia_hardware_goldfish::wire::
-                                    ColorBufferFormatType::kBgra;
+                                format = fuchsia_hardware_goldfish::wire::ColorBufferFormatType::
+                                        kBgra;
                                 break;
                             case VK_FORMAT_R8G8B8A8_SINT:
                             case VK_FORMAT_R8G8B8A8_UNORM:
@@ -4315,8 +4218,8 @@ public:
                             case VK_FORMAT_R8G8B8A8_SNORM:
                             case VK_FORMAT_R8G8B8A8_SSCALED:
                             case VK_FORMAT_R8G8B8A8_USCALED:
-                                format = fuchsia_hardware_goldfish::wire::
-                                    ColorBufferFormatType::kRgba;
+                                format = fuchsia_hardware_goldfish::wire::ColorBufferFormatType::
+                                        kRgba;
                                 break;
                             case VK_FORMAT_R8_UNORM:
                             case VK_FORMAT_R8_UINT:
@@ -4325,8 +4228,8 @@ public:
                             case VK_FORMAT_R8_SINT:
                             case VK_FORMAT_R8_SSCALED:
                             case VK_FORMAT_R8_SRGB:
-                                format = fuchsia_hardware_goldfish::wire::
-                                    ColorBufferFormatType::kLuminance;
+                                format = fuchsia_hardware_goldfish::wire::ColorBufferFormatType::
+                                        kLuminance;
                                 break;
                             case VK_FORMAT_R8G8_UNORM:
                             case VK_FORMAT_R8G8_UINT:
@@ -4335,8 +4238,8 @@ public:
                             case VK_FORMAT_R8G8_SINT:
                             case VK_FORMAT_R8G8_SSCALED:
                             case VK_FORMAT_R8G8_SRGB:
-                                format = fuchsia_hardware_goldfish::wire::
-                                    ColorBufferFormatType::kRg;
+                                format =
+                                        fuchsia_hardware_goldfish::wire::ColorBufferFormatType::kRg;
                                 break;
                             default:
                                 ALOGE("Unsupported format: %d",
@@ -4346,21 +4249,20 @@ public:
 
                         fidl::Arena arena;
                         fuchsia_hardware_goldfish::wire::CreateColorBuffer2Params createParams(
-                            arena);
+                                arena);
                         createParams.set_width(pImageCreateInfo->extent.width)
-                            .set_height(pImageCreateInfo->extent.height)
-                            .set_format(format)
-                            .set_memory_property(
-                                fuchsia_hardware_goldfish::wire::kMemoryPropertyDeviceLocal);
+                                .set_height(pImageCreateInfo->extent.height)
+                                .set_format(format)
+                                .set_memory_property(fuchsia_hardware_goldfish::wire::
+                                                             kMemoryPropertyDeviceLocal);
 
-                        auto result = mControlDevice->CreateColorBuffer2(
-                            std::move(vmo_copy), std::move(createParams));
+                        auto result = mControlDevice->CreateColorBuffer2(std::move(vmo_copy),
+                                                                         std::move(createParams));
                         if (!result.ok() || result->res != ZX_OK) {
                             if (result.ok() &&
                                 result->res == ZX_ERR_ALREADY_EXISTS) {
-                                ALOGD(
-                                    "CreateColorBuffer: color buffer already "
-                                    "exists\n");
+                                ALOGD("CreateColorBuffer: color buffer already "
+                                      "exists\n");
                             } else {
                                 ALOGE("CreateColorBuffer failed: %d:%d",
                                       result.status(),
@@ -4388,6 +4290,10 @@ public:
                         abort();
                     }
                 }
+            } else {
+                ALOGW("Dedicated image / buffer not available. Cannot create "
+                      "BufferCollection to export VMOs.");
+                return VK_ERROR_OUT_OF_DEVICE_MEMORY;
             }
         }
 
@@ -4423,9 +4329,7 @@ public:
         }
 #endif
 
-        if (!isHostVisibleMemoryTypeIndexForGuest(
-                &mHostVisibleMemoryVirtInfo,
-                finalAllocInfo.memoryTypeIndex)) {
+        if (!isHostVisible(&mMemoryProps, finalAllocInfo.memoryTypeIndex)) {
             input_result =
                 enc->vkAllocateMemory(
                     device, &finalAllocInfo, pAllocator, pMemory, true /* do lock */);
@@ -4482,10 +4386,6 @@ public:
                 return VK_ERROR_OUT_OF_HOST_MEMORY;
             }
 
-            D("host visible alloc (external): "
-              "size 0x%llx host ptr %p mapped size 0x%llx",
-              (unsigned long long)finalAllocInfo.allocationSize, mappedPtr,
-              (unsigned long long)mappedSize);
             setDeviceMemoryInfo(device, *pMemory,
                 finalAllocInfo.allocationSize, finalAllocInfo.allocationSize,
                 reinterpret_cast<uint8_t*>(addr), finalAllocInfo.memoryTypeIndex,
@@ -4595,7 +4495,7 @@ public:
         }
 
         VkDeviceMemory baseMemory = info.subAlloc.baseMemory;
-        uint32_t memoryTypeIndex = info.subAlloc.memoryTypeIndex;
+        uint32_t memoryTypeIndex = info.memoryTypeIndex;
         // If this was a device address memory allocation,
         // free it right away.
         if (subFreeHostMemory(&info.subAlloc)) {
@@ -4717,8 +4617,7 @@ public:
         for (uint32_t i = 0; i < VK_MAX_MEMORY_TYPES; ++i) {
             bool shouldAcceptMemoryIndex = normalBits & (1 << i);
 #if defined(VK_USE_PLATFORM_ANDROID_KHR) || defined(__linux__)
-            shouldAcceptMemoryIndex &= !isHostVisibleMemoryTypeIndexForGuest(
-                &mHostVisibleMemoryVirtInfo, i);
+            shouldAcceptMemoryIndex &= !isHostVisible(&mMemoryProps, i);
 #endif  // VK_USE_PLATFORM_FUCHSIA
 
             if (shouldAcceptMemoryIndex) {
@@ -5220,7 +5119,7 @@ public:
             VK_EXTERNAL_FENCE_FEATURE_IMPORTABLE_BIT |
             VK_EXTERNAL_FENCE_FEATURE_EXPORTABLE_BIT;
 
-        ALOGD("%s: asked for sync fd, set the features\n", __func__);
+        D("%s: asked for sync fd, set the features\n", __func__);
 #endif
     }
 
@@ -8107,7 +8006,7 @@ public:
 
 private:
     mutable RecursiveLock mLock;
-    HostVisibleMemoryVirtualizationInfo mHostVisibleMemoryVirtInfo;
+    VkPhysicalDeviceMemoryProperties mMemoryProps;
     std::unique_ptr<EmulatorFeatureInfo> mFeatureInfo;
     std::unique_ptr<GoldfishAddressSpaceBlockProvider> mGoldfishAddressSpaceBlockProvider;
 
@@ -8174,10 +8073,6 @@ uint8_t* ResourceTracker::getMappedPointer(VkDeviceMemory memory) {
 
 VkDeviceSize ResourceTracker::getMappedSize(VkDeviceMemory memory) {
     return mImpl->getMappedSize(memory);
-}
-
-VkDeviceSize ResourceTracker::getNonCoherentExtendedSize(VkDevice device, VkDeviceSize basicSize) const {
-    return mImpl->getNonCoherentExtendedSize(device, basicSize);
 }
 
 bool ResourceTracker::isValidMemoryRange(const VkMappedMemoryRange& range) const {

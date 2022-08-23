@@ -62,7 +62,7 @@ getAndroidHardwareBufferUsageFromVkUsage(const VkImageCreateFlags vk_create,
 
 VkResult getAndroidHardwareBufferPropertiesANDROID(
     Gralloc* grallocHelper,
-    const VkPhysicalDeviceMemoryProperties* memProps,
+    const HostVisibleMemoryVirtualizationInfo* hostMemVirtInfo,
     VkDevice,
     const AHardwareBuffer* buffer,
     VkAndroidHardwareBufferPropertiesANDROID* pProperties) {
@@ -231,12 +231,12 @@ VkResult getAndroidHardwareBufferPropertiesANDROID(
         return VK_ERROR_INVALID_EXTERNAL_HANDLE;
     }
 
-    // Disallow host visible (hard to make actual dedicated allocs)
+    // Disallow host visible and noflags heaps for now
+    // (hard to make actual dedicated allocs)
     uint32_t memoryTypeBits = 0;
-    for (uint32_t i = 0; i < memProps->memoryTypeCount; ++i) {
-        if (isHostVisible(memProps, i))
-            continue;
-
+    for (uint32_t i = 0; i < VK_MAX_MEMORY_TYPES; ++i) {
+        if (isNoFlagsMemoryTypeIndexForGuest(hostMemVirtInfo, i)) continue;
+        if (isHostVisibleMemoryTypeIndexForGuest(hostMemVirtInfo, i)) continue;
         memoryTypeBits |= (1 << i);
     }
 

@@ -29,14 +29,6 @@ namespace android {
 
 /* SimpleInterface */
 
-static C2R SubscribedParamIndicesSetter(
-        bool mayBlock, C2InterfaceHelper::C2P<C2SubscribedParamIndicesTuning> &me) {
-    (void)mayBlock;
-    (void)me;
-
-    return C2R::Ok();
-}
-
 SimpleInterface<void>::BaseParams::BaseParams(
     const std::shared_ptr<C2ReflectorHelper> &reflector, C2String name,
     C2Component::kind_t kind, C2Component::domain_t domain, C2String mediaType,
@@ -204,7 +196,9 @@ SimpleInterface<void>::BaseParams::BaseParams(
             .withDefault(C2SubscribedParamIndicesTuning::AllocShared(0u))
             .withFields({C2F(mSubscribedParamIndices, m.values[0]).any(),
                          C2F(mSubscribedParamIndices, m.values).any()})
-            .withSetter(SubscribedParamIndicesSetter)
+            .withSetter(
+                Setter<
+                    C2SubscribedParamIndicesTuning>::NonStrictValuesWithNoDeps)
             .build());
 
     /* TODO

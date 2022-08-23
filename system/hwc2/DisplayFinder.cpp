@@ -110,7 +110,7 @@ HWC2::Error findGoldfishPrimaryDisplay(
           rcEnc->rcGetFBDisplayConfigsParam(rcEnc, configId, FB_HEIGHT),  //
           rcEnc->rcGetFBDisplayConfigsParam(rcEnc, configId, FB_XDPI),    //
           rcEnc->rcGetFBDisplayConfigsParam(rcEnc, configId, FB_YDPI),    //
-          getVsyncForDisplay(drmPresenter, display.displayId)             //
+          getVsyncForDisplay(drmPresenter, configId)                      //
           ));
     }
   } else {

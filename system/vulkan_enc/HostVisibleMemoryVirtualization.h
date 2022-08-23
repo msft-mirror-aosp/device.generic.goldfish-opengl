@@ -16,11 +16,7 @@
 
 #include <vulkan/vulkan.h>
 
-constexpr uint64_t kMegaBtye = 1048576;
-// This needs to be a power of 2 that is at least the min alignment needed in HostVisibleMemoryVirtualization.cpp.
-constexpr uint64_t kLargestPageSize = 65536;
-constexpr uint64_t kDefaultHostMemBlockSize = 16 * kMegaBtye; // 16 mb
-constexpr uint64_t kHostVisibleHeapSize = 512 * kMegaBtye;    // 512 mb
+#define VIRTUAL_HOST_VISIBLE_HEAP_SIZE 512ULL * (1048576ULL)
 
 struct EmulatorFeatureInfo;
 
@@ -38,7 +34,26 @@ namespace goldfish_vk {
 
 class VkEncoder;
 
-bool isHostVisible(const VkPhysicalDeviceMemoryProperties *memoryProps, uint32_t index);
+struct HostVisibleMemoryVirtualizationInfo {
+    bool initialized = false;
+    bool memoryPropertiesSupported;
+
+    VkPhysicalDeviceMemoryProperties hostMemoryProperties;
+    VkPhysicalDeviceMemoryProperties guestMemoryProperties;
+
+    uint32_t memoryTypeIndexMappingToHost[VK_MAX_MEMORY_TYPES];
+    uint32_t memoryTypeIndexMappingFromHost[VK_MAX_MEMORY_TYPES];
+
+    bool memoryTypeBitsShouldAdvertiseBoth[VK_MAX_MEMORY_TYPES];
+};
+
+void initHostVisibleMemoryVirtualizationInfo(
+    const VkPhysicalDeviceMemoryProperties* memoryProperties,
+    HostVisibleMemoryVirtualizationInfo* info_out);
+
+bool isHostVisibleMemoryTypeIndexForGuest(
+    const HostVisibleMemoryVirtualizationInfo* info,
+    uint32_t index);
 
 struct HostMemAlloc {
     bool initialized = false;
@@ -47,6 +62,7 @@ struct HostMemAlloc {
     uint32_t memoryTypeIndex = 0;
     VkDeviceSize nonCoherentAtomSize = 0;
     VkDeviceMemory memory = VK_NULL_HANDLE;
+    VkDeviceSize allocSize = 0;
     VkDeviceSize mappedSize = 0;
     uint8_t* mappedPtr = nullptr;
     android::base::guest::SubAllocator* subAlloc = nullptr;
@@ -55,6 +71,7 @@ struct HostMemAlloc {
     uint32_t boHandle = 0;
     uint64_t memoryAddr = 0;
     size_t memorySize = 0;
+    bool isDeviceAddressMemoryAllocation = false;
     bool isDedicated = false;
 };
 
@@ -63,6 +80,7 @@ VkResult finishHostMemAllocInit(
     VkDevice device,
     uint32_t memoryTypeIndex,
     VkDeviceSize nonCoherentAtomSize,
+    VkDeviceSize allocSize,
     VkDeviceSize mappedSize,
     uint8_t* mappedPtr,
     HostMemAlloc* out);
@@ -95,5 +113,9 @@ void subAllocHostMemory(
 bool subFreeHostMemory(SubAlloc* toFree);
 
 bool canSubAlloc(android::base::guest::SubAllocator* subAlloc, VkDeviceSize size);
+
+bool isNoFlagsMemoryTypeIndexForGuest(
+    const HostVisibleMemoryVirtualizationInfo* info,
+    uint32_t index);
 
 } // namespace goldfish_vk

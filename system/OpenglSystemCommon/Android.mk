@@ -7,6 +7,7 @@ $(call emugl-import,libGoldfishAddressSpace$(GOLDFISH_OPENGL_LIB_SUFFIX))
 $(call emugl-import,libqemupipe$(GOLDFISH_OPENGL_LIB_SUFFIX))
 $(call emugl-import,libgralloc_cb$(GOLDFISH_OPENGL_LIB_SUFFIX))
 else
+$(call emugl-export,STATIC_LIBRARIES,libplatform)
 $(call emugl-export,STATIC_LIBRARIES,libGoldfishAddressSpace libringbuffer)
 $(call emugl-export,STATIC_LIBRARIES,libqemupipe.ranchu)
 $(call emugl-export,HEADER_LIBRARIES,libgralloc_cb.ranchu)
@@ -34,7 +35,7 @@ else
 
 ifeq (true,$(GFXSTREAM))
 
-LOCAL_HEADER_LIBRARIES += vulkan_headers
+LOCAL_HEADER_LIBRARIES += gfxstream_vulkan_headers
 
 LOCAL_CFLAGS += -DVIRTIO_GPU
 LOCAL_SRC_FILES += \

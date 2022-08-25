@@ -26,6 +26,7 @@ class AddressSpaceStream;
 AddressSpaceStream* createAddressSpaceStream(size_t bufSize);
 
 #if defined(VIRTIO_GPU) && !defined(HOST_BUILD)
+#include "VirtGpu.h"
 struct StreamCreate {
    int streamHandle;
 };
@@ -41,7 +42,6 @@ public:
         struct asg_context context,
         uint64_t ringOffset,
         uint64_t writeBufferOffset,
-        bool virtioMode,
         struct address_space_ops ops);
     ~AddressSpaceStream();
 
@@ -54,17 +54,14 @@ public:
     virtual int writeFullyAsync(const void *buf, size_t len);
     virtual const unsigned char *commitBufferAndReadFully(size_t size, void *buf, size_t len);
 
-    int getRendernodeFd() const {
-#if defined(__Fuchsia__)
-        return -1;
-#else
-        if (!m_virtioMode) return -1;
-        return m_handle;
-#endif
+#if defined(VIRTIO_GPU) && !defined(HOST_BUILD)
+    void setMapping(VirtGpuBlobMappingPtr mapping) {
+        m_mapping = mapping;
     }
+#endif
 
-    void setThreadID(uint32_t id) {
-        m_threadID = id;
+    void setResourceId(uint32_t id) {
+        m_resourceId = id;
     }
 
 private:
@@ -81,7 +78,9 @@ private:
     void backoff();
     void resetBackoff();
 
-    bool m_virtioMode;
+#if defined(VIRTIO_GPU) && !defined(HOST_BUILD)
+    VirtGpuBlobMappingPtr m_mapping = nullptr;
+#endif
     struct address_space_ops m_ops;
 
     unsigned char* m_tmpBuf;
@@ -113,7 +112,7 @@ private:
     uint64_t m_backoffFactor;
 
     size_t m_ringStorageSize;
-    uint32_t m_threadID = 0;
+    uint32_t m_resourceId = 0;
 };
 
 #endif

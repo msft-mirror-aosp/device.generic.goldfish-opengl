@@ -3,6 +3,7 @@ LOCAL_PATH := $(call my-dir)
 $(call emugl-begin-shared-library,libOpenglSystemCommon)
 $(call emugl-import,libGLESv1_enc libGLESv2_enc lib_renderControl_enc)
 ifeq (true,$(GOLDFISH_OPENGL_BUILD_FOR_HOST))
+$(call emugl-import,libplatform$(GOLDFISH_OPENGL_LIB_SUFFIX))
 $(call emugl-import,libGoldfishAddressSpace$(GOLDFISH_OPENGL_LIB_SUFFIX))
 $(call emugl-import,libqemupipe$(GOLDFISH_OPENGL_LIB_SUFFIX))
 $(call emugl-import,libgralloc_cb$(GOLDFISH_OPENGL_LIB_SUFFIX))
@@ -39,7 +40,6 @@ LOCAL_HEADER_LIBRARIES += gfxstream_vulkan_headers
 
 LOCAL_CFLAGS += -DVIRTIO_GPU
 LOCAL_SRC_FILES += \
-    VirtioGpuStream.cpp \
     VirtioGpuPipeStream.cpp \
 
 LOCAL_C_INCLUDES += external/libdrm external/minigbm/cros_gralloc

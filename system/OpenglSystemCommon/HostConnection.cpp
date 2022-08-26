@@ -72,10 +72,6 @@ AddressSpaceStream* createAddressSpaceStream(size_t bufSize) {
     ALOGE("%s: FATAL: Trying to create ASG stream in unsupported build\n", __func__);
     abort();
 }
-AddressSpaceStream* createVirtioGpuAddressSpaceStream(size_t bufSize) {
-    ALOGE("%s: FATAL: Trying to create virtgpu ASG stream in unsupported build\n", __func__);
-    abort();
-}
 #endif
 
 using goldfish_vk::VkEncoder;
@@ -90,7 +86,6 @@ using goldfish_vk::VkEncoder;
 #ifdef VIRTIO_GPU
 
 #include "VirtGpu.h"
-#include "VirtioGpuStream.h"
 #include "VirtioGpuPipeStream.h"
 #include "virtgpu_drm.h"
 
@@ -130,7 +125,6 @@ static HostConnectionType getConnectionTypeFromProperty() {
 
     if (!strcmp("tcp", transportValue)) return HOST_CONNECTION_TCP;
     if (!strcmp("pipe", transportValue)) return HOST_CONNECTION_QEMU_PIPE;
-    if (!strcmp("virtio-gpu", transportValue)) return HOST_CONNECTION_VIRTIO_GPU;
     if (!strcmp("asg", transportValue)) return HOST_CONNECTION_ADDRESS_SPACE;
     if (!strcmp("virtio-gpu-pipe", transportValue)) return HOST_CONNECTION_VIRTIO_GPU_PIPE;
     if (!strcmp("virtio-gpu-asg", transportValue)) return HOST_CONNECTION_VIRTIO_GPU_ADDRESS_SPACE;
@@ -496,27 +490,6 @@ std::unique_ptr<HostConnection> HostConnection::connect(uint32_t capset_id) {
 #endif
         }
 #if defined(VIRTIO_GPU) && !defined(HOST_BUILD)
-        case HOST_CONNECTION_VIRTIO_GPU: {
-            auto stream = new VirtioGpuStream(STREAM_BUFFER_SIZE);
-            if (!stream) {
-                ALOGE("Failed to create VirtioGpu for host connection\n");
-                return nullptr;
-            }
-            if (stream->connect() < 0) {
-                ALOGE("Failed to connect to host (VirtioGpu)\n");
-                return nullptr;
-            }
-            con->m_connectionType = HOST_CONNECTION_VIRTIO_GPU;
-            con->m_grallocType = GRALLOC_TYPE_MINIGBM;
-            auto rendernodeFd = stream->getRendernodeFd();
-            con->m_processPipe = stream->getProcessPipe();
-            con->m_stream = stream;
-            con->m_rendernodeFd = rendernodeFd;
-            MinigbmGralloc* m = new MinigbmGralloc;
-            m->setFd(rendernodeFd);
-            con->m_grallocHelper = m;
-            break;
-        }
         case HOST_CONNECTION_VIRTIO_GPU_PIPE: {
             auto stream = new VirtioGpuPipeStream(STREAM_BUFFER_SIZE);
             if (!stream) {
@@ -550,16 +523,9 @@ std::unique_ptr<HostConnection> HostConnection::connect(uint32_t capset_id) {
             break;
         }
         case HOST_CONNECTION_VIRTIO_GPU_ADDRESS_SPACE: {
-            struct StreamCreate streamCreate = {0};
             VirtGpuDevice& instance = VirtGpuDevice::getInstance((enum VirtGpuCapset)capset_id);
             auto deviceHandle = instance.getDeviceHandle();
-            streamCreate.streamHandle = deviceHandle;
-            if (streamCreate.streamHandle < 0) {
-                ALOGE("Failed to open virtgpu for ASG host connection\n");
-                return nullptr;
-            }
-
-            auto stream = createVirtioGpuAddressSpaceStream(streamCreate);
+            auto stream = createVirtioGpuAddressSpaceStream();
             if (!stream) {
                 ALOGE("Failed to create virtgpu AddressSpaceStream\n");
                 return nullptr;

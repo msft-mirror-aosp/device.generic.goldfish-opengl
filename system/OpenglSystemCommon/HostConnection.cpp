@@ -16,6 +16,7 @@
 #include "HostConnection.h"
 
 #include "cutils/properties.h"
+#include "renderControl_types.h"
 
 #ifdef HOST_BUILD
 #include "android/base/Tracing.h"
@@ -86,13 +87,17 @@ using goldfish_vk::VkEncoder;
 #ifdef VIRTIO_GPU
 
 #include "VirtGpu.h"
-#include "VirtioGpuStream.h"
 #include "VirtioGpuPipeStream.h"
 #include "virtgpu_drm.h"
 
 #include <cros_gralloc_handle.h>
 #include <xf86drm.h>
 
+#endif
+
+#if defined(__linux__) || defined(__ANDROID__)
+#include <fstream>
+#include <string>
 #endif
 
 #undef LOG_TAG
@@ -126,7 +131,6 @@ static HostConnectionType getConnectionTypeFromProperty() {
 
     if (!strcmp("tcp", transportValue)) return HOST_CONNECTION_TCP;
     if (!strcmp("pipe", transportValue)) return HOST_CONNECTION_QEMU_PIPE;
-    if (!strcmp("virtio-gpu", transportValue)) return HOST_CONNECTION_VIRTIO_GPU;
     if (!strcmp("asg", transportValue)) return HOST_CONNECTION_ADDRESS_SPACE;
     if (!strcmp("virtio-gpu-pipe", transportValue)) return HOST_CONNECTION_VIRTIO_GPU_PIPE;
     if (!strcmp("virtio-gpu-asg", transportValue)) return HOST_CONNECTION_VIRTIO_GPU_ADDRESS_SPACE;
@@ -492,27 +496,6 @@ std::unique_ptr<HostConnection> HostConnection::connect(uint32_t capset_id) {
 #endif
         }
 #if defined(VIRTIO_GPU) && !defined(HOST_BUILD)
-        case HOST_CONNECTION_VIRTIO_GPU: {
-            auto stream = new VirtioGpuStream(STREAM_BUFFER_SIZE);
-            if (!stream) {
-                ALOGE("Failed to create VirtioGpu for host connection\n");
-                return nullptr;
-            }
-            if (stream->connect() < 0) {
-                ALOGE("Failed to connect to host (VirtioGpu)\n");
-                return nullptr;
-            }
-            con->m_connectionType = HOST_CONNECTION_VIRTIO_GPU;
-            con->m_grallocType = GRALLOC_TYPE_MINIGBM;
-            auto rendernodeFd = stream->getRendernodeFd();
-            con->m_processPipe = stream->getProcessPipe();
-            con->m_stream = stream;
-            con->m_rendernodeFd = rendernodeFd;
-            MinigbmGralloc* m = new MinigbmGralloc;
-            m->setFd(rendernodeFd);
-            con->m_grallocHelper = m;
-            break;
-        }
         case HOST_CONNECTION_VIRTIO_GPU_PIPE: {
             auto stream = new VirtioGpuPipeStream(STREAM_BUFFER_SIZE);
             if (!stream) {
@@ -587,6 +570,33 @@ std::unique_ptr<HostConnection> HostConnection::connect(uint32_t capset_id) {
 
     DPRINT("HostConnection::get() New Host Connection established %p, tid %d\n",
           con.get(), getCurrentThreadId());
+
+#if defined(__linux__) || defined(__ANDROID__)
+    auto rcEnc = con->rcEncoder();
+    if (rcEnc != nullptr) {
+#if defined(__ANDROID__) && __ANDROID_API__ >= 21
+        // The encoder does not modify the strings. The API gen does not yet
+        // handle const vars.
+        rcEnc->rcSetProcessMetadata(
+            rcEnc, const_cast<char*>("process_name"),
+            const_cast<RenderControlByte*>(getprogname()),
+            strlen(getprogname()) + 1);
+#else
+        std::ifstream stream("/proc/self/cmdline");
+        if (stream.is_open()) {
+            std::string cmdline((std::istreambuf_iterator<char>(stream)),
+                                std::istreambuf_iterator<char>());
+            // The encoder does not modify the strings. The API gen does not yet
+            // handle const vars.
+            rcEnc->rcSetProcessMetadata(
+                rcEnc, const_cast<char*>("process_name"),
+                const_cast<RenderControlByte*>(cmdline.c_str()),
+                strlen(cmdline.c_str()) + 1);
+        }
+#endif
+    }
+#endif
+
     return con;
 }
 

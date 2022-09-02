@@ -36,6 +36,10 @@ shared_library("libvulkan_goldfish") {
     "android-emu/android/base/threads/AndroidThread_pthread.cpp",
     "android-emu/android/base/threads/AndroidWorkPool.cpp",
     "android-emu/android/base/threads/AndroidWorkPool.h",
+    "platform/include/VirtGpu.h",
+    "platform/stub/VirtGpuBlob.cpp",
+    "platform/stub/VirtGpuBlobMapping.cpp",
+    "platform/stub/VirtGpuDevice.cpp",
     "shared/GoldfishAddressSpace/goldfish_address_space.cpp",
     "shared/GoldfishAddressSpace/include/goldfish_address_space.h",
     "shared/OpenglCodecCommon/ChecksumCalculator.cpp",
@@ -161,23 +165,29 @@ shared_library("libvulkan_goldfish") {
 
     include_dirs += [
       "fuchsia/include",
+      "platform/include",
       "//third_party/Vulkan-Headers/include",
     ]
 
     deps = [
-      "//sdk/fidl/fuchsia.hardware.goldfish:fuchsia.hardware.goldfish_llcpp",
-      "//sdk/fidl/fuchsia.logger:fuchsia.logger_llcpp",
-      "//sdk/fidl/fuchsia.sysmem:fuchsia.sysmem_llcpp",
-      "//sdk/lib/fdio",
+      "//sdk/fidl/fuchsia.hardware.goldfish:fuchsia.hardware.goldfish_cpp_wire",
+      "//sdk/fidl/fuchsia.logger:fuchsia.logger_cpp_wire",
+      "//sdk/fidl/fuchsia.sysmem:fuchsia.sysmem_cpp_wire",
       "//src/zircon/lib/zircon",
-      "//zircon/public/lib/async-cpp",
-      "//zircon/public/lib/zx",
-      "//zircon/system/ulib/async-default",
+      "//zircon/system/ulib/async:async-cpp",
       "//zircon/system/ulib/async-loop:async-loop-cpp",
       "//zircon/system/ulib/syslog:syslog-static",
       "//zircon/system/ulib/trace:trace-with-static-engine",
       "//zircon/system/ulib/trace-provider:trace-provider-with-static-engine",
+      "//zircon/system/ulib/zx",
       "//zircon/system/ulib/zxio",
+    ]
+
+    # Vulkan ICDs on Fuchsia are only allowed to depend on (parts of) libc
+    # and libzircon, and no other shared libraries.
+    assert_no_deps = [
+      "//sdk/lib/fdio",
+      "//zircon/system/ulib/async-default",
     ]
 
     defines += [

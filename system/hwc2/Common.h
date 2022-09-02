@@ -44,5 +44,7 @@
 
 bool IsCuttlefish();
 bool IsCuttlefishFoldable();
+bool IsNoOpMode();
+bool IsClientCompositionMode();
 
 #endif

@@ -82,6 +82,14 @@ public:
         VkInstance instance, uint32_t* pPhysicalDeviceCount,
         VkPhysicalDevice* pPhysicalDevices);
 
+    void on_vkGetPhysicalDeviceFeatures2(
+        void* context,
+        VkPhysicalDevice physicalDevice,
+        VkPhysicalDeviceFeatures2* pFeatures);
+    void on_vkGetPhysicalDeviceFeatures2KHR(
+        void* context,
+        VkPhysicalDevice physicalDevice,
+        VkPhysicalDeviceFeatures2* pFeatures);
     void on_vkGetPhysicalDeviceProperties(
         void* context,
         VkPhysicalDevice physicalDevice,
@@ -304,51 +312,9 @@ public:
         VkDevice device,
         VkBufferCollectionFUCHSIA collection,
         VkBufferCollectionPropertiesFUCHSIA* pProperties);
-    VkResult on_vkCreateBufferCollectionFUCHSIAX(
-        void* context,
-        VkResult input_result,
-        VkDevice device,
-        const VkBufferCollectionCreateInfoFUCHSIAX* pInfo,
-        const VkAllocationCallbacks* pAllocator,
-        VkBufferCollectionFUCHSIAX* pCollection);
-    void on_vkDestroyBufferCollectionFUCHSIAX(
-        void* context,
-        VkResult input_result,
-        VkDevice device,
-        VkBufferCollectionFUCHSIAX collection,
-        const VkAllocationCallbacks* pAllocator);
-    VkResult on_vkSetBufferCollectionConstraintsFUCHSIAX(
-        void* context,
-        VkResult input_result,
-        VkDevice device,
-        VkBufferCollectionFUCHSIAX collection,
-        const VkImageCreateInfo* pImageInfo);
-    VkResult on_vkSetBufferCollectionBufferConstraintsFUCHSIAX(
-        void* context,
-        VkResult input_result,
-        VkDevice device,
-        VkBufferCollectionFUCHSIAX collection,
-        const VkBufferConstraintsInfoFUCHSIAX* pBufferConstraintsInfo);
-    VkResult on_vkSetBufferCollectionImageConstraintsFUCHSIAX(
-        void* context,
-        VkResult input_result,
-        VkDevice device,
-        VkBufferCollectionFUCHSIAX collection,
-        const VkImageConstraintsInfoFUCHSIAX* pImageConstraintsInfo);
-    VkResult on_vkGetBufferCollectionPropertiesFUCHSIAX(
-        void* context,
-        VkResult input_result,
-        VkDevice device,
-        VkBufferCollectionFUCHSIAX collection,
-        VkBufferCollectionPropertiesFUCHSIAX* pProperties);
-    VkResult on_vkGetBufferCollectionProperties2FUCHSIAX(
-        void* context,
-        VkResult input_result,
-        VkDevice device,
-        VkBufferCollectionFUCHSIAX collection,
-        VkBufferCollectionProperties2FUCHSIAX* pProperties);
 #endif
 
+#ifdef VK_USE_PLATFORM_ANDROID_KHR
     VkResult on_vkGetAndroidHardwareBufferPropertiesANDROID(
         void* context, VkResult input_result,
         VkDevice device,
@@ -359,6 +325,7 @@ public:
         VkDevice device,
         const VkMemoryGetAndroidHardwareBufferInfoANDROID *pInfo,
         struct AHardwareBuffer** pBuffer);
+#endif
 
     VkResult on_vkCreateSamplerYcbcrConversion(
         void* context, VkResult input_result,
@@ -597,6 +564,19 @@ public:
         uint32_t dynamicOffsetCount,
         const uint32_t* pDynamicOffsets);
 
+    void on_vkCmdPipelineBarrier(
+        void* context,
+        VkCommandBuffer commandBuffer,
+        VkPipelineStageFlags srcStageMask,
+        VkPipelineStageFlags dstStageMask,
+        VkDependencyFlags dependencyFlags,
+        uint32_t memoryBarrierCount,
+        const VkMemoryBarrier* pMemoryBarriers,
+        uint32_t bufferMemoryBarrierCount,
+        const VkBufferMemoryBarrier* pBufferMemoryBarriers,
+        uint32_t imageMemoryBarrierCount,
+        const VkImageMemoryBarrier* pImageMemoryBarriers);
+
     void on_vkDestroyDescriptorSetLayout(
         void* context,
         VkDevice device,
@@ -619,6 +599,16 @@ public:
         VkImage image,
         int* pNativeFenceFd);
 
+    VkResult on_vkCreateGraphicsPipelines(
+        void* context,
+        VkResult input_result,
+        VkDevice device,
+        VkPipelineCache pipelineCache,
+        uint32_t createInfoCount,
+        const VkGraphicsPipelineCreateInfo* pCreateInfos,
+        const VkAllocationCallbacks* pAllocator,
+        VkPipeline* pPipelines);
+
     uint8_t* getMappedPointer(VkDeviceMemory memory);
     VkDeviceSize getMappedSize(VkDeviceMemory memory);
     VkDeviceSize getNonCoherentExtendedSize(VkDevice device, VkDeviceSize basicSize) const;
@@ -632,6 +622,7 @@ public:
     uint32_t getApiVersionFromDevice(VkDevice device) const;
     bool hasInstanceExtension(VkInstance instance, const std::string& name) const;
     bool hasDeviceExtension(VkDevice instance, const std::string& name) const;
+    VkDevice getDevice(VkCommandBuffer commandBuffer) const;
     void addToCommandPool(VkCommandPool commandPool,
                           uint32_t commandBufferCount,
                           VkCommandBuffer* pCommandBuffers);

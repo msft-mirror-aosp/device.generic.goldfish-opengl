@@ -155,7 +155,6 @@ class C2GoldfishAvcDec : public SimpleC2Component {
 
     std::unique_ptr<GoldfishH264Helper> mH264Helper;
 
-    int mId = -1;
     C2_DO_NOT_COPY(C2GoldfishAvcDec);
 };
 

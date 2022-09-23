@@ -6690,7 +6690,7 @@ public:
                     }
 #endif
 #if defined(VK_USE_PLATFORM_ANDROID_KHR) || defined(__linux__)
-                    if (semInfo.syncFd >= 0) {
+                    if (semInfo.syncFd != 0) {
                         pre_signal_sync_fds.push_back(semInfo.syncFd);
                         pre_signal_semaphores.push_back(pSubmits[i].pWaitSemaphores[j]);
                     }
@@ -6755,13 +6755,19 @@ public:
 #endif
 #if defined(VK_USE_PLATFORM_ANDROID_KHR) || defined(__linux__)
             for (auto fd : pre_signal_sync_fds) {
-                preSignalTasks.push_back([fd] {
-                    sync_wait(fd, 3000);
-                });
+                // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkImportSemaphoreFdInfoKHR.html
+                // fd == -1 is treated as already signaled
+                if (fd != -1) {
+                    preSignalTasks.push_back([fd] {
+                        sync_wait(fd, 3000);
+                    });
+                }
             }
 #endif
-            auto waitGroupHandle = mWorkPool.schedule(preSignalTasks);
-            mWorkPool.waitAll(waitGroupHandle);
+            if (!preSignalTasks.empty()) {
+                auto waitGroupHandle = mWorkPool.schedule(preSignalTasks);
+                mWorkPool.waitAll(waitGroupHandle);
+            }
 
             VkSubmitInfo submit_info = {
                 .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -7814,6 +7820,63 @@ public:
         }
 #endif
         return VK_SUCCESS;
+    }
+
+    VkResult on_vkCreateGraphicsPipelines(
+        void* context,
+        VkResult input_result,
+        VkDevice device,
+        VkPipelineCache pipelineCache,
+        uint32_t createInfoCount,
+        const VkGraphicsPipelineCreateInfo* pCreateInfos,
+        const VkAllocationCallbacks* pAllocator,
+        VkPipeline* pPipelines) {
+        (void)input_result;
+        VkEncoder* enc = (VkEncoder*)context;
+        std::vector<VkGraphicsPipelineCreateInfo> localCreateInfos(
+                pCreateInfos, pCreateInfos + createInfoCount);
+        for (VkGraphicsPipelineCreateInfo& graphicsPipelineCreateInfo : localCreateInfos) {
+            // dEQP-VK.api.pipeline.pipeline_invalid_pointers_unused_structs#graphics
+            bool requireViewportState = false;
+            // VUID-VkGraphicsPipelineCreateInfo-rasterizerDiscardEnable-00750
+            requireViewportState |= graphicsPipelineCreateInfo.pRasterizationState != nullptr &&
+                    graphicsPipelineCreateInfo.pRasterizationState->rasterizerDiscardEnable
+                        == VK_FALSE;
+            // VUID-VkGraphicsPipelineCreateInfo-pViewportState-04892
+#ifdef VK_EXT_extended_dynamic_state2
+            if (!requireViewportState && graphicsPipelineCreateInfo.pDynamicState) {
+                for (uint32_t i = 0; i <
+                            graphicsPipelineCreateInfo.pDynamicState->dynamicStateCount; i++) {
+                    if (VK_DYNAMIC_STATE_RASTERIZER_DISCARD_ENABLE_EXT ==
+                                graphicsPipelineCreateInfo.pDynamicState->pDynamicStates[i]) {
+                        requireViewportState = true;
+                        break;
+                    }
+                }
+            }
+#endif // VK_EXT_extended_dynamic_state2
+            if (!requireViewportState) {
+                graphicsPipelineCreateInfo.pViewportState = nullptr;
+            }
+
+            // It has the same requirement as for pViewportState.
+            bool shouldIncludeFragmentShaderState = requireViewportState;
+
+            // VUID-VkGraphicsPipelineCreateInfo-rasterizerDiscardEnable-00751
+            if (!shouldIncludeFragmentShaderState) {
+                graphicsPipelineCreateInfo.pMultisampleState = nullptr;
+            }
+
+            // VUID-VkGraphicsPipelineCreateInfo-renderPass-06043
+            // VUID-VkGraphicsPipelineCreateInfo-renderPass-06044
+            if (graphicsPipelineCreateInfo.renderPass == VK_NULL_HANDLE
+                    || !shouldIncludeFragmentShaderState) {
+                graphicsPipelineCreateInfo.pDepthStencilState = nullptr;
+                graphicsPipelineCreateInfo.pColorBlendState = nullptr;
+            }
+        }
+        return enc->vkCreateGraphicsPipelines(device, pipelineCache, localCreateInfos.size(),
+                localCreateInfos.data(), pAllocator, pPipelines, true /* do lock */);
     }
 
     uint32_t getApiVersionFromInstance(VkInstance instance) const {
@@ -9044,6 +9107,18 @@ VkResult ResourceTracker::on_vkQueueSignalReleaseImageANDROID(
     VkImage image,
     int* pNativeFenceFd) {
     return mImpl->on_vkQueueSignalReleaseImageANDROID(context, input_result, queue, waitSemaphoreCount, pWaitSemaphores, image, pNativeFenceFd);
+}
+
+VkResult ResourceTracker::on_vkCreateGraphicsPipelines(
+    void* context,
+    VkResult input_result,
+    VkDevice device,
+    VkPipelineCache pipelineCache,
+    uint32_t createInfoCount,
+    const VkGraphicsPipelineCreateInfo* pCreateInfos,
+    const VkAllocationCallbacks* pAllocator,
+    VkPipeline* pPipelines) {
+    return mImpl->on_vkCreateGraphicsPipelines(context, input_result, device, pipelineCache, createInfoCount, pCreateInfos, pAllocator, pPipelines);
 }
 
 void ResourceTracker::deviceMemoryTransform_tohost(

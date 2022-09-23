@@ -336,4 +336,18 @@ HWC3::Error Layer::setPerFrameMetadataBlobs(
   return HWC3::Error::None;
 }
 
+void Layer::logCompositionFallbackIfChanged(Composition to) {
+  Composition from = getCompositionType();
+  if (mLastCompositionFallback && mLastCompositionFallback->from == from &&
+      mLastCompositionFallback->to == to) {
+    return;
+  }
+  ALOGI("%s: layer %" PRIu32 " CompositionType fallback from %d to %d", __FUNCTION__,
+        static_cast<uint32_t>(getId()), static_cast<int>(from), static_cast<int>(to));
+  mLastCompositionFallback = {
+      .from = from,
+      .to = to,
+  };
+}
+
 }  // namespace aidl::android::hardware::graphics::composer3::impl

@@ -421,6 +421,16 @@ ndk::ScopedAStatus ComposerClient::getHdrCapabilities(
   return ToBinderStatus(display->getHdrCapabilities(outCapabilities));
 }
 
+ndk::ScopedAStatus ComposerClient::getOverlaySupport(
+    OverlayProperties* properties) {
+  DEBUG_LOG("%s", __FUNCTION__);
+
+  // no supported combinations
+  properties->combinations.clear();
+
+  return ToBinderStatus(HWC3::Error::None);
+}
+
 ndk::ScopedAStatus ComposerClient::getMaxVirtualDisplayCount(
     int32_t* outCount) {
   DEBUG_LOG("%s", __FUNCTION__);

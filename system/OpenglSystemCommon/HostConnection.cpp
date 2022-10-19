@@ -15,12 +15,16 @@
 */
 #include "HostConnection.h"
 
+#include "android/base/threads/AndroidThread.h"
+#include "android/base/AndroidHealthMonitor.h"
+#include "android/base/AndroidHealthMonitorConsumerBasic.h"
 #include "cutils/properties.h"
 #include "renderControl_types.h"
 
 #ifdef HOST_BUILD
 #include "android/base/Tracing.h"
 #endif
+#include "android/base/Process.h"
 
 #define DEBUG_HOSTCONNECTION 0
 
@@ -29,6 +33,9 @@
 #else
 #define DPRINT(...)
 #endif
+
+using android::base::guest::HealthMonitor;
+using android::base::guest::HealthMonitorConsumerBasic;
 
 #ifdef GOLDFISH_NO_GL
 struct gl_client_context_t {
@@ -62,15 +69,19 @@ public:
 #else
 namespace goldfish_vk {
 struct VkEncoder {
-    VkEncoder(IOStream*) { }
+    VkEncoder(IOStream* stream, HealthMonitor<>* healthMonitor = nullptr) { }
     void decRef() { }
     int placeholder;
 };
 } // namespace goldfish_vk
 class QemuPipeStream;
 typedef QemuPipeStream AddressSpaceStream;
-AddressSpaceStream* createAddressSpaceStream(size_t bufSize) {
+AddressSpaceStream* createAddressSpaceStream(size_t bufSize, HealthMonitor<>& healthMonitor) {
     ALOGE("%s: FATAL: Trying to create ASG stream in unsupported build\n", __func__);
+    abort();
+}
+AddressSpaceStream* createVirtioGpuAddressSpaceStream(HealthMonitor<>& healthMonitor) {
+    ALOGE("%s: FATAL: Trying to create VirtioGpu ASG stream in unsupported build\n", __func__);
     abort();
 }
 #endif
@@ -83,6 +94,8 @@ using goldfish_vk::VkEncoder;
 #include "ThreadInfo.h"
 #include <gralloc_cb_bp.h>
 #include <unistd.h>
+
+using android::base::guest::getCurrentThreadId;
 
 #ifdef VIRTIO_GPU
 
@@ -110,6 +123,15 @@ using goldfish_vk::VkEncoder;
 
 #define STREAM_BUFFER_SIZE  (4*1024*1024)
 #define STREAM_PORT_NUM     22468
+
+HealthMonitor<>& getGlobalHealthMonitor() {
+    // Initialize HealthMonitor
+    // Rather than inject as a construct arg, we keep it as a static variable in the .cpp
+    // to avoid setting up dependencies in other repos (external/qemu)
+    static HealthMonitorConsumerBasic sHealthMonitorConsumerBasic;
+    static HealthMonitor sHealthMonitor(sHealthMonitorConsumerBasic);
+    return sHealthMonitor;
+}
 
 static HostConnectionType getConnectionTypeFromProperty() {
 #ifdef __Fuchsia__
@@ -434,15 +456,17 @@ HostConnection::~HostConnection()
     }
 }
 
+
 // static
 std::unique_ptr<HostConnection> HostConnection::connect(uint32_t capset_id) {
     const enum HostConnectionType connType = getConnectionTypeFromProperty();
 
     // Use "new" to access a non-public constructor.
     auto con = std::unique_ptr<HostConnection>(new HostConnection);
+
     switch (connType) {
         case HOST_CONNECTION_ADDRESS_SPACE: {
-            auto stream = createAddressSpaceStream(STREAM_BUFFER_SIZE);
+            auto stream = createAddressSpaceStream(STREAM_BUFFER_SIZE, getGlobalHealthMonitor());
             if (!stream) {
                 ALOGE("Failed to create AddressSpaceStream for host connection\n");
                 return nullptr;
@@ -531,7 +555,7 @@ std::unique_ptr<HostConnection> HostConnection::connect(uint32_t capset_id) {
         case HOST_CONNECTION_VIRTIO_GPU_ADDRESS_SPACE: {
             VirtGpuDevice& instance = VirtGpuDevice::getInstance((enum VirtGpuCapset)capset_id);
             auto deviceHandle = instance.getDeviceHandle();
-            auto stream = createVirtioGpuAddressSpaceStream();
+            auto stream = createVirtioGpuAddressSpaceStream(getGlobalHealthMonitor());
             if (!stream) {
                 ALOGE("Failed to create virtgpu AddressSpaceStream\n");
                 return nullptr;
@@ -568,24 +592,13 @@ std::unique_ptr<HostConnection> HostConnection::connect(uint32_t capset_id) {
     *pClientFlags = 0;
     con->m_stream->commitBuffer(sizeof(unsigned int));
 
-    DPRINT("HostConnection::get() New Host Connection established %p, tid %d\n",
-          con.get(), getCurrentThreadId());
+    DPRINT("HostConnection::get() New Host Connection established %p, tid %lu\n", con.get(),
+           getCurrentThreadId());
 
 #if defined(__linux__) || defined(__ANDROID__)
     auto rcEnc = con->rcEncoder();
     if (rcEnc != nullptr) {
-        std::string processName;
-#if defined(__ANDROID__) && __ANDROID_API__ >= 21
-        processName = std::string(getprogname());
-#else
-        {
-            std::ifstream stream("/proc/self/cmdline");
-            if (stream.is_open()) {
-                processName = std::string(std::istreambuf_iterator<char>(stream),
-                                          std::istreambuf_iterator<char>());
-            }
-        }
-#endif
+        auto processName = android::base::guest::getProcessName();
         if (!processName.empty()) {
             rcEnc->rcSetProcessMetadata(
                 rcEnc, const_cast<char*>("process_name"),
@@ -648,8 +661,7 @@ GLEncoder *HostConnection::glEncoder()
 {
     if (!m_glEnc) {
         m_glEnc = std::make_unique<GLEncoder>(m_stream, checksumHelper());
-        DBG("HostConnection::glEncoder new encoder %p, tid %d",
-            m_glEnc, getCurrentThreadId());
+        DBG("HostConnection::glEncoder new encoder %p, tid %lu", m_glEnc, getCurrentThreadId());
         m_glEnc->setContextAccessor(s_getGLContext);
     }
     return m_glEnc.get();
@@ -660,8 +672,7 @@ GL2Encoder *HostConnection::gl2Encoder()
     if (!m_gl2Enc) {
         m_gl2Enc =
             std::make_unique<GL2Encoder>(m_stream, checksumHelper());
-        DBG("HostConnection::gl2Encoder new encoder %p, tid %d",
-            m_gl2Enc, getCurrentThreadId());
+        DBG("HostConnection::gl2Encoder new encoder %p, tid %lu", m_gl2Enc, getCurrentThreadId());
         m_gl2Enc->setContextAccessor(s_getGL2Context);
         m_gl2Enc->setNoHostError(m_noHostError);
         m_gl2Enc->setDrawCallFlushInterval(
@@ -676,7 +687,7 @@ VkEncoder *HostConnection::vkEncoder()
 {
     rcEncoder();
     if (!m_vkEnc) {
-        m_vkEnc = new VkEncoder(m_stream);
+        m_vkEnc = new VkEncoder(m_stream, &getGlobalHealthMonitor());
     }
     return m_vkEnc;
 }

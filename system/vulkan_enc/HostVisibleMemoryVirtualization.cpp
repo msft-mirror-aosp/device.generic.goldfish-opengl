@@ -14,16 +14,15 @@
 // limitations under the License.
 #include "HostVisibleMemoryVirtualization.h"
 
-#include "android/base/AndroidSubAllocator.h"
-
-#include "Resources.h"
-#include "VkEncoder.h"
-
-#include "../OpenglSystemCommon/EmulatorFeatureInfo.h"
-
 #include <log/log.h>
 
 #include <set>
+
+#include "../OpenglSystemCommon/EmulatorFeatureInfo.h"
+#include "ResourceTracker.h"
+#include "Resources.h"
+#include "VkEncoder.h"
+#include "aemu/base/AndroidSubAllocator.h"
 
 using android::base::guest::SubAllocator;
 
@@ -33,55 +32,40 @@ bool isHostVisible(const VkPhysicalDeviceMemoryProperties* memoryProps, uint32_t
     return memoryProps->memoryTypes[index].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 }
 
-CoherentMemory::CoherentMemory(VirtGpuBlobMappingPtr blobMapping, uint64_t size, VkEncoder *enc,
-                               VkDevice device, VkDeviceMemory memory)
-    : mSize(size),
-      mBlobMapping(blobMapping),
-      mEnc(enc),
-      mDevice(device),
-      mMemory(memory)
-{
-    mAllocator = std::make_unique<android::base::guest::SubAllocator>(blobMapping->asRawPtr(),
-                                                                      mSize, 4096);
+CoherentMemory::CoherentMemory(VirtGpuBlobMappingPtr blobMapping, uint64_t size, VkDevice device,
+                               VkDeviceMemory memory)
+    : mSize(size), mBlobMapping(blobMapping), mDevice(device), mMemory(memory) {
+    mAllocator =
+        std::make_unique<android::base::guest::SubAllocator>(blobMapping->asRawPtr(), mSize, 4096);
 }
 
 CoherentMemory::CoherentMemory(GoldfishAddressSpaceBlockPtr block, uint64_t gpuAddr, uint64_t size,
-                               VkEncoder *enc, VkDevice device, VkDeviceMemory memory)
-    : mSize(size),
-      mBlock(block),
-      mEnc(enc),
-      mDevice(device),
-      mMemory(memory)
-{
+                               VkDevice device, VkDeviceMemory memory)
+    : mSize(size), mBlock(block), mDevice(device), mMemory(memory) {
     void* address = block->mmap(gpuAddr);
-    mAllocator = std::make_unique<android::base::guest::SubAllocator>(address, mSize,
-                                                                      kLargestPageSize);
+    mAllocator =
+        std::make_unique<android::base::guest::SubAllocator>(address, mSize, kLargestPageSize);
 }
 
-CoherentMemory::~CoherentMemory()
-{
-    mEnc->vkFreeMemorySyncGOOGLE(mDevice, mMemory, nullptr, false);
+CoherentMemory::~CoherentMemory() {
+    ResourceTracker::getThreadLocalEncoder()->vkFreeMemorySyncGOOGLE(mDevice, mMemory, nullptr,
+                                                                     false);
 }
 
-VkDeviceMemory CoherentMemory::getDeviceMemory() const
-{
-    return mMemory;
-}
+VkDeviceMemory CoherentMemory::getDeviceMemory() const { return mMemory; }
 
-bool CoherentMemory::subAllocate(uint64_t size, uint8_t **ptr, uint64_t& offset) {
+bool CoherentMemory::subAllocate(uint64_t size, uint8_t** ptr, uint64_t& offset) {
     auto address = mAllocator->alloc(size);
-    if (!address)
-        return false;
+    if (!address) return false;
 
     *ptr = (uint8_t*)address;
     offset = mAllocator->getOffset(address);
     return true;
 }
 
-bool CoherentMemory::release(uint8_t *ptr)
-{
+bool CoherentMemory::release(uint8_t* ptr) {
     mAllocator->free(ptr);
     return true;
 }
 
-} // namespace goldfish_vk
+}  // namespace goldfish_vk

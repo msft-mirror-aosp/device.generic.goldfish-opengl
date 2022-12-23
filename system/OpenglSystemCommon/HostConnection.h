@@ -258,7 +258,6 @@ private:
     void queryAndSetVulkanAsyncQsri(ExtendedRCEncoderContext *rcEnc);
     void queryAndSetReadColorBufferDma(ExtendedRCEncoderContext *rcEnc);
     void queryAndSetHWCMultiConfigs(ExtendedRCEncoderContext* rcEnc);
-    void queryAndSetVulkanAuxCommandBufferMemory(ExtendedRCEncoderContext* rcEnc);
     GLint queryVersion(ExtendedRCEncoderContext* rcEnc);
 
 private:

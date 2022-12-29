@@ -592,6 +592,26 @@ ndk::ScopedAStatus ComposerClient::getPreferredBootDisplayConfig(
   return ToBinderStatus(display->getPreferredBootConfig(outConfigId));
 }
 
+ndk::ScopedAStatus ComposerClient::getHdrConversionCapabilities(
+    std::vector<aidl::android::hardware::graphics::common::HdrConversionCapability>* capabilities) {
+  DEBUG_LOG("%s", __FUNCTION__);
+  capabilities->clear();
+  return ToBinderStatus(HWC3::Error::None);
+}
+
+ndk::ScopedAStatus ComposerClient::setHdrConversionStrategy(
+    const aidl::android::hardware::graphics::common::HdrConversionStrategy& conversionStrategy) {
+  DEBUG_LOG("%s", __FUNCTION__);
+  using HdrConversionStrategyTag = aidl::android::hardware::graphics::common::HdrConversionStrategy::Tag;
+  switch (conversionStrategy.getTag() == HdrConversionStrategyTag::autoAllowedHdrTypes) {
+      auto autoHdrTypes = conversionStrategy.get<HdrConversionStrategyTag::autoAllowedHdrTypes>();
+      if (autoHdrTypes.size() != 0) {
+          return ToBinderStatus(HWC3::Error::Unsupported);
+      }
+  }
+  return ToBinderStatus(HWC3::Error::None);
+}
+
 ndk::ScopedAStatus ComposerClient::setAutoLowLatencyMode(int64_t displayId,
                                                          bool on) {
   DEBUG_LOG("%s", __FUNCTION__);

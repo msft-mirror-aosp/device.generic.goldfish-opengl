@@ -37,6 +37,8 @@ cpp_args += '-DGOLDFISH_NO_GL'
 cpp_args += '-DPAGE_SIZE=4096'
 # This should just be called NO_TRACE eventually
 cpp_args += '-DFUCHSIA_NO_TRACE'
+# Include the gfxstream private VkStructureType definitions
+cpp_args += '-DVK_GFXSTREAM_STRUCTURE_TYPE_EXT'
 
 #===============#
 # Dependencies  #
@@ -60,6 +62,6 @@ inc_system = include_directories('system/include')
 
 subdir('fuchsia')
 subdir('platform')
-subdir('android-emu/android/base')
+subdir('android-emu/aemu/base')
 subdir('shared')
 subdir('system')

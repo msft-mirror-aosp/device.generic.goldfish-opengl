@@ -22,6 +22,7 @@
 #include <media/stagefright/foundation/ColorUtils.h>
 
 #include "MediaH264Decoder.h"
+#include "GoldfishH264Helper.h"
 #include <SimpleC2Component.h>
 #include <atomic>
 #include <map>
@@ -141,6 +142,10 @@ class C2GoldfishAvcDec : public SimpleC2Component {
         }
     } mBitstreamColorAspects;
 
+    MetaDataColorAspects mSentMetadata = {1, 0, 0, 0};
+
+    void sendMetadata();
+
     // profile
     struct timeval mTimeStart;
     struct timeval mTimeEnd;
@@ -152,6 +157,9 @@ class C2GoldfishAvcDec : public SimpleC2Component {
     std::vector<uint8_t> mCsd1;
     void decodeHeaderAfterFlush();
 
+    std::unique_ptr<GoldfishH264Helper> mH264Helper;
+
+    int mId = -1;
     C2_DO_NOT_COPY(C2GoldfishAvcDec);
 };
 

@@ -22,7 +22,15 @@ enum class MediaCodecType : __u8 {
     VP8Codec = 0,
     VP9Codec = 1,
     H264Codec = 2,
-    Max = 3,
+    HevcCodec = 3,
+    Max = 4,
+};
+
+struct MetaDataColorAspects {
+    uint64_t type = 1;
+    uint64_t primaries;
+    uint64_t range;
+    uint64_t transfer;
 };
 
 enum class MediaOperation : __u8 {
@@ -32,7 +40,8 @@ enum class MediaOperation : __u8 {
     GetImage = 3,
     Flush = 4,
     Reset = 5,
-    Max = 6,
+    SendMetadata = 6,
+    Max = 7,
 };
 
 // This class will abstract away the knowledge required to send media codec data

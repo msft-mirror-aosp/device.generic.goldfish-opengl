@@ -20,8 +20,10 @@
 #endif
 
 #include <assert.h>
+
 #include "HostConnection.h"
 #include "ThreadInfo.h"
+#include "aemu/base/threads/AndroidThread.h"
 #include "eglDisplay.h"
 #include "eglSync.h"
 #include "egl_ftable.h"
@@ -56,11 +58,14 @@
 #endif // VIRTIO_GPU
 
 #ifdef GFXSTREAM
-#include "android/base/Tracing.h"
+#include "aemu/base/Tracing.h"
 #endif
 #include <cutils/trace.h>
 
 #include <system/window.h>
+
+using android::base::guest::getCurrentThreadId;
+
 #define DEBUG_EGL 0
 
 #if DEBUG_EGL
@@ -101,15 +106,17 @@ const char *  eglStrError(EGLint err)
 
 #ifdef LOG_EGL_ERRORS
 
-#define setErrorReturn(error, retVal)     \
-    {                                                \
-        ALOGE("tid %d: %s(%d): error 0x%x (%s)", getCurrentThreadId(), __FUNCTION__, __LINE__, error, eglStrError(error));     \
-        return setErrorFunc(error, retVal);            \
+#define setErrorReturn(error, retVal)                                                           \
+    {                                                                                           \
+        ALOGE("tid %lu: %s(%d): error 0x%x (%s)", getCurrentThreadId(), __FUNCTION__, __LINE__, \
+              error, eglStrError(error));                                                       \
+        return setErrorFunc(error, retVal);                                                     \
     }
 
-#define RETURN_ERROR(ret,err)           \
-    ALOGE("tid %d: %s(%d): error 0x%x (%s)", getCurrentThreadId(), __FUNCTION__, __LINE__, err, eglStrError(err));    \
-    getEGLThreadInfo()->eglError = err;    \
+#define RETURN_ERROR(ret, err)                                                                   \
+    ALOGE("tid %lu: %s(%d): error 0x%x (%s)", getCurrentThreadId(), __FUNCTION__, __LINE__, err, \
+          eglStrError(err));                                                                     \
+    getEGLThreadInfo()->eglError = err;                                                          \
     return ret;
 
 #else //!LOG_EGL_ERRORS
@@ -1725,9 +1732,9 @@ EGLContext eglCreateContext(EGLDisplay dpy, EGLConfig config, EGLContext share_c
             wantedMinorVersion = true;
             break;
         case EGL_CONTEXT_FLAGS_KHR:
-            if ((attrib_val | EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR) ||
-                (attrib_val | EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE_BIT_KHR)  ||
-                (attrib_val | EGL_CONTEXT_OPENGL_ROBUST_ACCESS_BIT_KHR)) {
+            if ((attrib_val & EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR) ||
+                (attrib_val & EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE_BIT_KHR)  ||
+                (attrib_val & EGL_CONTEXT_OPENGL_ROBUST_ACCESS_BIT_KHR)) {
                 context_flags = attrib_val;
             } else {
                 RETURN_ERROR(EGL_NO_CONTEXT,EGL_BAD_ATTRIBUTE);

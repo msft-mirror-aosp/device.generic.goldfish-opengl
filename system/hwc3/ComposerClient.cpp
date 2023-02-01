@@ -421,6 +421,16 @@ ndk::ScopedAStatus ComposerClient::getHdrCapabilities(
   return ToBinderStatus(display->getHdrCapabilities(outCapabilities));
 }
 
+ndk::ScopedAStatus ComposerClient::getOverlaySupport(
+    OverlayProperties* properties) {
+  DEBUG_LOG("%s", __FUNCTION__);
+
+  // no supported combinations
+  properties->combinations.clear();
+
+  return ToBinderStatus(HWC3::Error::None);
+}
+
 ndk::ScopedAStatus ComposerClient::getMaxVirtualDisplayCount(
     int32_t* outCount) {
   DEBUG_LOG("%s", __FUNCTION__);
@@ -580,6 +590,26 @@ ndk::ScopedAStatus ComposerClient::getPreferredBootDisplayConfig(
   GET_DISPLAY_OR_RETURN_ERROR();
 
   return ToBinderStatus(display->getPreferredBootConfig(outConfigId));
+}
+
+ndk::ScopedAStatus ComposerClient::getHdrConversionCapabilities(
+    std::vector<aidl::android::hardware::graphics::common::HdrConversionCapability>* capabilities) {
+  DEBUG_LOG("%s", __FUNCTION__);
+  capabilities->clear();
+  return ToBinderStatus(HWC3::Error::None);
+}
+
+ndk::ScopedAStatus ComposerClient::setHdrConversionStrategy(
+    const aidl::android::hardware::graphics::common::HdrConversionStrategy& conversionStrategy) {
+  DEBUG_LOG("%s", __FUNCTION__);
+  using HdrConversionStrategyTag = aidl::android::hardware::graphics::common::HdrConversionStrategy::Tag;
+  switch (conversionStrategy.getTag() == HdrConversionStrategyTag::autoAllowedHdrTypes) {
+      auto autoHdrTypes = conversionStrategy.get<HdrConversionStrategyTag::autoAllowedHdrTypes>();
+      if (autoHdrTypes.size() != 0) {
+          return ToBinderStatus(HWC3::Error::Unsupported);
+      }
+  }
+  return ToBinderStatus(HWC3::Error::None);
 }
 
 ndk::ScopedAStatus ComposerClient::setAutoLowLatencyMode(int64_t displayId,
@@ -1237,7 +1267,7 @@ HWC3::Error ComposerClient::createDisplaysLocked() {
 
   std::vector<DisplayMultiConfigs> displays;
 
-  HWC3::Error error = findDisplays(displays);
+  HWC3::Error error = findDisplays(mComposer->getDrmPresenter(), &displays);
   if (error != HWC3::Error::None) {
     ALOGE("%s failed to find display configs", __FUNCTION__);
     return error;
@@ -1284,6 +1314,8 @@ HWC3::Error ComposerClient::createDisplayLocked(
     return error;
   }
 
+  display->setPowerMode(PowerMode::ON);
+
   DEBUG_LOG("%s: adding display:%" PRIu64, __FUNCTION__, displayId);
   mDisplays.emplace(displayId, std::move(display));
 
@@ -1319,6 +1351,10 @@ HWC3::Error ComposerClient::destroyDisplayLocked(int64_t displayId) {
     ALOGE("%s: display:%" PRId64 " no such display?", __FUNCTION__, displayId);
     return HWC3::Error::BadDisplay;
   }
+
+  Display* display = it->second.get();
+
+  display->setPowerMode(PowerMode::OFF);
 
   HWC3::Error error = mComposer->onDisplayDestroy(it->second.get());
   if (error != HWC3::Error::None) {

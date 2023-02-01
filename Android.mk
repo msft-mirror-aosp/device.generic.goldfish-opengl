@@ -52,6 +52,7 @@ IS_AT_LEAST_OPD1:=true
 # The host-side Android framework implementation
 HOST_EMUGL_PATH := $(GOLDFISH_OPENGL_PATH)/../../../external/qemu/android/android-emugl
 EMUGL_COMMON_INCLUDES += $(HOST_EMUGL_PATH)/guest
+GFXSTREAM_PROTOCOLS_PATH := $(HOST_EMUGL_PATH)/../../../gfxstream-protocols
 
 EMUGL_COMMON_CFLAGS += \
     -DPLATFORM_SDK_VERSION=29 \
@@ -62,6 +63,7 @@ EMUGL_COMMON_CFLAGS += \
     -fvisibility=default \
     -DPAGE_SIZE=4096 \
     -DGFXSTREAM \
+    -DENABLE_ANDROID_HEALTH_MONITOR \
     -Wno-unused-parameter
 
 endif # GOLDFISH_OPENGL_BUILD_FOR_HOST
@@ -127,6 +129,7 @@ ifeq (true,$(GOLDFISH_OPENGL_SHOULD_BUILD))
 include $(GOLDFISH_OPENGL_PATH)/shared/qemupipe/Android.mk
 include $(GOLDFISH_OPENGL_PATH)/shared/gralloc_cb/Android.mk
 include $(GOLDFISH_OPENGL_PATH)/shared/GoldfishAddressSpace/Android.mk
+include $(GOLDFISH_OPENGL_PATH)/platform/Android.mk
 
 ifeq (true,$(GFXSTREAM)) # android-emu
     include $(GOLDFISH_OPENGL_PATH)/android-emu/Android.mk
@@ -175,4 +178,8 @@ ifeq ($(shell test $(PLATFORM_SDK_VERSION) -gt 28 -o $(IS_AT_LEAST_QPR1) = true 
     include $(GOLDFISH_OPENGL_PATH)/system/codecs/omx/vpxdec/Android.mk
 endif
 
+endif
+
+ifeq (true,$(GFXSTREAM)) # Vulkan lib tests
+    include $(GOLDFISH_OPENGL_PATH)/system/vulkan_enc_unit_tests/Android.mk
 endif

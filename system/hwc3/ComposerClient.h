@@ -81,6 +81,7 @@ class ComposerClient : public BnComposerClient {
       int64_t displayId, common::Transform* orientation) override;
   ndk::ScopedAStatus getHdrCapabilities(int64_t displayId,
                                         HdrCapabilities* caps) override;
+  ndk::ScopedAStatus getOverlaySupport(OverlayProperties* properties) override;
   ndk::ScopedAStatus getMaxVirtualDisplayCount(int32_t* count) override;
   ndk::ScopedAStatus getPerFrameMetadataKeys(
       int64_t displayId, std::vector<PerFrameMetadataKey>* keys) override;
@@ -109,6 +110,10 @@ class ComposerClient : public BnComposerClient {
   ndk::ScopedAStatus clearBootDisplayConfig(int64_t displayId) override;
   ndk::ScopedAStatus getPreferredBootDisplayConfig(int64_t displayId,
                                                    int32_t* config) override;
+  ndk::ScopedAStatus getHdrConversionCapabilities(
+      std::vector<aidl::android::hardware::graphics::common::HdrConversionCapability>*) override;
+  ndk::ScopedAStatus setHdrConversionStrategy(
+      const aidl::android::hardware::graphics::common::HdrConversionStrategy& conversionStrategy) override;
   ndk::ScopedAStatus setAutoLowLatencyMode(int64_t displayId, bool on) override;
   ndk::ScopedAStatus setClientTargetSlotCount(int64_t displayId,
                                               int32_t count) override;

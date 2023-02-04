@@ -132,6 +132,8 @@ class ComposerClient : public BnComposerClient {
   ndk::ScopedAStatus setVsyncEnabled(int64_t displayId, bool enabled) override;
   ndk::ScopedAStatus setIdleTimerEnabled(int64_t displayId,
                                          int32_t timeoutMs) override;
+  ndk::ScopedAStatus setRefreshRateChangedCallbackDebugEnabled(int64_t displayId,
+                                                               bool enabled) override;
 
  protected:
   ndk::SpAIBinder createBinder() override;

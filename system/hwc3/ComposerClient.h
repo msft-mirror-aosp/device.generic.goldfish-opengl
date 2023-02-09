@@ -113,7 +113,8 @@ class ComposerClient : public BnComposerClient {
   ndk::ScopedAStatus getHdrConversionCapabilities(
       std::vector<aidl::android::hardware::graphics::common::HdrConversionCapability>*) override;
   ndk::ScopedAStatus setHdrConversionStrategy(
-      const aidl::android::hardware::graphics::common::HdrConversionStrategy& conversionStrategy) override;
+      const aidl::android::hardware::graphics::common::HdrConversionStrategy& conversionStrategy,
+      aidl::android::hardware::graphics::common::Hdr* preferredHdrOutputType) override;
   ndk::ScopedAStatus setAutoLowLatencyMode(int64_t displayId, bool on) override;
   ndk::ScopedAStatus setClientTargetSlotCount(int64_t displayId,
                                               int32_t count) override;

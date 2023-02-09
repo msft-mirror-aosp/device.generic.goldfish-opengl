@@ -600,7 +600,8 @@ ndk::ScopedAStatus ComposerClient::getHdrConversionCapabilities(
 }
 
 ndk::ScopedAStatus ComposerClient::setHdrConversionStrategy(
-    const aidl::android::hardware::graphics::common::HdrConversionStrategy& conversionStrategy) {
+    const aidl::android::hardware::graphics::common::HdrConversionStrategy& conversionStrategy,
+    aidl::android::hardware::graphics::common::Hdr* preferredHdrOutputType) {
   DEBUG_LOG("%s", __FUNCTION__);
   using HdrConversionStrategyTag = aidl::android::hardware::graphics::common::HdrConversionStrategy::Tag;
   switch (conversionStrategy.getTag() == HdrConversionStrategyTag::autoAllowedHdrTypes) {
@@ -609,6 +610,7 @@ ndk::ScopedAStatus ComposerClient::setHdrConversionStrategy(
           return ToBinderStatus(HWC3::Error::Unsupported);
       }
   }
+  *preferredHdrOutputType = aidl::android::hardware::graphics::common::Hdr::INVALID;
   return ToBinderStatus(HWC3::Error::None);
 }
 

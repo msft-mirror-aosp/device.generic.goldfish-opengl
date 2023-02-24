@@ -63,6 +63,7 @@ EMUGL_COMMON_CFLAGS += \
     -fvisibility=default \
     -DPAGE_SIZE=4096 \
     -DGFXSTREAM \
+    -DENABLE_ANDROID_HEALTH_MONITOR \
     -Wno-unused-parameter
 
 endif # GOLDFISH_OPENGL_BUILD_FOR_HOST
@@ -167,8 +168,6 @@ ifeq (true,$(GFXSTREAM)) # Vulkan libs
 endif
 
 ifeq ($(shell test $(PLATFORM_SDK_VERSION) -gt 28 -o $(IS_AT_LEAST_QPR1) = true && echo isApi29OrHigher),isApi29OrHigher)
-    # HWC2 enabled after P
-    include $(GOLDFISH_OPENGL_PATH)/system/hwc2/Android.mk
     include $(GOLDFISH_OPENGL_PATH)/system/hwc3/Android.mk
     # hardware codecs enabled after P
     include $(GOLDFISH_OPENGL_PATH)/system/codecs/omx/common/Android.mk
@@ -177,4 +176,8 @@ ifeq ($(shell test $(PLATFORM_SDK_VERSION) -gt 28 -o $(IS_AT_LEAST_QPR1) = true 
     include $(GOLDFISH_OPENGL_PATH)/system/codecs/omx/vpxdec/Android.mk
 endif
 
+endif
+
+ifeq (true,$(GFXSTREAM)) # Vulkan lib tests
+    include $(GOLDFISH_OPENGL_PATH)/system/vulkan_enc_unit_tests/Android.mk
 endif

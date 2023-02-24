@@ -2029,6 +2029,10 @@ class VkEncoder {
     void vkQueueSignalReleaseImageANDROIDAsyncGOOGLE(VkQueue queue, uint32_t waitSemaphoreCount,
                                                      const VkSemaphore* pWaitSemaphores,
                                                      VkImage image, uint32_t doLock);
+    void vkQueueFlushCommandsFromAuxMemoryGOOGLE(VkQueue queue, VkCommandBuffer commandBuffer,
+                                                 VkDeviceMemory deviceMemory,
+                                                 VkDeviceSize dataOffset, VkDeviceSize dataSize,
+                                                 uint32_t doLock);
 #endif
 #ifdef VK_EXT_global_priority_query
 #endif

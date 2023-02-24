@@ -34,6 +34,7 @@
 #define DPRINT(...)
 #endif
 
+using android::base::guest::CreateHealthMonitor;
 using android::base::guest::HealthMonitor;
 using android::base::guest::HealthMonitorConsumerBasic;
 
@@ -76,11 +77,11 @@ struct VkEncoder {
 } // namespace goldfish_vk
 class QemuPipeStream;
 typedef QemuPipeStream AddressSpaceStream;
-AddressSpaceStream* createAddressSpaceStream(size_t bufSize, HealthMonitor<>& healthMonitor) {
+AddressSpaceStream* createAddressSpaceStream(size_t bufSize, HealthMonitor<>* healthMonitor) {
     ALOGE("%s: FATAL: Trying to create ASG stream in unsupported build\n", __func__);
     abort();
 }
-AddressSpaceStream* createVirtioGpuAddressSpaceStream(HealthMonitor<>& healthMonitor) {
+AddressSpaceStream* createVirtioGpuAddressSpaceStream(HealthMonitor<>* healthMonitor) {
     ALOGE("%s: FATAL: Trying to create VirtioGpu ASG stream in unsupported build\n", __func__);
     abort();
 }
@@ -124,13 +125,13 @@ using android::base::guest::getCurrentThreadId;
 #define STREAM_BUFFER_SIZE  (4*1024*1024)
 #define STREAM_PORT_NUM     22468
 
-HealthMonitor<>& getGlobalHealthMonitor() {
+HealthMonitor<>* getGlobalHealthMonitor() {
     // Initialize HealthMonitor
     // Rather than inject as a construct arg, we keep it as a static variable in the .cpp
     // to avoid setting up dependencies in other repos (external/qemu)
     static HealthMonitorConsumerBasic sHealthMonitorConsumerBasic;
-    static HealthMonitor sHealthMonitor(sHealthMonitorConsumerBasic);
-    return sHealthMonitor;
+    static std::unique_ptr<HealthMonitor<>> sHealthMonitor = CreateHealthMonitor(sHealthMonitorConsumerBasic);
+    return sHealthMonitor.get();
 }
 
 static HostConnectionType getConnectionTypeFromProperty() {
@@ -592,9 +593,6 @@ std::unique_ptr<HostConnection> HostConnection::connect(uint32_t capset_id) {
     *pClientFlags = 0;
     con->m_stream->commitBuffer(sizeof(unsigned int));
 
-    DPRINT("HostConnection::get() New Host Connection established %p, tid %lu\n", con.get(),
-           getCurrentThreadId());
-
 #if defined(__linux__) || defined(__ANDROID__)
     auto rcEnc = con->rcEncoder();
     if (rcEnc != nullptr) {
@@ -653,7 +651,6 @@ void HostConnection::exitUnclean() {
 
 // static
 std::unique_ptr<HostConnection> HostConnection::createUnique(uint32_t capset_id) {
-    DPRINT("%s: call\n", __func__);
     return connect(capset_id);
 }
 
@@ -687,7 +684,7 @@ VkEncoder *HostConnection::vkEncoder()
 {
     rcEncoder();
     if (!m_vkEnc) {
-        m_vkEnc = new VkEncoder(m_stream, &getGlobalHealthMonitor());
+        m_vkEnc = new VkEncoder(m_stream, getGlobalHealthMonitor());
     }
     return m_vkEnc;
 }
@@ -727,6 +724,7 @@ ExtendedRCEncoderContext *HostConnection::rcEncoder()
         queryAndSetVulkanAsyncQsri(rcEnc);
         queryAndSetReadColorBufferDma(rcEnc);
         queryAndSetHWCMultiConfigs(rcEnc);
+        queryAndSetVulkanAuxCommandBufferMemory(rcEnc);
         queryVersion(rcEnc);
         if (m_processPipe) {
             auto fd = (m_connectionType == HOST_CONNECTION_VIRTIO_GPU_ADDRESS_SPACE) ? m_rendernodeFd : -1;
@@ -1015,6 +1013,12 @@ void HostConnection::queryAndSetHWCMultiConfigs(ExtendedRCEncoderContext* rcEnc)
         rcEnc->featureInfo()->hasHWCMultiConfigs = true;
     }
 }
+
+void HostConnection::queryAndSetVulkanAuxCommandBufferMemory(ExtendedRCEncoderContext* rcEnc) {
+    std::string hostExtensions = queryHostExtensions(rcEnc);
+    rcEnc->featureInfo()->hasVulkanAuxCommandMemory = hostExtensions.find(kVulkanAuxCommandMemory) != std::string::npos;
+}
+
 
 GLint HostConnection::queryVersion(ExtendedRCEncoderContext* rcEnc) {
     GLint version = m_rcEnc->rcGetRendererVersion(m_rcEnc.get());

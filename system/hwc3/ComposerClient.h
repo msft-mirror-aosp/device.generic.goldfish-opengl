@@ -113,7 +113,8 @@ class ComposerClient : public BnComposerClient {
   ndk::ScopedAStatus getHdrConversionCapabilities(
       std::vector<aidl::android::hardware::graphics::common::HdrConversionCapability>*) override;
   ndk::ScopedAStatus setHdrConversionStrategy(
-      const aidl::android::hardware::graphics::common::HdrConversionStrategy& conversionStrategy) override;
+      const aidl::android::hardware::graphics::common::HdrConversionStrategy& conversionStrategy,
+      aidl::android::hardware::graphics::common::Hdr* preferredHdrOutputType) override;
   ndk::ScopedAStatus setAutoLowLatencyMode(int64_t displayId, bool on) override;
   ndk::ScopedAStatus setClientTargetSlotCount(int64_t displayId,
                                               int32_t count) override;
@@ -132,6 +133,8 @@ class ComposerClient : public BnComposerClient {
   ndk::ScopedAStatus setVsyncEnabled(int64_t displayId, bool enabled) override;
   ndk::ScopedAStatus setIdleTimerEnabled(int64_t displayId,
                                          int32_t timeoutMs) override;
+  ndk::ScopedAStatus setRefreshRateChangedCallbackDebugEnabled(int64_t displayId,
+                                                               bool enabled) override;
 
  protected:
   ndk::SpAIBinder createBinder() override;

@@ -1657,18 +1657,14 @@ public:
 
 #ifdef VK_USE_PLATFORM_ANDROID_KHR
     VkResult on_vkGetAndroidHardwareBufferPropertiesANDROID(
-            void* context, VkResult,
-            VkDevice device,
+            void*, VkResult,
+            VkDevice,
             const AHardwareBuffer* buffer,
             VkAndroidHardwareBufferPropertiesANDROID* pProperties) {
-        const VkPhysicalDeviceMemoryProperties& memoryProperties =
-            getPhysicalDeviceMemoryProperties(context, device, VK_NULL_HANDLE);
         auto grallocHelper =
             ResourceTracker::threadingCallbacks.hostConnectionGetFunc()->grallocHelper();
         return getAndroidHardwareBufferPropertiesANDROID(
-            grallocHelper,
-            &memoryProperties,
-            device, buffer, pProperties);
+            grallocHelper, buffer, pProperties);
     }
 
     VkResult on_vkGetMemoryAndroidHardwareBufferANDROID(
@@ -3309,16 +3305,6 @@ public:
 
 #if defined(VK_USE_PLATFORM_ANDROID_KHR) || defined(__linux__)
         shouldPassThroughDedicatedAllocInfo &= !requestedMemoryIsHostVisible;
-
-        if (!exportAllocateInfoPtr &&
-            (importBufferCollectionInfoPtr || importVmoInfoPtr) &&
-            dedicatedAllocInfoPtr &&
-            requestedMemoryIsHostVisible) {
-            ALOGE(
-                "FATAL: It is not yet supported to import-allocate "
-                "external memory that is both host visible and dedicated.");
-            abort();
-        }
 #endif  // VK_USE_PLATFORM_FUCHSIA
 
         if (shouldPassThroughDedicatedAllocInfo &&
@@ -3791,16 +3777,6 @@ public:
             _RETURN_SCUCCESS_WITH_DEVICE_MEMORY_REPORT;
         }
 
-        // Device-local memory dealing is over. What follows:
-        // host-visible memory.
-
-        if (ahw) {
-            ALOGE("%s: Host visible export/import allocation "
-                  "of Android hardware buffers is not supported.",
-                  __func__);
-            abort();
-        }
-
 #ifdef VK_USE_PLATFORM_FUCHSIA
         if (vmo_handle != ZX_HANDLE_INVALID) {
             input_result = enc->vkAllocateMemory(device, &finalAllocInfo, pAllocator, pMemory, true /* do lock */);
@@ -4250,6 +4226,13 @@ public:
 #ifdef VK_USE_PLATFORM_FUCHSIA
         if (isSysmemBackedMemory) {
             info.isSysmemBackedMemory = true;
+        }
+#endif
+#ifdef VK_USE_PLATFORM_ANDROID_KHR
+        if (extImgCiPtr &&
+            (extImgCiPtr->handleTypes &
+             VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID)) {
+            updateMemoryTypeBitsForAndroidHardwareBuffers(&memReqs.memoryTypeBits);
         }
 #endif
 
@@ -5287,6 +5270,14 @@ public:
         }
 
         if (res != VK_SUCCESS) return res;
+
+#ifdef VK_USE_PLATFORM_ANDROID_KHR
+        if (extBufCiPtr &&
+            (extBufCiPtr->handleTypes &
+             VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID)) {
+            updateMemoryTypeBitsForAndroidHardwareBuffers(&memReqs.memoryTypeBits);
+        }
+#endif
 
         AutoLock<RecursiveLock> lock(mLock);
 

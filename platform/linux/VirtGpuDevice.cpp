@@ -25,6 +25,7 @@
 
 #include "VirtGpu.h"
 #include "virtgpu_drm.h"
+#include "virtgpu_gfxstream_protocol.h"
 
 #define PARAM(x) \
     (struct VirtGpuParam) { x, #x, 0 }
@@ -41,15 +42,18 @@ VirtGpuDevice& VirtGpuDevice::getInstance(enum VirtGpuCapset capset) {
 
 VirtGpuDevice::VirtGpuDevice(enum VirtGpuCapset capset) {
     struct VirtGpuParam params[] = {
-            PARAM(VIRTGPU_PARAM_3D_FEATURES),          PARAM(VIRTGPU_PARAM_CAPSET_QUERY_FIX),
-            PARAM(VIRTGPU_PARAM_RESOURCE_BLOB),        PARAM(VIRTGPU_PARAM_HOST_VISIBLE),
-            PARAM(VIRTGPU_PARAM_CROSS_DEVICE),         PARAM(VIRTGPU_PARAM_CONTEXT_INIT),
-            PARAM(VIRTGPU_PARAM_SUPPORTED_CAPSET_IDs),
+        PARAM(VIRTGPU_PARAM_3D_FEATURES),          PARAM(VIRTGPU_PARAM_CAPSET_QUERY_FIX),
+        PARAM(VIRTGPU_PARAM_RESOURCE_BLOB),        PARAM(VIRTGPU_PARAM_HOST_VISIBLE),
+        PARAM(VIRTGPU_PARAM_CROSS_DEVICE),         PARAM(VIRTGPU_PARAM_CONTEXT_INIT),
+        PARAM(VIRTGPU_PARAM_SUPPORTED_CAPSET_IDs), PARAM(VIRTGPU_PARAM_CREATE_GUEST_HANDLE),
     };
 
     int ret;
+    struct drm_virtgpu_get_caps get_caps = {0};
     struct drm_virtgpu_context_init init = {0};
     struct drm_virtgpu_context_set_param ctx_set_params[2] = {{0}};
+
+    memset(&mCaps, 0, sizeof(struct VirtGpuCaps));
 
     mDeviceHandle = static_cast<int64_t>(drmOpenRender(128));
     if (mDeviceHandle < 0) {
@@ -62,17 +66,31 @@ VirtGpuDevice::VirtGpuDevice(enum VirtGpuCapset capset) {
         get_param.param = params[i].param;
         get_param.value = (uint64_t)(uintptr_t)&params[i].value;
 
-        int ret = drmIoctl(mDeviceHandle, DRM_IOCTL_VIRTGPU_GETPARAM, &get_param);
+        ret = drmIoctl(mDeviceHandle, DRM_IOCTL_VIRTGPU_GETPARAM, &get_param);
         if (ret) {
             ALOGE("virtgpu backend not enabling %s", params[i].name);
+            continue;
         }
 
-        mParams[i] = params[i];
+        mCaps.params[i] = params[i].value;
+    }
+
+    get_caps.cap_set_id = static_cast<uint32_t>(capset);
+    if (capset == kCapsetGfxStream) {
+        get_caps.size = sizeof(struct gfxstreamCapset);
+        get_caps.addr = (unsigned long long)&mCaps.gfxstreamCapset;
+    }
+
+    ret = drmIoctl(mDeviceHandle, DRM_IOCTL_VIRTGPU_GET_CAPS, &get_caps);
+    if (ret) {
+        // Don't fail get capabilities just yet, AEMU doesn't use this API
+        // yet (b/272121235);
+        ALOGE("DRM_IOCTL_VIRTGPU_GET_CAPS failed with %s", strerror(errno));
     }
 
 
     ctx_set_params[0].param = VIRTGPU_CONTEXT_PARAM_NUM_RINGS;
-    ctx_set_params[0].value = 1;
+    ctx_set_params[0].value = 2;
     init.num_params = 1;
 
     if (capset != kCapsetNone) {
@@ -89,14 +107,7 @@ VirtGpuDevice::VirtGpuDevice(enum VirtGpuCapset capset) {
     }
 }
 
-uint64_t VirtGpuDevice::getParam(enum VirtGpuParamId param) {
-    if (param >= kParamMax) {
-        ALOGE("Invalid parameter");
-        return false;
-    }
-
-    return mParams[param].value;
-}
+struct VirtGpuCaps VirtGpuDevice::getCaps(void) { return mCaps; }
 
 int64_t VirtGpuDevice::getDeviceHandle(void) {
     return mDeviceHandle;
@@ -125,7 +136,7 @@ VirtGpuBlobPtr VirtGpuDevice::createPipeBlob(uint32_t size) {
                                          static_cast<uint64_t>(size));
 }
 
-VirtGpuBlobPtr VirtGpuDevice::createBlob(struct VirtGpuCreateBlob& blobCreate) {
+VirtGpuBlobPtr VirtGpuDevice::createBlob(const struct VirtGpuCreateBlob& blobCreate) {
     int ret;
     struct drm_virtgpu_resource_create_blob create = {0};
 
@@ -144,7 +155,7 @@ VirtGpuBlobPtr VirtGpuDevice::createBlob(struct VirtGpuCreateBlob& blobCreate) {
                                          blobCreate.size);
 }
 
-VirtGpuBlobPtr VirtGpuDevice::importBlob(struct VirtGpuExternalHandle& handle) {
+VirtGpuBlobPtr VirtGpuDevice::importBlob(const struct VirtGpuExternalHandle& handle) {
     struct drm_virtgpu_resource_info info = {0};
     uint32_t blobHandle;
     int ret;
@@ -174,6 +185,7 @@ int VirtGpuDevice::execBuffer(struct VirtGpuExecBuffer& execbuffer, VirtGpuBlobP
 
     exec.flags = execbuffer.flags;
     exec.size = execbuffer.command_size;
+    exec.ring_idx = execbuffer.ring_idx;
     exec.command = (uint64_t)(uintptr_t)(execbuffer.command);
     exec.fence_fd = -1;
 

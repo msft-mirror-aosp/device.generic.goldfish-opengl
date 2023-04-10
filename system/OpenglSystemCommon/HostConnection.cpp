@@ -68,13 +68,15 @@ public:
 #include "VkEncoder.h"
 #include "AddressSpaceStream.h"
 #else
-namespace goldfish_vk {
+namespace gfxstream {
+namespace vk {
 struct VkEncoder {
     VkEncoder(IOStream* stream, HealthMonitor<>* healthMonitor = nullptr) { }
     void decRef() { }
     int placeholder;
 };
-} // namespace goldfish_vk
+}  // namespace vk
+}  // namespace gfxstream
 class QemuPipeStream;
 typedef QemuPipeStream AddressSpaceStream;
 AddressSpaceStream* createAddressSpaceStream(size_t bufSize, HealthMonitor<>* healthMonitor) {
@@ -87,7 +89,7 @@ AddressSpaceStream* createVirtioGpuAddressSpaceStream(HealthMonitor<>* healthMon
 }
 #endif
 
-using goldfish_vk::VkEncoder;
+using gfxstream::vk::VkEncoder;
 
 #include "ProcessPipe.h"
 #include "QemuPipeStream.h"
@@ -593,9 +595,6 @@ std::unique_ptr<HostConnection> HostConnection::connect(uint32_t capset_id) {
     *pClientFlags = 0;
     con->m_stream->commitBuffer(sizeof(unsigned int));
 
-    DPRINT("HostConnection::get() New Host Connection established %p, tid %lu\n", con.get(),
-           getCurrentThreadId());
-
 #if defined(__linux__) || defined(__ANDROID__)
     auto rcEnc = con->rcEncoder();
     if (rcEnc != nullptr) {
@@ -654,7 +653,6 @@ void HostConnection::exitUnclean() {
 
 // static
 std::unique_ptr<HostConnection> HostConnection::createUnique(uint32_t capset_id) {
-    DPRINT("%s: call\n", __func__);
     return connect(capset_id);
 }
 

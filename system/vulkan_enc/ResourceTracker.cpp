@@ -15,18 +15,15 @@
 
 #include "ResourceTracker.h"
 
-#include "Resources.h"
-#include "CommandBufferStagingStream.h"
-#include "DescriptorSetVirtualization.h"
-
-#include "aemu/base/Optional.h"
-#include "aemu/base/threads/AndroidWorkPool.h"
-#include "aemu/base/Tracing.h"
-
-#include "goldfish_vk_private_defs.h"
-
 #include "../OpenglSystemCommon/EmulatorFeatureInfo.h"
 #include "../OpenglSystemCommon/HostConnection.h"
+#include "CommandBufferStagingStream.h"
+#include "DescriptorSetVirtualization.h"
+#include "Resources.h"
+#include "aemu/base/Optional.h"
+#include "aemu/base/Tracing.h"
+#include "aemu/base/threads/AndroidWorkPool.h"
+#include "goldfish_vk_private_defs.h"
 #include "vulkan/vulkan_core.h"
 
 /// Use installed headers or locally defined Fuchsia-specific bits
@@ -147,7 +144,8 @@ using android::base::guest::RecursiveLock;
 using android::base::guest::Lock;
 using android::base::guest::WorkPool;
 
-namespace goldfish_vk {
+namespace gfxstream {
+namespace vk {
 
 #define MAKE_HANDLE_MAPPING_FOREACH(type_name, map_impl, map_to_u64_impl, map_from_u64_impl) \
     void mapHandles_##type_name(type_name* handles, size_t count) override { \
@@ -205,6 +203,14 @@ struct StagingInfo {
     Lock mLock;
     std::vector<CommandBufferStagingStream*> streams;
     std::vector<VkEncoder*> encoders;
+    /// \brief sets alloc and free callbacks for memory allocation for CommandBufferStagingStream(s)
+    /// \param allocFn is the callback to allocate memory
+    /// \param freeFn is the callback to free memory
+    void setAllocFree(CommandBufferStagingStream::Alloc&& allocFn,
+                      CommandBufferStagingStream::Free&& freeFn) {
+        mAlloc = allocFn;
+        mFree = freeFn;
+    }
 
     ~StagingInfo() {
         for (auto stream : streams) {
@@ -228,7 +234,12 @@ struct StagingInfo {
         CommandBufferStagingStream* stream;
         VkEncoder* encoder;
         if (streams.empty()) {
-            stream = new CommandBufferStagingStream;
+            if (mAlloc && mFree) {
+                // if custom allocators are provided, forward them to CommandBufferStagingStream
+                stream = new CommandBufferStagingStream(mAlloc, mFree);
+            } else {
+                stream = new CommandBufferStagingStream;
+            }
             encoder = new VkEncoder(stream);
         } else {
             stream = streams.back();
@@ -239,6 +250,10 @@ struct StagingInfo {
         *streamOut = stream;
         *encoderOut = encoder;
     }
+
+   private:
+    CommandBufferStagingStream::Alloc mAlloc = nullptr;
+    CommandBufferStagingStream::Free mFree = nullptr;
 };
 
 static StagingInfo sStaging;
@@ -286,6 +301,7 @@ public:
 
         uint8_t* ptr = nullptr;
 
+        uint64_t blobId = 0;
         uint64_t allocationSize = 0;
         uint32_t memoryTypeIndex = 0;
         uint64_t coherentMemorySize = 0;
@@ -891,6 +907,11 @@ public:
         }
 
         return offset + size <= info.allocationSize;
+    }
+
+    void setupCaps(void) {
+        VirtGpuDevice& instance = VirtGpuDevice::getInstance((enum VirtGpuCapset)3);
+        mCaps = instance.getCaps();
     }
 
     void setupFeatures(const EmulatorFeatureInfo* features) {
@@ -1531,14 +1552,12 @@ public:
     }
 
     void on_vkGetPhysicalDeviceMemoryProperties(
-        void*,
-        VkPhysicalDevice physdev,
+        void* context,
+        VkPhysicalDevice physicalDevice,
         VkPhysicalDeviceMemoryProperties* out) {
-
-        (void)physdev;
         // gfxstream decides which physical device to expose to the guest on startup.
         // Otherwise, we would need a physical device to properties mapping.
-        mMemoryProps = *out;
+        *out = getPhysicalDeviceMemoryProperties(context, VK_NULL_HANDLE, physicalDevice);
     }
 
     void on_vkGetPhysicalDeviceMemoryProperties2(
@@ -1638,16 +1657,14 @@ public:
 
 #ifdef VK_USE_PLATFORM_ANDROID_KHR
     VkResult on_vkGetAndroidHardwareBufferPropertiesANDROID(
-        void*, VkResult,
-        VkDevice device,
-        const AHardwareBuffer* buffer,
-        VkAndroidHardwareBufferPropertiesANDROID* pProperties) {
+            void*, VkResult,
+            VkDevice,
+            const AHardwareBuffer* buffer,
+            VkAndroidHardwareBufferPropertiesANDROID* pProperties) {
         auto grallocHelper =
             ResourceTracker::threadingCallbacks.hostConnectionGetFunc()->grallocHelper();
         return getAndroidHardwareBufferPropertiesANDROID(
-            grallocHelper,
-            &mMemoryProps,
-            device, buffer, pProperties);
+            grallocHelper, buffer, pProperties);
     }
 
     VkResult on_vkGetMemoryAndroidHardwareBufferANDROID(
@@ -2933,12 +2950,18 @@ public:
         return coherentMemory;
     }
 
-  VkResult allocateCoherentMemory(VkDevice device, const VkMemoryAllocateInfo *pAllocateInfo,
-                                    VkEncoder *enc, VkDeviceMemory* pMemory) {
+    VkResult allocateCoherentMemory(VkDevice device, const VkMemoryAllocateInfo* pAllocateInfo,
+                                    VkEncoder* enc, VkDeviceMemory* pMemory) {
+        uint64_t blobId = 0;
         uint64_t offset = 0;
         uint8_t *ptr = nullptr;
         VkMemoryAllocateFlagsInfo allocFlagsInfo;
         VkMemoryOpaqueCaptureAddressAllocateInfo opaqueCaptureAddressAllocInfo;
+        VkCreateBlobGOOGLE createBlobInfo;
+        VirtGpuBlobPtr guestBlob = nullptr;
+
+        memset(&createBlobInfo, 0, sizeof(struct VkCreateBlobGOOGLE));
+        createBlobInfo.sType = VK_STRUCTURE_TYPE_CREATE_BLOB_GOOGLE;
 
         const VkMemoryAllocateFlagsInfo* allocFlagsInfoPtr =
             vk_find_struct<VkMemoryAllocateFlagsInfo>(pAllocateInfo);
@@ -2952,15 +2975,21 @@ public:
 
         bool dedicated = deviceAddressMemoryAllocation;
 
+        if (mCaps.gfxstreamCapset.deferredMapping || mCaps.params[kParamCreateGuestHandle])
+            dedicated = true;
+
         VkMemoryAllocateInfo hostAllocationInfo = vk_make_orphan_copy(*pAllocateInfo);
         vk_struct_chain_iterator structChainIter = vk_make_chain_iterator(&hostAllocationInfo);
 
-        if (dedicated) {
+        if (mCaps.gfxstreamCapset.deferredMapping || mCaps.params[kParamCreateGuestHandle]) {
+            hostAllocationInfo.allocationSize = ALIGN(pAllocateInfo->allocationSize, 4096);
+        } else if (dedicated) {
+            // Over-aligning to kLargestSize to some Windows drivers (b:152769369).  Can likely
+            // have host report the desired alignment.
             hostAllocationInfo.allocationSize =
-                ((pAllocateInfo->allocationSize + kLargestPageSize - 1) / kLargestPageSize);
+                ALIGN(pAllocateInfo->allocationSize, kLargestPageSize);
         } else {
-            VkDeviceSize roundedUpAllocSize =
-                kMegaBtye * ((pAllocateInfo->allocationSize + kMegaBtye - 1) / kMegaBtye);
+            VkDeviceSize roundedUpAllocSize = ALIGN(pAllocateInfo->allocationSize, kMegaByte);
             hostAllocationInfo.allocationSize = std::max(roundedUpAllocSize,
                                                          kDefaultHostMemBlockSize);
         }
@@ -2980,6 +3009,39 @@ public:
             }
         }
 
+        if (mCaps.params[kParamCreateGuestHandle]) {
+            struct VirtGpuCreateBlob createBlob = {0};
+            struct VirtGpuExecBuffer exec = {};
+            VirtGpuDevice& instance = VirtGpuDevice::getInstance();
+            struct gfxstreamPlaceholderCommandVk placeholderCmd = {};
+
+            createBlobInfo.blobId = ++mBlobId;
+            createBlobInfo.blobMem = kBlobMemGuest;
+            createBlobInfo.blobFlags = kBlobFlagCreateGuestHandle;
+            vk_append_struct(&structChainIter, &createBlobInfo);
+
+            createBlob.blobMem = kBlobMemGuest;
+            createBlob.flags = kBlobFlagCreateGuestHandle;
+            createBlob.blobId = createBlobInfo.blobId;
+            createBlob.size = hostAllocationInfo.allocationSize;
+
+            guestBlob = instance.createBlob(createBlob);
+            if (!guestBlob) return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+
+            placeholderCmd.hdr.opCode = GFXSTREAM_PLACEHOLDER_COMMAND_VK;
+            exec.command = static_cast<void*>(&placeholderCmd);
+            exec.command_size = sizeof(placeholderCmd);
+            exec.flags = kRingIdx;
+            exec.ring_idx = 1;
+            if (instance.execBuffer(exec, guestBlob)) return VK_ERROR_OUT_OF_HOST_MEMORY;
+
+            guestBlob->wait();
+        } else if (mCaps.gfxstreamCapset.deferredMapping) {
+            createBlobInfo.blobId = ++mBlobId;
+            createBlobInfo.blobMem = kBlobMemHost3d;
+            vk_append_struct(&structChainIter, &createBlobInfo);
+        }
+
         VkDeviceMemory mem = VK_NULL_HANDLE;
         VkResult host_res =
         enc->vkAllocateMemory(device, &hostAllocationInfo, nullptr,
@@ -2987,7 +3049,26 @@ public:
         if(host_res != VK_SUCCESS) {
             return host_res;
         }
+
         struct VkDeviceMemory_Info info;
+        if (mCaps.gfxstreamCapset.deferredMapping || mCaps.params[kParamCreateGuestHandle]) {
+            info.allocationSize = pAllocateInfo->allocationSize;
+            info.blobId = createBlobInfo.blobId;
+        }
+
+        if (guestBlob) {
+            auto mapping = guestBlob->createMapping();
+            if (!mapping) return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+
+            auto coherentMemory = std::make_shared<CoherentMemory>(
+                mapping, hostAllocationInfo.allocationSize, device, mem);
+
+            coherentMemory->subAllocate(pAllocateInfo->allocationSize, &ptr, offset);
+            info.coherentMemoryOffset = offset;
+            info.coherentMemory = coherentMemory;
+            info.ptr = ptr;
+        }
+
         info.coherentMemorySize = hostAllocationInfo.allocationSize;
         info.memoryTypeIndex = hostAllocationInfo.memoryTypeIndex;
         info.device = device;
@@ -2998,6 +3079,12 @@ public:
             AutoLock<RecursiveLock> lock(mLock);
             info_VkDeviceMemory[mem] = info;
         }
+
+        if (mCaps.gfxstreamCapset.deferredMapping || mCaps.params[kParamCreateGuestHandle]) {
+            *pMemory = mem;
+            return host_res;
+        }
+
         auto coherentMemory = createCoherentMemory(device, mem, hostAllocationInfo, enc, host_res);
         if(coherentMemory) {
             AutoLock<RecursiveLock> lock(mLock);
@@ -3019,7 +3106,6 @@ public:
 
     VkResult getCoherentMemory(const VkMemoryAllocateInfo* pAllocateInfo, VkEncoder* enc,
                                VkDevice device, VkDeviceMemory* pMemory) {
-
         VkMemoryAllocateFlagsInfo allocFlagsInfo;
         VkMemoryOpaqueCaptureAddressAllocateInfo opaqueCaptureAddressAllocInfo;
 
@@ -3030,6 +3116,9 @@ public:
         bool dedicated = allocFlagsInfoPtr &&
                          ((allocFlagsInfoPtr->flags & VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT) ||
                           (allocFlagsInfoPtr->flags & VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT));
+
+        if (mCaps.gfxstreamCapset.deferredMapping || mCaps.params[kParamCreateGuestHandle])
+            dedicated = true;
 
         CoherentMemoryPtr coherentMemory = nullptr;
         uint8_t *ptr = nullptr;
@@ -3061,6 +3150,9 @@ public:
                 info.coherentMemory = coherentMemory;
                 info.device = device;
 
+                // for suballocated memory, create an alias VkDeviceMemory handle for application
+                // memory used for suballocations will still be VkDeviceMemory associated with
+                // CoherentMemory
                 auto mem = new_from_host_VkDeviceMemory(VK_NULL_HANDLE);
                 info_VkDeviceMemory[mem] = info;
                 *pMemory = mem;
@@ -3188,24 +3280,31 @@ public:
         const VkMemoryDedicatedAllocateInfo* dedicatedAllocInfoPtr =
             vk_find_struct<VkMemoryDedicatedAllocateInfo>(pAllocateInfo);
 
+        // Note for AHardwareBuffers, the Vulkan spec states:
+        //
+        //     Android hardware buffers have intrinsic width, height, format, and usage
+        //     properties, so Vulkan images bound to memory imported from an Android
+        //     hardware buffer must use dedicated allocations
+        //
+        // so any allocation requests with a VkImportAndroidHardwareBufferInfoANDROID
+        // will necessarily have a VkMemoryDedicatedAllocateInfo. However, the host
+        // may or may not actually use a dedicated allocation to emulate
+        // AHardwareBuffers. As such, the VkMemoryDedicatedAllocateInfo is passed to the
+        // host and the host will decide whether or not to use it.
+
         bool shouldPassThroughDedicatedAllocInfo =
-            !exportAllocateInfoPtr && !importAhbInfoPtr &&
+            !exportAllocateInfoPtr &&
             !importBufferCollectionInfoPtr &&
             !importVmoInfoPtr;
 
-#if defined(VK_USE_PLATFORM_ANDROID_KHR) || defined(__linux__)
-        shouldPassThroughDedicatedAllocInfo &=
-            !isHostVisible(&mMemoryProps, pAllocateInfo->memoryTypeIndex);
+        const VkPhysicalDeviceMemoryProperties& physicalDeviceMemoryProps
+            = getPhysicalDeviceMemoryProperties(context, device, VK_NULL_HANDLE);
 
-        if (!exportAllocateInfoPtr &&
-            ( importBufferCollectionInfoPtr || importVmoInfoPtr) &&
-            dedicatedAllocInfoPtr &&
-            isHostVisible(&mMemoryProps, pAllocateInfo->memoryTypeIndex)) {
-            ALOGE(
-                "FATAL: It is not yet supported to import-allocate "
-                "external memory that is both host visible and dedicated.");
-            abort();
-        }
+        const bool requestedMemoryIsHostVisible =
+            isHostVisible(&physicalDeviceMemoryProps, pAllocateInfo->memoryTypeIndex);
+
+#if defined(VK_USE_PLATFORM_ANDROID_KHR) || defined(__linux__)
+        shouldPassThroughDedicatedAllocInfo &= !requestedMemoryIsHostVisible;
 #endif  // VK_USE_PLATFORM_FUCHSIA
 
         if (shouldPassThroughDedicatedAllocInfo &&
@@ -3659,7 +3758,7 @@ public:
         }
 #endif
 
-        if (ahw || !isHostVisible(&mMemoryProps, finalAllocInfo.memoryTypeIndex)) {
+        if (ahw || !requestedMemoryIsHostVisible) {
             input_result =
                 enc->vkAllocateMemory(
                     device, &finalAllocInfo, pAllocator, pMemory, true /* do lock */);
@@ -3676,16 +3775,6 @@ public:
                 vmo_handle);
 
             _RETURN_SCUCCESS_WITH_DEVICE_MEMORY_REPORT;
-        }
-
-        // Device-local memory dealing is over. What follows:
-        // host-visible memory.
-
-        if (ahw) {
-            ALOGE("%s: Host visible export/import allocation "
-                  "of Android hardware buffers is not supported.",
-                  __func__);
-            abort();
         }
 
 #ifdef VK_USE_PLATFORM_FUCHSIA
@@ -3731,6 +3820,23 @@ public:
         _RETURN_SCUCCESS_WITH_DEVICE_MEMORY_REPORT;
     }
 
+    CoherentMemoryPtr freeCoherentMemoryLocked(VkDeviceMemory memory, VkDeviceMemory_Info& info) {
+        if (info.coherentMemory && info.ptr) {
+            if (info.coherentMemory->getDeviceMemory() != memory) {
+                delete_goldfish_VkDeviceMemory(memory);
+            }
+
+            if (info.ptr) {
+                info.coherentMemory->release(info.ptr);
+                info.ptr = nullptr;
+            }
+
+            return std::move(info.coherentMemory);
+        }
+
+        return nullptr;
+    }
+
     void on_vkFreeMemory(
         void* context,
         VkDevice device,
@@ -3748,15 +3854,12 @@ public:
             memoryObjectId = getAHardwareBufferId(info.ahw);
         }
 #endif
-        emitDeviceMemoryReport(
-            info_VkDevice[device],
-            info.imported ? VK_DEVICE_MEMORY_REPORT_EVENT_TYPE_UNIMPORT_EXT
-                          : VK_DEVICE_MEMORY_REPORT_EVENT_TYPE_FREE_EXT,
-            memoryObjectId,
-            0 /* size */,
-            VK_OBJECT_TYPE_DEVICE_MEMORY,
-            (uint64_t)(void*)memory
-        );
+
+        emitDeviceMemoryReport(info_VkDevice[device],
+                               info.imported ? VK_DEVICE_MEMORY_REPORT_EVENT_TYPE_UNIMPORT_EXT
+                                             : VK_DEVICE_MEMORY_REPORT_EVENT_TYPE_FREE_EXT,
+                               memoryObjectId, 0 /* size */, VK_OBJECT_TYPE_DEVICE_MEMORY,
+                               (uint64_t)(void*)memory);
 
 #ifdef VK_USE_PLATFORM_FUCHSIA
         if (info.vmoHandle && info.ptr) {
@@ -3776,35 +3879,18 @@ public:
             return;
         }
 
-        if (info.coherentMemory && info.ptr) {
-            if (info.coherentMemory->getDeviceMemory() != memory) {
-                delete_goldfish_VkDeviceMemory(memory);
-            }
+        auto coherentMemory = freeCoherentMemoryLocked(memory, info);
 
-            if (info.ptr) {
-                info.coherentMemory->release(info.ptr);
-                info.ptr = nullptr;
-            }
-
-            auto coherentMemory = std::move(info.coherentMemory);
-            // We have to release the lock before we could possibly free a
-            // CoherentMemory, because that will call into VkEncoder, which
-            // shouldn't be called when the lock is held.
-            lock.unlock();
-            coherentMemory = nullptr;
-        }
+        // We have to release the lock before we could possibly free a
+        // CoherentMemory, because that will call into VkEncoder, which
+        // shouldn't be called when the lock is held.
+        lock.unlock();
+        coherentMemory = nullptr;
     }
 
-    VkResult on_vkMapMemory(
-        void*,
-        VkResult host_result,
-        VkDevice,
-        VkDeviceMemory memory,
-        VkDeviceSize offset,
-        VkDeviceSize size,
-        VkMemoryMapFlags,
-        void** ppData) {
-
+    VkResult on_vkMapMemory(void* context, VkResult host_result, VkDevice device,
+                            VkDeviceMemory memory, VkDeviceSize offset, VkDeviceSize size,
+                            VkMemoryMapFlags, void** ppData) {
         if (host_result != VK_SUCCESS) {
             ALOGE("%s: Host failed to map\n", __func__);
             return host_result;
@@ -3819,6 +3905,39 @@ public:
         }
 
         auto& info = it->second;
+
+        if (info.blobId && !info.coherentMemory && !mCaps.params[kParamCreateGuestHandle]) {
+            VkEncoder* enc = (VkEncoder*)context;
+            VirtGpuBlobMappingPtr mapping;
+            VirtGpuDevice& instance = VirtGpuDevice::getInstance();
+
+            uint64_t offset;
+            uint8_t* ptr;
+
+            VkResult vkResult = enc->vkGetBlobGOOGLE(device, memory, false);
+            if (vkResult != VK_SUCCESS) return vkResult;
+
+            struct VirtGpuCreateBlob createBlob = {};
+            createBlob.blobMem = kBlobMemHost3d;
+            createBlob.flags = kBlobFlagMappable;
+            createBlob.blobId = info.blobId;
+            createBlob.size = info.coherentMemorySize;
+
+            auto blob = instance.createBlob(createBlob);
+            if (!blob) return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+
+            mapping = blob->createMapping();
+            if (!mapping) return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+
+            auto coherentMemory =
+                std::make_shared<CoherentMemory>(mapping, createBlob.size, device, memory);
+
+            coherentMemory->subAllocate(info.allocationSize, &ptr, offset);
+
+            info.coherentMemoryOffset = offset;
+            info.coherentMemory = coherentMemory;
+            info.ptr = ptr;
+        }
 
         if (!info.ptr) {
             ALOGE("%s: ptr null\n", __func__);
@@ -3847,43 +3966,6 @@ public:
         // no-op
     }
 
-    uint32_t transformNonExternalResourceMemoryTypeBitsForGuest(
-        uint32_t hostBits) {
-        uint32_t res = 0;
-        for (uint32_t i = 0; i < VK_MAX_MEMORY_TYPES; ++i) {
-            if (hostBits & (1 << i)) {
-                res |= (1 << i);
-            }
-        }
-        return res;
-    }
-
-    uint32_t transformExternalResourceMemoryTypeBitsForGuest(
-        uint32_t normalBits) {
-        uint32_t res = 0;
-        for (uint32_t i = 0; i < VK_MAX_MEMORY_TYPES; ++i) {
-            bool shouldAcceptMemoryIndex = normalBits & (1 << i);
-            if (shouldAcceptMemoryIndex) {
-                res |= (1 << i);
-            }
-        }
-        return res;
-    }
-
-    void transformNonExternalResourceMemoryRequirementsForGuest(
-        VkMemoryRequirements* reqs) {
-        reqs->memoryTypeBits =
-            transformNonExternalResourceMemoryTypeBitsForGuest(
-                reqs->memoryTypeBits);
-    }
-
-    void transformExternalResourceMemoryRequirementsForGuest(
-        VkMemoryRequirements* reqs) {
-        reqs->memoryTypeBits =
-            transformExternalResourceMemoryTypeBitsForGuest(
-                reqs->memoryTypeBits);
-    }
-
     void transformExternalResourceMemoryDedicatedRequirementsForGuest(
         VkMemoryDedicatedRequirements* dedicatedReqs) {
         dedicatedReqs->prefersDedicatedAllocation = VK_TRUE;
@@ -3894,36 +3976,7 @@ public:
         VkImage image,
         VkMemoryRequirements* reqs) {
 
-        auto it = info_VkImage.find(image);
-        if (it == info_VkImage.end()) return;
-
-        auto& info = it->second;
-
-        if (!info.external ||
-            !info.externalCreateInfo.handleTypes) {
-            transformNonExternalResourceMemoryRequirementsForGuest(reqs);
-        } else {
-            transformExternalResourceMemoryRequirementsForGuest(reqs);
-        }
         setMemoryRequirementsForSysmemBackedImage(image, reqs);
-    }
-
-    void transformBufferMemoryRequirementsForGuestLocked(
-        VkBuffer buffer,
-        VkMemoryRequirements* reqs) {
-
-        auto it = info_VkBuffer.find(buffer);
-        if (it == info_VkBuffer.end()) return;
-
-        auto& info = it->second;
-
-        if (!info.external ||
-            !info.externalCreateInfo.handleTypes) {
-            transformNonExternalResourceMemoryRequirementsForGuest(reqs);
-            return;
-        }
-
-        transformExternalResourceMemoryRequirementsForGuest(reqs);
     }
 
     void transformImageMemoryRequirements2ForGuest(
@@ -3939,13 +3992,9 @@ public:
 
         if (!info.external ||
             !info.externalCreateInfo.handleTypes) {
-            transformNonExternalResourceMemoryRequirementsForGuest(
-                &reqs2->memoryRequirements);
             setMemoryRequirementsForSysmemBackedImage(image, &reqs2->memoryRequirements);
             return;
         }
-
-        transformExternalResourceMemoryRequirementsForGuest(&reqs2->memoryRequirements);
 
         setMemoryRequirementsForSysmemBackedImage(image, &reqs2->memoryRequirements);
 
@@ -3971,12 +4020,8 @@ public:
 
         if (!info.external ||
             !info.externalCreateInfo.handleTypes) {
-            transformNonExternalResourceMemoryRequirementsForGuest(
-                &reqs2->memoryRequirements);
             return;
         }
-
-        transformExternalResourceMemoryRequirementsForGuest(&reqs2->memoryRequirements);
 
         VkMemoryDedicatedRequirements* dedicatedReqs =
             vk_find_struct<VkMemoryDedicatedRequirements>(reqs2);
@@ -4181,6 +4226,13 @@ public:
 #ifdef VK_USE_PLATFORM_FUCHSIA
         if (isSysmemBackedMemory) {
             info.isSysmemBackedMemory = true;
+        }
+#endif
+#ifdef VK_USE_PLATFORM_ANDROID_KHR
+        if (extImgCiPtr &&
+            (extImgCiPtr->handleTypes &
+             VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID)) {
+            updateMemoryTypeBitsForAndroidHardwareBuffers(&memReqs.memoryTypeBits);
         }
 #endif
 
@@ -5219,6 +5271,14 @@ public:
 
         if (res != VK_SUCCESS) return res;
 
+#ifdef VK_USE_PLATFORM_ANDROID_KHR
+        if (extBufCiPtr &&
+            (extBufCiPtr->handleTypes &
+             VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID)) {
+            updateMemoryTypeBitsForAndroidHardwareBuffers(&memReqs.memoryTypeBits);
+        }
+#endif
+
         AutoLock<RecursiveLock> lock(mLock);
 
         auto it = info_VkBuffer.find(*pBuffer);
@@ -5231,6 +5291,7 @@ public:
 
         if (supportsCreateResourcesWithRequirements()) {
             info.baseRequirementsKnown = true;
+            info.baseRequirements = memReqs;
         }
 
         if (extBufCiPtr) {
@@ -5243,11 +5304,6 @@ public:
             info.isSysmemBackedMemory = true;
         }
 #endif
-
-        if (info.baseRequirementsKnown) {
-            transformBufferMemoryRequirementsForGuestLocked(*pBuffer, &memReqs);
-            info.baseRequirements = memReqs;
-        }
 
         return res;
     }
@@ -5282,8 +5338,6 @@ public:
 
         lock.lock();
 
-        transformBufferMemoryRequirementsForGuestLocked(
-            buffer, pMemoryRequirements);
         info.baseRequirementsKnown = true;
         info.baseRequirements = *pMemoryRequirements;
     }
@@ -5716,17 +5770,42 @@ public:
 
             unsigned char* writtenPtr = 0;
             size_t written = 0;
-            ((CommandBufferStagingStream*)cb->privateStream)->getWritten(&writtenPtr, &written);
+            CommandBufferStagingStream* cmdBufStream =
+                static_cast<CommandBufferStagingStream*>(cb->privateStream);
+            cmdBufStream->getWritten(&writtenPtr, &written);
 
             // There's no pending commands here, skip. (case 2, stream created but no new recordings)
             if (!written) continue;
 
             // There are pending commands to flush.
             VkEncoder* enc = (VkEncoder*)context;
-            enc->vkQueueFlushCommandsGOOGLE(queue, cmdbuf, written, (const void*)writtenPtr, true /* do lock */);
+            VkDeviceMemory deviceMemory = cmdBufStream->getDeviceMemory();
+            VkDeviceSize dataOffset = 0;
+            if (mFeatureInfo->hasVulkanAuxCommandMemory) {
+                // for suballocations, deviceMemory is an alias VkDeviceMemory
+                // get underling VkDeviceMemory for given alias
+                deviceMemoryTransform_tohost(&deviceMemory, 1 /*memoryCount*/, &dataOffset,
+                                             1 /*offsetCount*/, nullptr /*size*/, 0 /*sizeCount*/,
+                                             nullptr /*typeIndex*/, 0 /*typeIndexCount*/,
+                                             nullptr /*typeBits*/, 0 /*typeBitCounts*/);
 
+                // mark stream as flushing before flushing commands
+                cmdBufStream->markFlushing();
+                enc->vkQueueFlushCommandsFromAuxMemoryGOOGLE(queue, cmdbuf, deviceMemory,
+                                                             dataOffset, written, true /*do lock*/);
+            } else {
+                enc->vkQueueFlushCommandsGOOGLE(queue, cmdbuf, written, (const void*)writtenPtr,
+                                                true /* do lock */);
+            }
             // Reset this stream.
-            ((CommandBufferStagingStream*)cb->privateStream)->reset();
+            // flushing happens on vkQueueSubmit
+            // vulkan api states that on queue submit,
+            // applications MUST not attempt to modify the command buffer in any way
+            // -as the device may be processing the commands recorded to it.
+            // It is safe to call reset() here for this reason.
+            // Command Buffer associated with this stream will only leave pending state
+            // after queue submit is complete and host has read the data
+            cmdBufStream->reset();
         }
     }
 
@@ -6603,6 +6682,69 @@ public:
         return 0;
     }
 
+    CommandBufferStagingStream::Alloc getAlloc() {
+        if (mFeatureInfo->hasVulkanAuxCommandMemory) {
+            return [this](size_t size) -> CommandBufferStagingStream::Memory {
+                VkMemoryAllocateInfo info{
+                    .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                    .pNext = nullptr,
+                    .allocationSize = size,
+                    .memoryTypeIndex = VK_MAX_MEMORY_TYPES  // indicates auxiliary memory
+                };
+
+                auto enc = ResourceTracker::getThreadLocalEncoder();
+                VkDevice device = VK_NULL_HANDLE;
+                VkDeviceMemory vkDeviceMem = VK_NULL_HANDLE;
+                VkResult result = getCoherentMemory(&info, enc, device, &vkDeviceMem);
+                if (result != VK_SUCCESS) {
+                    ALOGE("Failed to get coherent memory %u", result);
+                    return {.deviceMemory = VK_NULL_HANDLE, .ptr = nullptr};
+                }
+
+                // getCoherentMemory() uses suballocations.
+                // To retrieve the suballocated memory address, look up
+                // VkDeviceMemory filled in by getCoherentMemory()
+                // scope of mLock
+                {
+                    AutoLock<RecursiveLock> lock(mLock);
+                    const auto it = info_VkDeviceMemory.find(vkDeviceMem);
+                    if (it == info_VkDeviceMemory.end()) {
+                        ALOGE("Coherent memory allocated %u not found", result);
+                        return {.deviceMemory = VK_NULL_HANDLE, .ptr = nullptr};
+                    };
+
+                    const auto& info = it->second;
+                    return {.deviceMemory = vkDeviceMem, .ptr = info.ptr};
+                }
+            };
+        }
+        return nullptr;
+    }
+
+    CommandBufferStagingStream::Free getFree() {
+        if (mFeatureInfo->hasVulkanAuxCommandMemory) {
+            return [this](const CommandBufferStagingStream::Memory& memory) {
+                // deviceMemory may not be the actual backing auxiliary VkDeviceMemory
+                // for suballocations, deviceMemory is a alias VkDeviceMemory hand;
+                // freeCoherentMemoryLocked maps the alias to the backing VkDeviceMemory
+                VkDeviceMemory deviceMemory = memory.deviceMemory;
+                AutoLock<RecursiveLock> lock(mLock);
+                auto it = info_VkDeviceMemory.find(deviceMemory);
+                if (it == info_VkDeviceMemory.end()) {
+                    ALOGE("Device memory to free not found");
+                    return;
+                }
+                auto coherentMemory = freeCoherentMemoryLocked(deviceMemory, it->second);
+                // We have to release the lock before we could possibly free a
+                // CoherentMemory, because that will call into VkEncoder, which
+                // shouldn't be called when the lock is held.
+                lock.unlock();
+                coherentMemory = nullptr;
+            };
+        }
+        return nullptr;
+    }
+
     VkResult on_vkBeginCommandBuffer(
         void* context, VkResult input_result,
         VkCommandBuffer commandBuffer,
@@ -7103,7 +7245,8 @@ public:
     // Resets staging stream for this command buffer and primary command buffers
     // where this command buffer has been recorded. If requested, also clears the pending
     // descriptor sets.
-    void resetCommandBufferStagingInfo(VkCommandBuffer commandBuffer, bool alsoResetPrimaries, bool alsoClearPendingDescriptorSets) {
+    void resetCommandBufferStagingInfo(VkCommandBuffer commandBuffer, bool alsoResetPrimaries,
+                                       bool alsoClearPendingDescriptorSets) {
         struct goldfish_VkCommandBuffer* cb = as_goldfish_VkCommandBuffer(commandBuffer);
         if (!cb) {
             return;
@@ -7171,13 +7314,44 @@ public:
 
 private:
     mutable RecursiveLock mLock;
-    VkPhysicalDeviceMemoryProperties mMemoryProps;
+
+    const VkPhysicalDeviceMemoryProperties& getPhysicalDeviceMemoryProperties(
+            void* context,
+            VkDevice device = VK_NULL_HANDLE,
+            VkPhysicalDevice physicalDevice = VK_NULL_HANDLE) {
+        if (!mCachedPhysicalDeviceMemoryProps) {
+            if (physicalDevice == VK_NULL_HANDLE) {
+                AutoLock<RecursiveLock> lock(mLock);
+
+                auto deviceInfoIt = info_VkDevice.find(device);
+                if (deviceInfoIt == info_VkDevice.end()) {
+                    ALOGE("Failed to pass device or physical device.");
+                    abort();
+                }
+                const auto& deviceInfo = deviceInfoIt->second;
+                physicalDevice = deviceInfo.physdev;
+            }
+
+            VkEncoder* enc = (VkEncoder*)context;
+
+            VkPhysicalDeviceMemoryProperties properties;
+            enc->vkGetPhysicalDeviceMemoryProperties(physicalDevice, &properties, true /* no lock */);
+
+            mCachedPhysicalDeviceMemoryProps.emplace(std::move(properties));
+        }
+        return *mCachedPhysicalDeviceMemoryProps;
+    }
+
+    std::optional<const VkPhysicalDeviceMemoryProperties> mCachedPhysicalDeviceMemoryProps;
     std::unique_ptr<EmulatorFeatureInfo> mFeatureInfo;
     std::unique_ptr<GoldfishAddressSpaceBlockProvider> mGoldfishAddressSpaceBlockProvider;
 
+    struct VirtGpuCaps mCaps;
     std::vector<VkExtensionProperties> mHostInstanceExtensions;
     std::vector<VkExtensionProperties> mHostDeviceExtensions;
 
+    // 32 bits only for now, upper bits may be used later.
+    std::atomic<uint32_t> mBlobId = 0;
 #if defined(VK_USE_PLATFORM_ANDROID_KHR) || defined(__linux__)
     int mSyncDeviceFd = -1;
 #endif
@@ -7247,6 +7421,8 @@ void ResourceTracker::setupFeatures(const EmulatorFeatureInfo* features) {
     mImpl->setupFeatures(features);
 }
 
+void ResourceTracker::setupCaps(void) { mImpl->setupCaps(); }
+
 void ResourceTracker::setThreadingCallbacks(const ResourceTracker::ThreadingCallbacks& callbacks) {
     mImpl->setThreadingCallbacks(callbacks);
 }
@@ -7299,6 +7475,8 @@ ALWAYS_INLINE VkEncoder* ResourceTracker::getCommandBufferEncoder(VkCommandBuffe
 
     struct goldfish_VkCommandBuffer* cb = as_goldfish_VkCommandBuffer(commandBuffer);
     if (!cb->privateEncoder) {
+        sStaging.setAllocFree(ResourceTracker::get()->getAlloc(),
+                              ResourceTracker::get()->getFree());
         sStaging.popStaging((CommandBufferStagingStream**)&cb->privateStream, &cb->privateEncoder);
     }
     uint8_t* writtenPtr; size_t written;
@@ -8114,6 +8292,9 @@ uint32_t ResourceTracker::syncEncodersForQueue(VkQueue queue, VkEncoder* current
     return mImpl->syncEncodersForQueue(queue, current);
 }
 
+CommandBufferStagingStream::Alloc ResourceTracker::getAlloc() { return mImpl->getAlloc(); }
+
+CommandBufferStagingStream::Free ResourceTracker::getFree() { return mImpl->getFree(); }
 
 VkResult ResourceTracker::on_vkBeginCommandBuffer(
     void* context, VkResult input_result,
@@ -8296,4 +8477,5 @@ void ResourceTracker::transformImpl_VkImageCreateInfo_tohost(const VkImageCreate
 
 LIST_TRIVIAL_TRANSFORMED_TYPES(DEFINE_TRANSFORMED_TYPE_IMPL)
 
-} // namespace goldfish_vk
+}  // namespace vk
+}  // namespace gfxstream

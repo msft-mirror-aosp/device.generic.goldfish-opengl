@@ -14,22 +14,23 @@
 // limitations under the License.
 #pragma once
 
-#include "aemu/base/Tracing.h"
-
 #include <vulkan/vulkan.h>
 
-#include "VulkanHandleMapping.h"
-#include "VulkanHandles.h"
 #include <functional>
 #include <memory>
 
+#include "CommandBufferStagingStream.h"
+#include "VulkanHandleMapping.h"
+#include "VulkanHandles.h"
+#include "aemu/base/Tracing.h"
 #include "goldfish_vk_transform_guest.h"
 
 struct EmulatorFeatureInfo;
 
 class HostConnection;
 
-namespace goldfish_vk {
+namespace gfxstream {
+namespace vk {
 
 class VkEncoder;
 
@@ -528,6 +529,9 @@ public:
     uint32_t syncEncodersForCommandBuffer(VkCommandBuffer commandBuffer, VkEncoder* current);
     uint32_t syncEncodersForQueue(VkQueue queue, VkEncoder* current);
 
+    CommandBufferStagingStream::Alloc getAlloc();
+    CommandBufferStagingStream::Free getFree();
+
     VkResult on_vkBeginCommandBuffer(
         void* context, VkResult input_result,
         VkCommandBuffer commandBuffer,
@@ -613,7 +617,10 @@ public:
     VkDeviceSize getMappedSize(VkDeviceMemory memory);
     VkDeviceSize getNonCoherentExtendedSize(VkDevice device, VkDeviceSize basicSize) const;
     bool isValidMemoryRange(const VkMappedMemoryRange& range) const;
+
     void setupFeatures(const EmulatorFeatureInfo* features);
+    void setupCaps(void);
+
     void setThreadingCallbacks(const ThreadingCallbacks& callbacks);
     bool hostSupportsVulkan() const;
     bool usingDirectMapping() const;
@@ -676,4 +683,5 @@ private:
     std::unique_ptr<Impl> mImpl;
 };
 
-} // namespace goldfish_vk
+}  // namespace vk
+}  // namespace gfxstream

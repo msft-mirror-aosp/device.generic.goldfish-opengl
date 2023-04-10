@@ -984,7 +984,6 @@ static std::vector<std::string> getExtStringArray() {
     // find the number of extensions
     int extStart = 0;
     int extEnd = 0;
-    int currentExtIndex = 0;
 
     if (sWantES30OrAbove(hostStr) &&
         !strstr(hostStr, kOESEGLImageExternalEssl3)) {
@@ -996,7 +995,6 @@ static std::vector<std::string> getExtStringArray() {
         if (hostStr[extEnd] == ' ') {
             int extSz = extEnd - extStart;
             res.push_back(std::string(hostStr + extStart, extSz));
-            currentExtIndex++;
             extStart = extEnd + 1;
         }
         extEnd++;
@@ -2202,6 +2200,9 @@ EGLBoolean eglUnlockSurfaceKHR(EGLDisplay display, EGLSurface surface)
     return 0;
 }
 
+/* Define to match AIDL PixelFormat::R_8. */
+#define HAL_PIXEL_FORMAT_R8 0x38
+
 EGLImageKHR eglCreateImageKHR(EGLDisplay dpy, EGLContext ctx, EGLenum target, EGLClientBuffer buffer, const EGLint *attrib_list)
 {
     (void)attrib_list;
@@ -2224,6 +2225,7 @@ EGLImageKHR eglCreateImageKHR(EGLDisplay dpy, EGLContext ctx, EGLenum target, EG
         DEFINE_AND_VALIDATE_HOST_CONNECTION(EGL_FALSE);
         int format = grallocHelper->getFormat(native_buffer->handle);
         switch (format) {
+            case HAL_PIXEL_FORMAT_R8:
             case HAL_PIXEL_FORMAT_RGBA_8888:
             case HAL_PIXEL_FORMAT_RGBX_8888:
             case HAL_PIXEL_FORMAT_RGB_888:

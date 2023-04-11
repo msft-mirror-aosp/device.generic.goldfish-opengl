@@ -27,7 +27,8 @@
 #include "vk_util.h"
 #include <assert.h>
 
-namespace goldfish_vk {
+namespace gfxstream {
+namespace vk {
 
 // From Intel ANV implementation.
 /* Construct ahw usage mask from image usage bits, see
@@ -61,10 +62,13 @@ getAndroidHardwareBufferUsageFromVkUsage(const VkImageCreateFlags vk_create,
    return ahw_usage;
 }
 
+void updateMemoryTypeBitsForAndroidHardwareBuffers(uint32_t* memoryTypeBits) {
+    constexpr const uint32_t kReservedAndroidHardwareBufferMemoryTypeIndex = 0;
+    *memoryTypeBits = 1u << kReservedAndroidHardwareBufferMemoryTypeIndex;
+}
+
 VkResult getAndroidHardwareBufferPropertiesANDROID(
     Gralloc* grallocHelper,
-    const VkPhysicalDeviceMemoryProperties* memProps,
-    VkDevice,
     const AHardwareBuffer* buffer,
     VkAndroidHardwareBufferPropertiesANDROID* pProperties) {
 
@@ -231,8 +235,9 @@ VkResult getAndroidHardwareBufferPropertiesANDROID(
     if (!colorBufferHandle) {
         return VK_ERROR_INVALID_EXTERNAL_HANDLE;
     }
-    assert(memProps->memoryTypeCount < VK_MAX_MEMORY_TYPES);
-    pProperties->memoryTypeBits = (1u << memProps->memoryTypeCount) - 1;
+
+    updateMemoryTypeBitsForAndroidHardwareBuffers(&pProperties->memoryTypeBits);
+
     pProperties->allocationSize =
         grallocHelper->getAllocatedSize(handle);
 
@@ -342,4 +347,5 @@ VkResult createAndroidHardwareBuffer(
     return VK_SUCCESS;
 }
 
-} // namespace goldfish_vk
+}  // namespace vk
+}  // namespace gfxstream

@@ -25,9 +25,7 @@ VirtGpuDevice::VirtGpuDevice(enum VirtGpuCapset capset) {
     // Unimplemented stub
 }
 
-uint64_t VirtGpuDevice::getParam(enum VirtGpuParamId param) {
-    return 0;
-}
+struct VirtGpuCaps VirtGpuDevice::getCaps(void) { return mCaps; }
 
 int64_t VirtGpuDevice::getDeviceHandle(void) {
     return mDeviceHandle;
@@ -37,11 +35,11 @@ VirtGpuBlobPtr VirtGpuDevice::createPipeBlob(uint32_t size) {
     return nullptr;
 }
 
-VirtGpuBlobPtr VirtGpuDevice::createBlob(struct VirtGpuCreateBlob& blobCreate) {
+VirtGpuBlobPtr VirtGpuDevice::createBlob(const struct VirtGpuCreateBlob& blobCreate) {
     return nullptr;
 }
 
-VirtGpuBlobPtr VirtGpuDevice::importBlob(struct VirtGpuExternalHandle& handle) {
+VirtGpuBlobPtr VirtGpuDevice::importBlob(const struct VirtGpuExternalHandle& handle) {
     return nullptr;
 }
 

@@ -29,7 +29,8 @@ struct EmulatorFeatureInfo;
 
 class HostConnection;
 
-namespace goldfish_vk {
+namespace gfxstream {
+namespace vk {
 
 class VkEncoder;
 
@@ -616,7 +617,10 @@ public:
     VkDeviceSize getMappedSize(VkDeviceMemory memory);
     VkDeviceSize getNonCoherentExtendedSize(VkDevice device, VkDeviceSize basicSize) const;
     bool isValidMemoryRange(const VkMappedMemoryRange& range) const;
+
     void setupFeatures(const EmulatorFeatureInfo* features);
+    void setupCaps(void);
+
     void setThreadingCallbacks(const ThreadingCallbacks& callbacks);
     bool hostSupportsVulkan() const;
     bool usingDirectMapping() const;
@@ -679,4 +683,5 @@ private:
     std::unique_ptr<Impl> mImpl;
 };
 
-} // namespace goldfish_vk
+}  // namespace vk
+}  // namespace gfxstream

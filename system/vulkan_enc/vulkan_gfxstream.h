@@ -43,20 +43,14 @@ typedef struct VkImportBufferGOOGLE {
     uint32_t buffer;
 } VkImportBufferGOOGLE;
 
-typedef struct VkImportPhysicalAddressGOOGLE {
+typedef struct VkCreateBlobGOOGLE {
     VkStructureType sType;
     void* pNext;
-    uint64_t physicalAddress;
-    VkDeviceSize size;
-    VkFormat format;
-    VkImageTiling tiling;
-    uint32_t tilingParameter;
-} VkImportPhysicalAddressGOOGLE;
+    uint32_t blobMem;
+    uint32_t blobFlags;
+    uint64_t blobId;
+} VkCreateBlobGOOGLE;
 
-typedef VkResult(VKAPI_PTR* PFN_vkRegisterImageColorBufferGOOGLE)(VkDevice device, VkImage image,
-                                                                  uint32_t colorBuffer);
-typedef VkResult(VKAPI_PTR* PFN_vkRegisterBufferColorBufferGOOGLE)(VkDevice device, VkBuffer buffer,
-                                                                   uint32_t colorBuffer);
 typedef VkResult(VKAPI_PTR* PFN_vkMapMemoryIntoAddressSpaceGOOGLE)(VkDevice device,
                                                                    VkDeviceMemory memory,
                                                                    uint64_t* pAddress);
@@ -124,14 +118,9 @@ typedef void(VKAPI_PTR* PFN_vkQueueFlushCommandsFromAuxMemoryGOOGLE)(VkQueue que
                                                                      VkDeviceMemory deviceMemory,
                                                                      VkDeviceSize dataOffset,
                                                                      VkDeviceSize dataSize);
+typedef VkResult(VKAPI_PTR* PFN_vkGetBlobGOOGLE)(VkDevice device, VkDeviceMemory memory);
 
 #ifndef VK_NO_PROTOTYPES
-VKAPI_ATTR VkResult VKAPI_CALL vkRegisterImageColorBufferGOOGLE(VkDevice device, VkImage image,
-                                                                uint32_t colorBuffer);
-
-VKAPI_ATTR VkResult VKAPI_CALL vkRegisterBufferColorBufferGOOGLE(VkDevice device, VkBuffer buffer,
-                                                                 uint32_t colorBuffer);
-
 VKAPI_ATTR VkResult VKAPI_CALL vkMapMemoryIntoAddressSpaceGOOGLE(VkDevice device,
                                                                  VkDeviceMemory memory,
                                                                  uint64_t* pAddress);
@@ -217,6 +206,8 @@ VKAPI_ATTR void VKAPI_CALL vkQueueFlushCommandsFromAuxMemoryGOOGLE(VkQueue queue
                                                                    VkDeviceMemory deviceMemory,
                                                                    VkDeviceSize dataOffset,
                                                                    VkDeviceSize dataSize);
+
+VKAPI_ATTR VkResult VKAPI_CALL vkGetBlobGOOGLE(VkDevice device, VkDeviceMemory memory);
 #endif
 
 #ifdef __cplusplus

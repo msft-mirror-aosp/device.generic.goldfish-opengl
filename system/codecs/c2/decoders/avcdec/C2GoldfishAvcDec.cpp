@@ -615,6 +615,9 @@ void C2GoldfishAvcDec::resetPlugin() {
     mSignalledOutputEos = false;
     gettimeofday(&mTimeStart, nullptr);
     gettimeofday(&mTimeEnd, nullptr);
+    if (mOutBlock) {
+        mOutBlock.reset();
+    }
 }
 
 void C2GoldfishAvcDec::deleteContext() {
@@ -715,13 +718,9 @@ C2GoldfishAvcDec::ensureDecoderState(const std::shared_ptr<C2BlockPool> &pool) {
         mOutBlock.reset();
     }
     if (!mOutBlock) {
-        uint32_t format = HAL_PIXEL_FORMAT_YCBCR_420_888;
-        C2MemoryUsage usage = {C2MemoryUsage::CPU_READ,
-                               C2MemoryUsage::CPU_WRITE};
-        usage.expected = (uint64_t)(BufferUsage::VIDEO_DECODER);
-        // C2MemoryUsage usage = {(unsigned
-        // int)(BufferUsage::GPU_DATA_BUFFER)};// { C2MemoryUsage::CPU_READ,
-        // C2MemoryUsage::CPU_WRITE };
+        const uint32_t format = HAL_PIXEL_FORMAT_YCBCR_420_888;
+        const C2MemoryUsage usage = {(uint64_t)(BufferUsage::VIDEO_DECODER),
+                                     C2MemoryUsage::CPU_WRITE};
         c2_status_t err = pool->fetchGraphicBlock(ALIGN2(mWidth), mHeight,
                                                   format, usage, &mOutBlock);
         if (err != C2_OK) {
@@ -745,8 +744,8 @@ C2GoldfishAvcDec::ensureDecoderState(const std::shared_ptr<C2BlockPool> &pool) {
 void C2GoldfishAvcDec::checkMode(const std::shared_ptr<C2BlockPool> &pool) {
     mWidth = mIntf->width();
     mHeight = mIntf->height();
-    const bool isGraphic = (pool->getAllocatorId() & C2Allocator::GRAPHIC);
-    DDD("buffer id %d", (int)(pool->getAllocatorId()));
+    const bool isGraphic = (pool->getLocalId() == C2PlatformAllocatorStore::GRALLOC);
+    DDD("buffer pool id %x",  (int)(pool->getLocalId()));
     if (isGraphic) {
         DDD("decoding to host color buffer");
         mEnableAndroidNativeBuffers = true;

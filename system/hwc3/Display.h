@@ -85,6 +85,7 @@ class Display {
   HWC3::Error getColorModes(std::vector<ColorMode>* outColorModes);
   HWC3::Error getDisplayCapabilities(std::vector<DisplayCapability>* caps);
   HWC3::Error getDisplayConfigs(std::vector<int32_t>* configs);
+  HWC3::Error getDisplayConfigurations(std::vector<DisplayConfiguration>* outConfigs);
   HWC3::Error getDisplayConnectionType(DisplayConnectionType* outType);
   HWC3::Error getDisplayIdentificationData(
       DisplayIdentification* outIdentification);

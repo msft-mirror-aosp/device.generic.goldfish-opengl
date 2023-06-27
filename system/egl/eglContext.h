@@ -52,6 +52,7 @@ struct EGLContext_t {
     GLClientState * getClientState(){ return clientState; }
     GLSharedGroupPtr getSharedGroup(){ return sharedGroup; }
     int getGoldfishSyncFd();
+    static void deleteOnce(EGLContext_t* ptr);
 private:
     GLClientState    *    clientState;
     GLSharedGroupPtr      sharedGroup;

@@ -123,39 +123,54 @@ HWC3::Error findGoldfishPrimaryDisplay(
   return HWC3::Error::None;
 }
 
+void parseExternalDisplaysFromProperties(std::vector<int>& outPropIntParts) {
+
+  static constexpr const char* kExternalDisplayProp[] = {
+      "hwservicemanager.external.displays",
+      "ro.boot.qemu.external.displays",
+  };
+
+  for (auto propName: kExternalDisplayProp) {
+      const std::string propVal = ::android::base::GetProperty(propName, "");
+      if (propVal.empty()) {
+            DEBUG_LOG("%s: prop name is: %s, prop value is: empty", __FUNCTION__,
+              propName);
+          continue;
+      }
+      DEBUG_LOG("%s: prop name is: %s, prop value is: %s", __FUNCTION__,
+              propName, propVal.c_str());
+
+      const std::vector<std::string> propStringParts =
+          ::android::base::Split(propVal, ",");
+      if (propStringParts.size() % 5 != 0) {
+          ALOGE("%s: Invalid syntax for system prop %s which is %s", __FUNCTION__,
+                  propName, propVal.c_str());
+          continue;
+      }
+      std::vector<int> propIntParts;
+      for (const std::string& propStringPart : propStringParts) {
+          int propIntPart;
+          if (!::android::base::ParseInt(propStringPart, &propIntPart)) {
+              ALOGE("%s: Invalid syntax for system prop %s which is %s", __FUNCTION__,
+                      propName, propVal.c_str());
+              break;
+          }
+          propIntParts.push_back(propIntPart);
+      }
+      if (propIntParts.empty() || propIntParts.size() % 5 != 0) {
+          continue;
+      }
+      outPropIntParts.insert(outPropIntParts.end(), propIntParts.begin(), propIntParts.end());
+  }
+}
+
 HWC3::Error findGoldfishSecondaryDisplays(
     std::vector<DisplayMultiConfigs>* outDisplays) {
   DEBUG_LOG("%s", __FUNCTION__);
 
-  static constexpr const char kExternalDisplayProp[] =
-      "hwservicemanager.external.displays";
-
-  const auto propString =
-      ::android::base::GetProperty(kExternalDisplayProp, "");
-  DEBUG_LOG("%s: prop value is: %s", __FUNCTION__, propString.c_str());
-
-  if (propString.empty()) {
-    return HWC3::Error::None;
-  }
-
-  const std::vector<std::string> propStringParts =
-      ::android::base::Split(propString, ",");
-  if (propStringParts.size() % 5 != 0) {
-    ALOGE("%s: Invalid syntax for system prop %s which is %s", __FUNCTION__,
-          kExternalDisplayProp, propString.c_str());
-    return HWC3::Error::BadParameter;
-  }
 
   std::vector<int> propIntParts;
-  for (const std::string& propStringPart : propStringParts) {
-    int propIntPart;
-    if (!::android::base::ParseInt(propStringPart, &propIntPart)) {
-      ALOGE("%s: Invalid syntax for system prop %s which is %s", __FUNCTION__,
-            kExternalDisplayProp, propString.c_str());
-      return HWC3::Error::BadParameter;
-    }
-    propIntParts.push_back(propIntPart);
-  }
+  parseExternalDisplaysFromProperties(propIntParts);
 
   int64_t secondaryDisplayId = 1;
   while (!propIntParts.empty()) {

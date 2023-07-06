@@ -33,6 +33,8 @@ struct DisplayMultiConfigs {
   std::vector<DisplayConfig> configs;
 };
 
+void parseExternalDisplaysFromProperties(std::vector<int>& outPropIntParts);
+
 HWC3::Error findDisplays(const DrmClient* drm,
                          std::vector<DisplayMultiConfigs>* outDisplays);
 

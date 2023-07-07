@@ -199,6 +199,8 @@ const char *  eglStrError(EGLint err)
 
 // The one and only supported display object.
 static eglDisplay s_display;
+static std::mutex s_contexts_mutex;
+static std::set<EGLContext_t*> s_contexts_to_delete;
 
 // Extra defines not in the official EGL spec yet,
 // but required in Android CTS.
@@ -251,6 +253,8 @@ EGLContext_t::EGLContext_t(EGLDisplay dpy, EGLConfig config, EGLContext_t* share
         sharedGroup = GLSharedGroupPtr(new GLSharedGroup());
     assert(dpy == (EGLDisplay)&s_display);
     s_display.onCreateContext((EGLContext)this);
+    std::lock_guard<std::mutex> mylock(s_contexts_mutex);
+    s_contexts_to_delete.insert(this);
 };
 
 int EGLContext_t::getGoldfishSyncFd() {
@@ -258,6 +262,19 @@ int EGLContext_t::getGoldfishSyncFd() {
         goldfishSyncFd = goldfish_sync_open();
     }
     return goldfishSyncFd;
+}
+
+void EGLContext_t::deleteOnce(EGLContext_t* ptr) {
+    // adding a block so we don't hold mutex when deleting
+    {
+        std::lock_guard<std::mutex> mylock(s_contexts_mutex);
+        if (s_contexts_to_delete.find(ptr) != s_contexts_to_delete.end()) {
+            s_contexts_to_delete.erase(ptr);
+        } else {
+            return;
+        }
+    }
+    delete ptr;
 }
 
 EGLContext_t::~EGLContext_t()
@@ -1568,7 +1585,7 @@ static EGLBoolean s_eglReleaseThreadImpl(EGLThreadInfo* tInfo) {
             rcEnc->rcDestroyContext(rcEnc, context->rcContext);
             context->rcContext = 0;
         }
-        delete context;
+        EGLContext_t::deleteOnce(context);
     }
     tInfo->currentContext = 0;
 
@@ -1884,7 +1901,8 @@ EGLBoolean eglDestroyContext(EGLDisplay dpy, EGLContext ctx)
         context->rcContext = 0;
     }
 
-    delete context;
+    EGLContext_t::deleteOnce(context);
+
     return EGL_TRUE;
 }
 
@@ -2200,6 +2218,9 @@ EGLBoolean eglUnlockSurfaceKHR(EGLDisplay display, EGLSurface surface)
     return 0;
 }
 
+/* Define to match AIDL PixelFormat::R_8. */
+#define HAL_PIXEL_FORMAT_R8 0x38
+
 EGLImageKHR eglCreateImageKHR(EGLDisplay dpy, EGLContext ctx, EGLenum target, EGLClientBuffer buffer, const EGLint *attrib_list)
 {
     (void)attrib_list;
@@ -2219,9 +2240,13 @@ EGLImageKHR eglCreateImageKHR(EGLDisplay dpy, EGLContext ctx, EGLenum target, EG
         if (native_buffer->common.version != sizeof(android_native_buffer_t))
             setErrorReturn(EGL_BAD_PARAMETER, EGL_NO_IMAGE_KHR);
 
+        if (native_buffer->handle == NULL)
+            setErrorReturn(EGL_BAD_PARAMETER, EGL_NO_IMAGE_KHR);
+
         DEFINE_AND_VALIDATE_HOST_CONNECTION(EGL_FALSE);
         int format = grallocHelper->getFormat(native_buffer->handle);
         switch (format) {
+            case HAL_PIXEL_FORMAT_R8:
             case HAL_PIXEL_FORMAT_RGBA_8888:
             case HAL_PIXEL_FORMAT_RGBX_8888:
             case HAL_PIXEL_FORMAT_RGB_888:

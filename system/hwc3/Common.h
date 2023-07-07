@@ -42,12 +42,14 @@
 
 namespace aidl::android::hardware::graphics::composer3::impl {
 
+bool IsAutoDevice();
 bool IsCuttlefish();
 bool IsCuttlefishFoldable();
 
 bool IsInNoOpCompositionMode();
 bool IsInClientCompositionMode();
 
+bool IsInGem5DisplayFinderMode();
 bool IsInNoOpDisplayFinderMode();
 bool IsInDrmDisplayFinderMode();
 

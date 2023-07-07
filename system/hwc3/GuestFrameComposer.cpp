@@ -29,6 +29,7 @@
 #include <ui/GraphicBufferMapper.h>
 
 #include "Display.h"
+#include "DisplayFinder.h"
 #include "Drm.h"
 #include "Layer.h"
 
@@ -591,35 +592,8 @@ HWC3::Error GuestFrameComposer::getDisplayConfigsFromSystemProp(
     std::vector<GuestFrameComposer::DisplayConfig>* configs) {
   DEBUG_LOG("%s", __FUNCTION__);
 
-  static constexpr const char kExternalDisplayProp[] =
-      "hwservicemanager.external.displays";
-
-  const auto propString =
-      ::android::base::GetProperty(kExternalDisplayProp, "");
-  DEBUG_LOG("%s: prop value is: %s", __FUNCTION__, propString.c_str());
-
-  if (propString.empty()) {
-    return HWC3::Error::None;
-  }
-
-  const std::vector<std::string> propStringParts =
-      ::android::base::Split(propString, ",");
-  if (propStringParts.size() % 5 != 0) {
-    ALOGE("%s: Invalid syntax for system prop %s which is %s", __FUNCTION__,
-          kExternalDisplayProp, propString.c_str());
-    return HWC3::Error::BadParameter;
-  }
-
   std::vector<int> propIntParts;
-  for (const std::string& propStringPart : propStringParts) {
-    int propIntPart;
-    if (!::android::base::ParseInt(propStringPart, &propIntPart)) {
-      ALOGE("%s: Invalid syntax for system prop %s which is %s", __FUNCTION__,
-            kExternalDisplayProp, propString.c_str());
-      return HWC3::Error::BadParameter;
-    }
-    propIntParts.push_back(propIntPart);
-  }
+  parseExternalDisplaysFromProperties(propIntParts);
 
   while (!propIntParts.empty()) {
     DisplayConfig display_config = {

@@ -487,13 +487,13 @@ HWC3::Error HostFrameComposer::validateDisplay(Display* display,
       switch (layerCompositionType) {
         case Composition::CLIENT:
         case Composition::SIDEBAND:
-          ALOGI("%s: layer %" PRIu32 " CompositionType %d, fallback to client",
+          ALOGV("%s: layer %" PRIu32 " CompositionType %d, fallback to client",
                 __FUNCTION__, static_cast<uint32_t>(layer->getId()),
                 layerCompositionType);
           layerFallBackTo = Composition::CLIENT;
           break;
         case Composition::CURSOR:
-          ALOGI("%s: layer %" PRIu32 " CompositionType %d, fallback to device",
+          ALOGV("%s: layer %" PRIu32 " CompositionType %d, fallback to device",
                 __FUNCTION__, static_cast<uint32_t>(layer->getId()),
                 layerCompositionType);
           layerFallBackTo = Composition::DEVICE;
@@ -591,6 +591,8 @@ HWC3::Error HostFrameComposer::presentDisplay(
 
           *outDisplayFence = std::move(flushCompleteFence);
         } else {
+          rcEnc->rcSetDisplayColorBuffer(rcEnc, displayInfo.hostDisplayId,
+                  hostCon->grallocHelper()->getHostHandle(displayClientTarget.getBuffer()));
           post(hostCon, rcEnc, displayClientTarget.getBuffer());
           *outDisplayFence = std::move(fence);
         }
@@ -766,6 +768,8 @@ HWC3::Error HostFrameComposer::presentDisplay(
           displayClientTargetFence);
       *outDisplayFence = std::move(flushFence);
     } else {
+          rcEnc->rcSetDisplayColorBuffer(rcEnc, displayInfo.hostDisplayId,
+                  hostCon->grallocHelper()->getHostHandle(displayClientTarget.getBuffer()));
       post(hostCon, rcEnc, displayClientTarget.getBuffer());
       *outDisplayFence = std::move(displayClientTargetFence);
     }

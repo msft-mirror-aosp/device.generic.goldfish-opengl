@@ -495,11 +495,19 @@ void C2GoldfishVpxDec::checkContext(const std::shared_ptr<C2BlockPool> &pool) {
     mCtx = new vpx_codec_ctx_t;
     mCtx->vpversion = mMode == MODE_VP8 ? 8 : 9;
 
+    //const bool isGraphic = (pool->getLocalId() == C2PlatformAllocatorStore::GRALLOC);
     const bool isGraphic = (pool->getAllocatorId() & C2Allocator::GRAPHIC);
-    DDD("buffer id %d", (int)(pool->getAllocatorId()));
+    DDD("buffer pool allocator id %x",  (int)(pool->getAllocatorId()));
     if (isGraphic) {
-        DDD("decoding to host color buffer");
-        mEnableAndroidNativeBuffers = true;
+        uint64_t client_usage = getClientUsage(pool);
+        DDD("client has usage as 0x%llx", client_usage);
+        if (client_usage & BufferUsage::CPU_READ_MASK) {
+            DDD("decoding to guest byte buffer as client has read usage");
+            mEnableAndroidNativeBuffers = false;
+        } else {
+            DDD("decoding to host color buffer");
+            mEnableAndroidNativeBuffers = true;
+        }
     } else {
         DDD("decoding to guest byte buffer");
         mEnableAndroidNativeBuffers = false;
@@ -723,9 +731,9 @@ C2GoldfishVpxDec::outputBuffer(const std::shared_ptr<C2BlockPool> &pool,
 
     // now get the block
     std::shared_ptr<C2GraphicBlock> block;
-    C2MemoryUsage usage = {C2MemoryUsage::CPU_READ, C2MemoryUsage::CPU_WRITE};
     uint32_t format = HAL_PIXEL_FORMAT_YCBCR_420_888;
-    usage.expected = (uint64_t)(BufferUsage::VIDEO_DECODER);
+    const C2MemoryUsage usage = {(uint64_t)(BufferUsage::VIDEO_DECODER),
+                                 C2MemoryUsage::CPU_WRITE | C2MemoryUsage::CPU_READ};
 
     c2_status_t err = pool->fetchGraphicBlock(align(mWidth, 2), mHeight, format,
                                               usage, &block);

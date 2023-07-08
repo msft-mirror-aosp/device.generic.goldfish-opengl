@@ -719,8 +719,8 @@ C2GoldfishAvcDec::ensureDecoderState(const std::shared_ptr<C2BlockPool> &pool) {
     }
     if (!mOutBlock) {
         const uint32_t format = HAL_PIXEL_FORMAT_YCBCR_420_888;
-        const C2MemoryUsage usage = {C2MemoryUsage::CPU_READ,
-                                     (uint64_t)(BufferUsage::VIDEO_DECODER)};
+        const C2MemoryUsage usage = {(uint64_t)(BufferUsage::VIDEO_DECODER),
+                                     C2MemoryUsage::CPU_WRITE | C2MemoryUsage::CPU_READ};
         c2_status_t err = pool->fetchGraphicBlock(ALIGN2(mWidth), mHeight,
                                                   format, usage, &mOutBlock);
         if (err != C2_OK) {
@@ -744,11 +744,19 @@ C2GoldfishAvcDec::ensureDecoderState(const std::shared_ptr<C2BlockPool> &pool) {
 void C2GoldfishAvcDec::checkMode(const std::shared_ptr<C2BlockPool> &pool) {
     mWidth = mIntf->width();
     mHeight = mIntf->height();
-    const bool isGraphic = (pool->getLocalId() == C2PlatformAllocatorStore::GRALLOC);
-    DDD("buffer pool id %x",  (int)(pool->getLocalId()));
+    //const bool isGraphic = (pool->getLocalId() == C2PlatformAllocatorStore::GRALLOC);
+    const bool isGraphic = (pool->getAllocatorId() & C2Allocator::GRAPHIC);
+    DDD("buffer pool allocator id %x",  (int)(pool->getAllocatorId()));
     if (isGraphic) {
-        DDD("decoding to host color buffer");
-        mEnableAndroidNativeBuffers = true;
+        uint64_t client_usage = getClientUsage(pool);
+        DDD("client has usage as 0x%llx", client_usage);
+        if (client_usage & BufferUsage::CPU_READ_MASK) {
+            DDD("decoding to guest byte buffer as client has read usage");
+            mEnableAndroidNativeBuffers = false;
+        } else {
+            DDD("decoding to host color buffer");
+            mEnableAndroidNativeBuffers = true;
+        }
     } else {
         DDD("decoding to guest byte buffer");
         mEnableAndroidNativeBuffers = false;

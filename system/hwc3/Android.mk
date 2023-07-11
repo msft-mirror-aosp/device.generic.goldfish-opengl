@@ -84,6 +84,7 @@ LOCAL_SRC_FILES := \
     DisplayConfig.cpp \
     DisplayFinder.cpp \
     Drm.cpp \
+    DrmSwapchain.cpp \
     DrmAtomicRequest.cpp \
     DrmBuffer.cpp \
     DrmClient.cpp \

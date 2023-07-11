@@ -591,6 +591,8 @@ HWC3::Error HostFrameComposer::presentDisplay(
 
           *outDisplayFence = std::move(flushCompleteFence);
         } else {
+          rcEnc->rcSetDisplayColorBuffer(rcEnc, displayInfo.hostDisplayId,
+                  hostCon->grallocHelper()->getHostHandle(displayClientTarget.getBuffer()));
           post(hostCon, rcEnc, displayClientTarget.getBuffer());
           *outDisplayFence = std::move(fence);
         }
@@ -766,6 +768,8 @@ HWC3::Error HostFrameComposer::presentDisplay(
           displayClientTargetFence);
       *outDisplayFence = std::move(flushFence);
     } else {
+          rcEnc->rcSetDisplayColorBuffer(rcEnc, displayInfo.hostDisplayId,
+                  hostCon->grallocHelper()->getHostHandle(displayClientTarget.getBuffer()));
       post(hostCon, rcEnc, displayClientTarget.getBuffer());
       *outDisplayFence = std::move(displayClientTargetFence);
     }

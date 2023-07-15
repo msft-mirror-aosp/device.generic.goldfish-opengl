@@ -135,6 +135,8 @@ class ComposerClient : public BnComposerClient {
                                          int32_t timeoutMs) override;
   ndk::ScopedAStatus setRefreshRateChangedCallbackDebugEnabled(int64_t displayId,
                                                                bool enabled) override;
+  ndk::ScopedAStatus getDisplayConfigurations(int64_t displayId,
+                                              std::vector<DisplayConfiguration>*) override;
 
  protected:
   ndk::SpAIBinder createBinder() override;

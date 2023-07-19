@@ -753,12 +753,25 @@ ndk::ScopedAStatus ComposerClient::setRefreshRateChangedCallbackDebugEnabled(
 }
 
 ndk::ScopedAStatus ComposerClient::getDisplayConfigurations(
-      int64_t displayId, std::vector<DisplayConfiguration>* outDisplayConfig) {
+        int64_t displayId,
+        int32_t /*maxFrameIntervalNs*/,
+        std::vector<DisplayConfiguration>* outDisplayConfig) {
     DEBUG_LOG("%s", __FUNCTION__);
 
     GET_DISPLAY_OR_RETURN_ERROR();
 
     return ToBinderStatus(display->getDisplayConfigurations(outDisplayConfig));
+}
+
+ndk::ScopedAStatus ComposerClient::notifyExpectedPresent(
+        int64_t displayId,
+        const ClockMonotonicTimestamp& /*expectedPresentTime*/,
+        int32_t /*frameIntervalNs*/)  {
+    DEBUG_LOG("%s", __FUNCTION__);
+
+    GET_DISPLAY_OR_RETURN_ERROR();
+
+    return ToBinderStatus(HWC3::Error::Unsupported);
 }
 
 ndk::SpAIBinder ComposerClient::createBinder() {

@@ -40,7 +40,7 @@ GOLDFISH_OPENGL_LIB_SUFFIX :=
 # This is always set to a module's LOCAL_C_INCLUDES
 # See the definition of emugl-begin-module in common.mk
 EMUGL_COMMON_INCLUDES := \
-    $(GOLDFISH_OPENGL_PATH)/host/include/libOpenglRender \
+    $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/iostream/include/libOpenglRender \
     $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/include
 
 # This is always set to a module's LOCAL_CFLAGS
@@ -139,16 +139,16 @@ ifeq (true,$(GOLDFISH_OPENGL_SHOULD_BUILD))
 # Note that the build system will complain if you try to import a
 # module that hasn't been declared yet anyway.
 #
-include $(GOLDFISH_OPENGL_PATH)/shared/qemupipe/Android.mk
-include $(GOLDFISH_OPENGL_PATH)/shared/gralloc_cb/Android.mk
-include $(GOLDFISH_OPENGL_PATH)/shared/GoldfishAddressSpace/Android.mk
+include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/qemupipe/Android.mk
+include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/gralloc_cb/Android.mk
+include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/GoldfishAddressSpace/Android.mk
 include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/platform/Android.mk
 
 ifeq (true,$(GFXSTREAM)) # android-emu
-    include $(GOLDFISH_OPENGL_PATH)/android-emu/Android.mk
+    include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/android-emu/Android.mk
 endif
 
-include $(GOLDFISH_OPENGL_PATH)/shared/OpenglCodecCommon/Android.mk
+include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/OpenglCodecCommon/Android.mk
 
 # Encoder shared libraries
 include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/GLESv1_enc/Android.mk

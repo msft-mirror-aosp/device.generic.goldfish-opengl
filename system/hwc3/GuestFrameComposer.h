@@ -20,7 +20,6 @@
 #include "Common.h"
 #include "Display.h"
 #include "DrmClient.h"
-#include "DrmSwapchain.h"
 #include "FrameComposer.h"
 #include "Gralloc.h"
 #include "Layer.h"
@@ -93,8 +92,10 @@ class GuestFrameComposer : public FrameComposer {
                                std::uint32_t dstBufferBytesPerPixel);
 
   struct DisplayInfo {
-    // Additional per display buffers for the composition result.
-    std::unique_ptr<DrmSwapchain> swapchain = {};
+    // Additional per display buffer for the composition result.
+    buffer_handle_t compositionResultBuffer = nullptr;
+
+    std::shared_ptr<DrmBuffer> compositionResultDrmBuffer;
   };
 
   std::unordered_map<int64_t, DisplayInfo> mDisplayInfos;

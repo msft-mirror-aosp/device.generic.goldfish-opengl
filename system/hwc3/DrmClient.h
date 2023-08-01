@@ -49,6 +49,8 @@ class DrmClient {
     DrmClient(DrmClient&&) = delete;
     DrmClient& operator=(DrmClient&&) = delete;
 
+    ::android::base::unique_fd OpenVirtioGpuDrmFd();
+
     HWC3::Error init();
 
     struct DisplayConfig {

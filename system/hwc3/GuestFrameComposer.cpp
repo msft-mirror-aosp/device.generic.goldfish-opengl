@@ -488,46 +488,24 @@ HWC3::Error GuestFrameComposer::onDisplayCreate(Display* display) {
   }
 
   DisplayInfo& displayInfo = mDisplayInfos[displayId];
-
-  uint32_t bufferStride;
-  buffer_handle_t bufferHandle;
-
-  auto status = ::android::GraphicBufferAllocator::get().allocate(
-      displayWidth,                       //
-      displayHeight,                      //
-      ::android::PIXEL_FORMAT_RGBA_8888,  //
-      /*layerCount=*/1,                   //
-      ::android::GraphicBuffer::USAGE_HW_COMPOSER |
-          ::android::GraphicBuffer::USAGE_SW_READ_OFTEN |
-          ::android::GraphicBuffer::USAGE_SW_WRITE_OFTEN,  //
-      &bufferHandle,                                       //
-      &bufferStride,                                       //
-      "RanchuHwc");
-  if (status != ::android::OK) {
-    ALOGE("%s: failed to allocate composition buffer for display:%" PRIu64,
-          __FUNCTION__, displayId);
-    return HWC3::Error::NoResources;
-  }
-
-  displayInfo.compositionResultBuffer = bufferHandle;
-
-  auto [drmBufferCreateError, drmBuffer] = mDrmClient.create(bufferHandle);
-  if (drmBufferCreateError != HWC3::Error::None) {
-    ALOGE("%s: failed to create drm buffer for display:%" PRIu64, __FUNCTION__,
-          displayId);
-    return drmBufferCreateError;
-  }
-  displayInfo.compositionResultDrmBuffer = std::move(drmBuffer);
+  displayInfo.swapchain = DrmSwapchain::create(displayWidth, displayHeight,
+                                               ::android::GraphicBuffer::USAGE_HW_COMPOSER |
+                                                   ::android::GraphicBuffer::USAGE_SW_READ_OFTEN |
+                                                   ::android::GraphicBuffer::USAGE_SW_WRITE_OFTEN,
+                                               &mDrmClient);
 
   if (displayId == 0) {
-    auto [flushError, flushSyncFd] = mDrmClient.flushToDisplay(
-        displayId, displayInfo.compositionResultDrmBuffer, -1);
+    auto compositionResult = displayInfo.swapchain->getNextImage();
+    auto [flushError, flushSyncFd] =
+        mDrmClient.flushToDisplay(displayId, compositionResult->getDrmBuffer(), -1);
     if (flushError != HWC3::Error::None) {
       ALOGW(
           "%s: Initial display flush failed. HWComposer assuming that we are "
           "running in QEMU without a display and disabling presenting.",
           __FUNCTION__);
       mPresentDisabled = true;
+    } else {
+      compositionResult->markAsInUse(std::move(flushSyncFd));
     }
   }
 
@@ -548,14 +526,7 @@ HWC3::Error GuestFrameComposer::onDisplayDestroy(Display* display) {
           displayId);
     return HWC3::Error::BadDisplay;
   }
-
-  DisplayInfo& displayInfo = mDisplayInfos[displayId];
-
-  ::android::GraphicBufferAllocator::get().free(
-      displayInfo.compositionResultBuffer);
-
-  mDisplayInfos.erase(it);
-
+  mDisplayInfos.erase(displayId);
   return HWC3::Error::None;
 }
 
@@ -753,21 +724,23 @@ HWC3::Error GuestFrameComposer::presentDisplay(
   }
 
   DisplayInfo& displayInfo = it->second;
+  auto compositionResult = displayInfo.swapchain->getNextImage();
+  compositionResult->wait();
 
-  if (displayInfo.compositionResultBuffer == nullptr) {
+  if (compositionResult->getBuffer() == nullptr) {
     ALOGE("%s: display:%" PRIu64 " missing composition result buffer",
           __FUNCTION__, displayId);
     return HWC3::Error::NoResources;
   }
 
-  if (displayInfo.compositionResultDrmBuffer == nullptr) {
+  if (compositionResult->getDrmBuffer() == nullptr) {
     ALOGE("%s: display:%" PRIu64 " missing composition result drm buffer",
           __FUNCTION__, displayId);
     return HWC3::Error::NoResources;
   }
 
   std::optional<GrallocBuffer> compositionResultBufferOpt =
-      mGralloc.Import(displayInfo.compositionResultBuffer);
+      mGralloc.Import(compositionResult->getBuffer());
   if (!compositionResultBufferOpt) {
     ALOGE("%s: display:%" PRIu64 " failed to import buffer", __FUNCTION__,
           displayId);
@@ -912,14 +885,16 @@ HWC3::Error GuestFrameComposer::presentDisplay(
   DEBUG_LOG("%s display:%" PRIu64 " flushing drm buffer", __FUNCTION__,
             displayId);
 
-  auto [error, fence] = mDrmClient.flushToDisplay(
-      displayId, displayInfo.compositionResultDrmBuffer, -1);
+  auto [error, fence] = mDrmClient.flushToDisplay(displayId, compositionResult->getDrmBuffer(), -1);
   if (error != HWC3::Error::None) {
     ALOGE("%s: display:%" PRIu64 " failed to flush drm buffer" PRIu64,
           __FUNCTION__, displayId);
   }
 
   *outDisplayFence = std::move(fence);
+  compositionResult->markAsInUse(outDisplayFence->ok()
+                                     ? ::android::base::unique_fd(dup(*outDisplayFence))
+                                     : ::android::base::unique_fd());
   return error;
 }
 

@@ -62,14 +62,14 @@ LOCAL_STATIC_LIBRARIES := \
     libyuv_static
 
 LOCAL_C_INCLUDES := \
-    device/generic/goldfish-opengl/host/include/libOpenglRender \
-    device/generic/goldfish-opengl/android-emu \
-    device/generic/goldfish-opengl/shared/OpenglCodecCommon \
-    device/generic/goldfish-opengl/system/OpenglSystemCommon \
-    device/generic/goldfish-opengl/system/include \
-    device/generic/goldfish-opengl/system/renderControl_enc \
     external/libdrm \
     external/minigbm/cros_gralloc \
+    hardware/google/gfxstream/guest/android-emu \
+    hardware/google/gfxstream/guest/include \
+    hardware/google/gfxstream/guest/iostream/include/libOpenglRender \
+    hardware/google/gfxstream/guest/OpenglCodecCommon \
+    hardware/google/gfxstream/guest/OpenglSystemCommon \
+    hardware/google/gfxstream/guest/renderControl_enc \
     system/core/libsync \
     system/core/libsync/include \
 
@@ -84,6 +84,7 @@ LOCAL_SRC_FILES := \
     DisplayConfig.cpp \
     DisplayFinder.cpp \
     Drm.cpp \
+    DrmSwapchain.cpp \
     DrmAtomicRequest.cpp \
     DrmBuffer.cpp \
     DrmClient.cpp \

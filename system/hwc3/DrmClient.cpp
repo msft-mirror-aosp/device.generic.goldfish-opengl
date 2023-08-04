@@ -39,6 +39,19 @@ HWC3::Error DrmClient::init() {
         return HWC3::Error::NoResources;
     }
 
+    auto version = drmGetVersion(mFd.get());
+
+    const std::string deviceName = version->name;
+    DEBUG_LOG("%s: /dev/dri/card0 is %s", __FUNCTION__, deviceName.c_str());
+    if (deviceName.find("virtio") == std::string::npos) {
+        ALOGE("%s: found unexpected DRM device when opening /dev/dri/card0: \"%s\". "
+              "Ranchu HWComposer is only expected to be used with \"virtio_gpu\".",
+              __FUNCTION__, deviceName.c_str());
+        return HWC3::Error::NoResources;
+    }
+
+    drmFreeVersion(version);
+
     int ret = drmSetClientCap(mFd.get(), DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
     if (ret) {
         ALOGE("%s: failed to set cap universal plane %s\n", __FUNCTION__, strerror(errno));

@@ -133,8 +133,8 @@ class C2GoldfishAvcDec::IntfImpl : public SimpleInterface<void>::BaseParams {
             DefineParam(mSize, C2_PARAMKEY_PICTURE_SIZE)
                 .withDefault(new C2StreamPictureSizeInfo::output(0u, 320, 240))
                 .withFields({
-                    C2F(mSize, width).inRange(2, 4080, 2),
-                    C2F(mSize, height).inRange(2, 4080, 2),
+                    C2F(mSize, width).inRange(2, 4096, 2),
+                    C2F(mSize, height).inRange(2, 4096, 2),
                 })
                 .withSetter(SizeSetter)
                 .build());
@@ -143,8 +143,8 @@ class C2GoldfishAvcDec::IntfImpl : public SimpleInterface<void>::BaseParams {
                          .withDefault(new C2StreamMaxPictureSizeTuning::output(
                              0u, 320, 240))
                          .withFields({
-                             C2F(mSize, width).inRange(2, 4080, 2),
-                             C2F(mSize, height).inRange(2, 4080, 2),
+                             C2F(mSize, width).inRange(2, 4096, 2),
+                             C2F(mSize, height).inRange(2, 4096, 2),
                          })
                          .withSetter(MaxPictureSizeSetter, mSize)
                          .build());
@@ -280,10 +280,12 @@ class C2GoldfishAvcDec::IntfImpl : public SimpleInterface<void>::BaseParams {
 
         C2R res = C2R::Ok();
         if (!me.F(me.v.width).supportsAtAll(me.v.width)) {
+            ALOGW("w %d is not supported, using old one %d", me.v.width, oldMe.v.width);
             res = res.plus(C2SettingResultBuilder::BadValue(me.F(me.v.width)));
             me.set().width = oldMe.v.width;
         }
         if (!me.F(me.v.height).supportsAtAll(me.v.height)) {
+            ALOGW("h %d is not supported, using old one %d", me.v.height, oldMe.v.height);
             res = res.plus(C2SettingResultBuilder::BadValue(me.F(me.v.height)));
             me.set().height = oldMe.v.height;
         }
@@ -297,8 +299,8 @@ class C2GoldfishAvcDec::IntfImpl : public SimpleInterface<void>::BaseParams {
         (void)mayBlock;
         // TODO: get max width/height from the size's field helpers vs.
         // hardcoding
-        me.set().width = c2_min(c2_max(me.v.width, size.v.width), 4080u);
-        me.set().height = c2_min(c2_max(me.v.height, size.v.height), 4080u);
+        me.set().width = c2_min(c2_max(me.v.width, size.v.width), 4096u);
+        me.set().height = c2_min(c2_max(me.v.height, size.v.height), 4096u);
         return C2R::Ok();
     }
 

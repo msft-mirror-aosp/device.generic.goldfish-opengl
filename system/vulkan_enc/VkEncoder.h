@@ -37,9 +37,10 @@
 #include "goldfish_vk_private_defs.h"
 #include "vulkan_gfxstream.h"
 
-namespace gfxstream {
+// ToT and udc-dev defines IOStream in different namespace
+// namespace gfxstream {
 class IOStream;
-}
+// }
 
 namespace gfxstream {
 namespace vk {

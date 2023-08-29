@@ -34,6 +34,7 @@ namespace vk {
 #define __GOLDFISH_VK_LIST_NON_DISPATCHABLE_HANDLE_TYPES_NVX_BINARY_IMPORT(f) \
     f(VkCuModuleNVX) \
     f(VkCuFunctionNVX) \
+    f(VkMicromapEXT) \
 
 #else
 

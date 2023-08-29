@@ -31,8 +31,6 @@ LOCAL_SHARED_LIBRARIES := \
     android.hardware.graphics.composer@2.1-resources \
     android.hardware.graphics.composer@2.2-resources \
     android.hardware.graphics.composer3-V3-ndk \
-    android.hardware.graphics.mapper@2.0 \
-    android.hardware.graphics.mapper@4.0 \
     libbase \
     libbinder_ndk \
     libEGL \

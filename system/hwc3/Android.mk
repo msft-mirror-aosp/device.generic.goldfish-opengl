@@ -69,6 +69,7 @@ LOCAL_C_INCLUDES := \
     hardware/google/gfxstream/guest/iostream/include/libOpenglRender \
     hardware/google/gfxstream/guest/OpenglCodecCommon \
     hardware/google/gfxstream/guest/OpenglSystemCommon \
+    hardware/google/gfxstream/guest/platform/include \
     hardware/google/gfxstream/guest/renderControl_enc \
     system/core/libsync \
     system/core/libsync/include \

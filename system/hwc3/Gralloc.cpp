@@ -16,160 +16,81 @@
 
 #include "Gralloc.h"
 
+#include <aidl/android/hardware/graphics/common/BufferUsage.h>
 #include <aidl/android/hardware/graphics/common/PlaneLayoutComponent.h>
 #include <aidl/android/hardware/graphics/common/PlaneLayoutComponentType.h>
 #include <drm_fourcc.h>
 #include <gralloctypes/Gralloc4.h>
-#include <hidl/ServiceManagement.h>
 #include <log/log.h>
+#include <ui/GraphicBufferMapper.h>
 
 #include <algorithm>
 
 #include "Drm.h"
 
+using aidl::android::hardware::graphics::common::BufferUsage;
 using aidl::android::hardware::graphics::common::PlaneLayout;
 using aidl::android::hardware::graphics::common::PlaneLayoutComponent;
 using aidl::android::hardware::graphics::common::PlaneLayoutComponentType;
-using android::hardware::hidl_handle;
-using android::hardware::hidl_vec;
-using android::hardware::graphics::common::V1_2::BufferUsage;
-using android::hardware::graphics::mapper::V4_0::Error;
-using android::hardware::graphics::mapper::V4_0::IMapper;
-using MetadataType =
-    android::hardware::graphics::mapper::V4_0::IMapper::MetadataType;
+using android::OK;
+using android::Rect;
+using android::status_t;
+using android::GraphicBufferMapper;
 
 namespace aidl::android::hardware::graphics::composer3::impl {
 
-Gralloc::Gralloc() {
-  ::android::hardware::preloadPassthroughService<IMapper>();
-
-  gralloc4_ = IMapper::getService();
-  if (gralloc4_ != nullptr) {
-    ALOGE("%s using Gralloc4.", __FUNCTION__);
-    return;
-  }
-  ALOGE("%s Gralloc4 not available.", __FUNCTION__);
-
-  ALOGE("%s No Grallocs available!", __FUNCTION__);
-}
-
-Error Gralloc::GetMetadata(buffer_handle_t buffer, MetadataType type,
-                           hidl_vec<uint8_t>* metadata) {
-  if (gralloc4_ == nullptr) {
-    ALOGE("%s Gralloc4 not available.", __FUNCTION__);
-    return Error::NO_RESOURCES;
-  }
-
-  if (metadata == nullptr) {
-    return Error::BAD_VALUE;
-  }
-
-  Error error = Error::NONE;
-
-  auto native_handle = const_cast<native_handle_t*>(buffer);
-
-  auto ret =
-      gralloc4_->get(native_handle, type,
-                     [&](const auto& get_error, const auto& get_metadata) {
-                       error = get_error;
-                       *metadata = get_metadata;
-                     });
-
-  if (!ret.isOk()) {
-    error = Error::NO_RESOURCES;
-  }
-
-  if (error != Error::NONE) {
-    ALOGE("%s failed to get metadata %s", __FUNCTION__, type.name.c_str());
-  }
-  return error;
-}
-
 std::optional<uint32_t> Gralloc::GetWidth(buffer_handle_t buffer) {
-  if (gralloc4_ == nullptr) {
-    ALOGE("%s Gralloc4 not available.", __FUNCTION__);
-    return std::nullopt;
-  }
-
-  hidl_vec<uint8_t> encoded_width;
-
-  Error error = GetMetadata(buffer, ::android::gralloc4::MetadataType_Width,
-                            &encoded_width);
-  if (error != Error::NONE) {
-    return std::nullopt;
-  }
-
   uint64_t width = 0;
-  ::android::gralloc4::decodeWidth(encoded_width, &width);
+  status_t status = GraphicBufferMapper::get().getWidth(buffer, &width);
+  if (status != OK) {
+    return std::nullopt;
+  }
+
+  if (width > std::numeric_limits<uint32_t>::max()) {
+    ALOGE("%s Width too large to cast to uint32_t: %ld", __FUNCTION__, width);
+    return std::nullopt;
+  }
   return static_cast<uint32_t>(width);
 }
 
 std::optional<uint32_t> Gralloc::GetHeight(buffer_handle_t buffer) {
-  if (gralloc4_ == nullptr) {
-    ALOGE("%s Gralloc4 not available.", __FUNCTION__);
-    return std::nullopt;
-  }
-
-  hidl_vec<uint8_t> encoded_height;
-
-  Error error = GetMetadata(buffer, ::android::gralloc4::MetadataType_Height,
-                            &encoded_height);
-  if (error != Error::NONE) {
-    return std::nullopt;
-  }
-
   uint64_t height = 0;
-  ::android::gralloc4::decodeHeight(encoded_height, &height);
+  status_t status = GraphicBufferMapper::get().getHeight(buffer, &height);
+  if (status != OK) {
+    return std::nullopt;
+  }
+
+  if (height > std::numeric_limits<uint32_t>::max()) {
+    ALOGE("%s Height too large to cast to uint32_t: %ld", __FUNCTION__, height);
+    return std::nullopt;
+  }
   return static_cast<uint32_t>(height);
 }
 
 std::optional<uint32_t> Gralloc::GetDrmFormat(buffer_handle_t buffer) {
-  if (gralloc4_ == nullptr) {
-    ALOGE("%s Gralloc4 not available.", __FUNCTION__);
-    return std::nullopt;
-  }
-
-  hidl_vec<uint8_t> encoded_format;
-
-  Error error =
-      GetMetadata(buffer, ::android::gralloc4::MetadataType_PixelFormatFourCC,
-                  &encoded_format);
-  if (error != Error::NONE) {
-    return std::nullopt;
-  }
-
   uint32_t format = 0;
-  ::android::gralloc4::decodePixelFormatFourCC(encoded_format, &format);
-  return static_cast<uint32_t>(format);
+  status_t status =  GraphicBufferMapper::get().getPixelFormatFourCC(buffer, &format);
+  if (status != OK) {
+    return std::nullopt;
+  }
+
+  return format;
 }
 
 std::optional<std::vector<PlaneLayout>> Gralloc::GetPlaneLayouts(
     buffer_handle_t buffer) {
-  if (gralloc4_ == nullptr) {
-    ALOGE("%s Gralloc4 not available.", __FUNCTION__);
+  std::vector<PlaneLayout> layouts;
+  status_t status =  GraphicBufferMapper::get().getPlaneLayouts(
+      buffer, &layouts);
+  if (status != OK) {
     return std::nullopt;
   }
 
-  hidl_vec<uint8_t> encoded_layouts;
-
-  Error error = GetMetadata(
-      buffer, ::android::gralloc4::MetadataType_PlaneLayouts, &encoded_layouts);
-  if (error != Error::NONE) {
-    return std::nullopt;
-  }
-
-  std::vector<PlaneLayout> plane_layouts;
-  ::android::gralloc4::decodePlaneLayouts(encoded_layouts, &plane_layouts);
-  return plane_layouts;
+  return layouts;
 }
 
 std::optional<uint32_t> Gralloc::GetMonoPlanarStrideBytes(
     buffer_handle_t buffer) {
-  if (gralloc4_ == nullptr) {
-    ALOGE("%s Gralloc4 not available.", __FUNCTION__);
-    return std::nullopt;
-  }
-
   auto plane_layouts_opt = GetPlaneLayouts(buffer);
   if (!plane_layouts_opt) {
     return std::nullopt;
@@ -180,57 +101,37 @@ std::optional<uint32_t> Gralloc::GetMonoPlanarStrideBytes(
     return std::nullopt;
   }
 
+  if (plane_layouts[0].strideInBytes > std::numeric_limits<uint32_t>::max()) {
+    ALOGE("%s strideInBytes too large to cast to uint32_t: %ld", __FUNCTION__, plane_layouts[0].strideInBytes);
+    return std::nullopt;
+  }
   return static_cast<uint32_t>(plane_layouts[0].strideInBytes);
 }
 
 std::optional<GrallocBuffer> Gralloc::Import(buffer_handle_t buffer) {
-  if (gralloc4_ == nullptr) {
-    ALOGE("%s Gralloc4 not available.", __FUNCTION__);
-    return std::nullopt;
-  }
-
   buffer_handle_t imported_buffer;
 
-  Error error;
-  auto ret =
-      gralloc4_->importBuffer(buffer, [&](const auto& err, const auto& buf) {
-        error = err;
-        if (err == Error::NONE) {
-          imported_buffer = static_cast<buffer_handle_t>(buf);
-        }
-      });
+  status_t status =
+      GraphicBufferMapper::get().importBufferNoValidate(buffer, &imported_buffer);
 
-  if (!ret.isOk() || error != Error::NONE) {
-    ALOGE("%s failed to import buffer", __FUNCTION__);
+  if (status != OK) {
+    ALOGE("%s failed to import buffer: %d", __FUNCTION__, status);
     return std::nullopt;
   }
   return GrallocBuffer(this, imported_buffer);
 }
 
 void Gralloc::Release(buffer_handle_t buffer) {
-  if (gralloc4_ == nullptr) {
-    ALOGE("%s Gralloc4 not available.", __FUNCTION__);
-    return;
-  }
+  status_t status = GraphicBufferMapper::get().freeBuffer(buffer);
 
-  auto native_buffer = const_cast<native_handle_t*>(buffer);
-  auto ret = gralloc4_->freeBuffer(native_buffer);
-
-  if (!ret.isOk()) {
-    ALOGE("%s failed to release buffer", __FUNCTION__);
+  if (status != OK) {
+    ALOGE("%s failed to release buffer: %d", __FUNCTION__, status);
   }
 }
 
 std::optional<void*> Gralloc::Lock(buffer_handle_t buffer) {
-  if (gralloc4_ == nullptr) {
-    ALOGE("%s Gralloc4 not available.", __FUNCTION__);
-    return std::nullopt;
-  }
-
-  auto native_buffer = const_cast<native_handle_t*>(buffer);
-
-  const auto buffer_usage = static_cast<uint64_t>(BufferUsage::CPU_READ_OFTEN |
-                                                  BufferUsage::CPU_WRITE_OFTEN);
+  const auto buffer_usage = static_cast<uint64_t>(BufferUsage::CPU_READ_OFTEN) |
+                            static_cast<uint64_t>(BufferUsage::CPU_WRITE_OFTEN);
 
   auto width_opt = GetWidth(buffer);
   if (!width_opt) {
@@ -242,33 +143,21 @@ std::optional<void*> Gralloc::Lock(buffer_handle_t buffer) {
     return std::nullopt;
   }
 
-  IMapper::Rect buffer_region;
+  Rect buffer_region;
   buffer_region.left = 0;
   buffer_region.top = 0;
-  buffer_region.width = *width_opt;
-  buffer_region.height = *height_opt;
+  // width = right - left
+  buffer_region.right = *width_opt;
+  // height = bottom - top
+  buffer_region.bottom = *height_opt;
 
-  // Empty fence, lock immedietly.
-  hidl_handle fence;
-
-  Error error = Error::NONE;
   void* data = nullptr;
 
-  auto ret =
-      gralloc4_->lock(native_buffer, buffer_usage, buffer_region, fence,
-                      [&](const auto& lock_error, const auto& lock_data) {
-                        error = lock_error;
-                        if (lock_error == Error::NONE) {
-                          data = lock_data;
-                        }
-                      });
+  status_t status =
+      GraphicBufferMapper::get().lock(buffer, buffer_usage, buffer_region, &data);
 
-  if (!ret.isOk()) {
-    error = Error::NO_RESOURCES;
-  }
-
-  if (error != Error::NONE) {
-    ALOGE("%s failed to lock buffer", __FUNCTION__);
+  if (status != OK) {
+    ALOGE("%s failed to lock buffer: %d", __FUNCTION__, status);
     return std::nullopt;
   }
 
@@ -276,11 +165,6 @@ std::optional<void*> Gralloc::Lock(buffer_handle_t buffer) {
 }
 
 std::optional<android_ycbcr> Gralloc::LockYCbCr(buffer_handle_t buffer) {
-  if (gralloc4_ == nullptr) {
-    ALOGE("%s Gralloc4 not available.", __FUNCTION__);
-    return std::nullopt;
-  }
-
   auto format_opt = GetDrmFormat(buffer);
   if (!format_opt) {
     ALOGE("%s failed to check format of buffer", __FUNCTION__);
@@ -350,24 +234,10 @@ std::optional<android_ycbcr> Gralloc::LockYCbCr(buffer_handle_t buffer) {
 }
 
 void Gralloc::Unlock(buffer_handle_t buffer) {
-  if (gralloc4_ == nullptr) {
-    ALOGE("%s Gralloc4 not available.", __FUNCTION__);
-    return;
-  }
+  status_t status = GraphicBufferMapper::get().unlock(buffer);
 
-  auto native_handle = const_cast<native_handle_t*>(buffer);
-
-  Error error = Error::NONE;
-  auto ret = gralloc4_->unlock(
-      native_handle,
-      [&](const auto& unlock_error, const auto&) { error = unlock_error; });
-
-  if (!ret.isOk()) {
-    error = Error::NO_RESOURCES;
-  }
-
-  if (error != Error::NONE) {
-    ALOGE("%s failed to unlock buffer", __FUNCTION__);
+  if (status != OK) {
+    ALOGE("%s failed to unlock buffer %d", __FUNCTION__, status);
   }
 }
 

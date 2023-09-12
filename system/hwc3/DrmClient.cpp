@@ -18,9 +18,9 @@
 
 #include <cros_gralloc_handle.h>
 
-using ::android::base::guest::AutoReadLock;
-using ::android::base::guest::AutoWriteLock;
-using ::android::base::guest::ReadWriteLock;
+using ::gfxstream::guest::AutoReadLock;
+using ::gfxstream::guest::AutoWriteLock;
+using ::gfxstream::guest::ReadWriteLock;
 
 namespace aidl::android::hardware::graphics::composer3::impl {
 

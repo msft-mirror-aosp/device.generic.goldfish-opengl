@@ -3443,7 +3443,8 @@ public:
 
             AHardwareBuffer_Desc ahbDesc = {};
             AHardwareBuffer_describe(ahw, &ahbDesc);
-            if (ahbDesc.format == AHARDWAREBUFFER_FORMAT_BLOB) {
+            if (ahbDesc.format == AHARDWAREBUFFER_FORMAT_BLOB
+                && !ResourceTracker::threadingCallbacks.hostConnectionGetFunc()->grallocHelper()->treatBlobAsImage()) {
                 importBufferInfo.buffer = hostHandle;
                 vk_append_struct(&structChainIter, &importBufferInfo);
             } else {
@@ -3779,7 +3780,9 @@ public:
                 enc->vkAllocateMemory(
                     device, &finalAllocInfo, pAllocator, pMemory, true /* do lock */);
 
-            if (input_result != VK_SUCCESS) _RETURN_FAILURE_WITH_DEVICE_MEMORY_REPORT(input_result);
+            if (input_result != VK_SUCCESS) {
+                _RETURN_FAILURE_WITH_DEVICE_MEMORY_REPORT(input_result);
+            }
 
             VkDeviceSize allocationSize = finalAllocInfo.allocationSize;
             setDeviceMemoryInfo(
@@ -3830,8 +3833,9 @@ public:
 
         // Host visible memory with direct mapping
         VkResult result = getCoherentMemory(&finalAllocInfo, enc, device, pMemory);
-        if (result != VK_SUCCESS)
+        if (result != VK_SUCCESS) {
             return result;
+        }
 
         _RETURN_SCUCCESS_WITH_DEVICE_MEMORY_REPORT;
     }
@@ -3940,10 +3944,14 @@ public:
             createBlob.size = info.coherentMemorySize;
 
             auto blob = instance.createBlob(createBlob);
-            if (!blob) return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+            if (!blob) {
+                return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+            }
 
             mapping = blob->createMapping();
-            if (!mapping) return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+            if (!mapping) {
+                return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+            }
 
             auto coherentMemory =
                 std::make_shared<CoherentMemory>(mapping, createBlob.size, device, memory);
@@ -4396,6 +4404,24 @@ public:
 
         VkEncoder* enc = (VkEncoder*)context;
         return enc->vkCreateSampler(device, &localCreateInfo, pAllocator, pSampler, true /* do lock */);
+    }
+
+    void on_vkGetPhysicalDeviceExternalBufferProperties(
+        void* context,
+        VkPhysicalDevice physicalDevice,
+        const VkPhysicalDeviceExternalBufferInfo* pExternalBufferInfo,
+        VkExternalBufferProperties* pExternalBufferProperties) {
+        VkEncoder* enc = (VkEncoder*)context;
+        // b/299520213
+        // We declared blob formar not supported.
+        if (ResourceTracker::threadingCallbacks.hostConnectionGetFunc()->grallocHelper()->treatBlobAsImage()
+            && pExternalBufferInfo->handleType == VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID) {
+            pExternalBufferProperties->externalMemoryProperties.externalMemoryFeatures = 0;
+            pExternalBufferProperties->externalMemoryProperties.exportFromImportedHandleTypes = 0;
+            pExternalBufferProperties->externalMemoryProperties.compatibleHandleTypes = 0;
+            return;
+        }
+        enc->vkGetPhysicalDeviceExternalBufferProperties(physicalDevice, pExternalBufferInfo, pExternalBufferProperties, true /* do lock */);
     }
 
     void on_vkGetPhysicalDeviceExternalFenceProperties(
@@ -8212,6 +8238,15 @@ VkResult ResourceTracker::on_vkCreateSampler(
     VkSampler* pSampler) {
     return mImpl->on_vkCreateSampler(
         context, input_result, device, pCreateInfo, pAllocator, pSampler);
+}
+
+void ResourceTracker::on_vkGetPhysicalDeviceExternalBufferProperties(
+    void* context,
+    VkPhysicalDevice physicalDevice,
+    const VkPhysicalDeviceExternalBufferInfo* pExternalBufferInfo,
+    VkExternalBufferProperties* pExternalBufferProperties) {
+    mImpl->on_vkGetPhysicalDeviceExternalBufferProperties(
+        context, physicalDevice, pExternalBufferInfo, pExternalBufferProperties);
 }
 
 void ResourceTracker::on_vkGetPhysicalDeviceExternalFenceProperties(

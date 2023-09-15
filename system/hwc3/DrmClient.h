@@ -98,7 +98,7 @@ class DrmClient {
     // Drm device.
     ::android::base::unique_fd mFd;
 
-    mutable ::android::base::guest::ReadWriteLock mDisplaysMutex;
+    mutable ::gfxstream::guest::ReadWriteLock mDisplaysMutex;
     std::vector<std::unique_ptr<DrmDisplay>> mDisplays;
 
     std::optional<HotplugCallback> mHotplugCallback;

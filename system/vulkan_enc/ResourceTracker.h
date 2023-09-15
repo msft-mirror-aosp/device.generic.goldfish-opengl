@@ -367,6 +367,12 @@ public:
         const VkAllocationCallbacks* pAllocator,
         VkSampler* pSampler);
 
+    void on_vkGetPhysicalDeviceExternalBufferProperties(
+        void* context,
+        VkPhysicalDevice physicalDevice,
+        const VkPhysicalDeviceExternalBufferInfo* pExternalBufferInfo,
+        VkExternalBufferProperties* pExternalBufferProperties);
+
     void on_vkGetPhysicalDeviceExternalFenceProperties(
         void* context,
         VkPhysicalDevice physicalDevice,

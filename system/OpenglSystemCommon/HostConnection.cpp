@@ -212,6 +212,7 @@ public:
     {
         return static_cast<size_t>(cb_handle_t::from(handle)->allocatedSize());
     }
+    virtual bool treatBlobAsImage() { return true; }
 };
 
 static inline uint32_t align_up(uint32_t n, uint32_t a) {

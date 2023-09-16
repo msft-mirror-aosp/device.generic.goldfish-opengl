@@ -1659,6 +1659,51 @@ public:
     }
 
 #ifdef VK_USE_PLATFORM_ANDROID_KHR
+    uint32_t getColorBufferMemoryIndex(void* context, VkDevice device) {
+        // Create test image to get the memory requirements
+        VkEncoder* enc = (VkEncoder*)context;
+        VkImageCreateInfo createInfo = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = VK_FORMAT_R8G8B8A8_UNORM,
+            .extent = {64, 64, 1},
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .tiling = VK_IMAGE_TILING_OPTIMAL,
+            .usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT |  VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                        VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
+            .initialLayout = VK_IMAGE_LAYOUT_MAX_ENUM,
+        };
+        VkImage image = VK_NULL_HANDLE;
+        VkResult res = enc->vkCreateImage(device, &createInfo, nullptr, &image, true /* do lock */);
+
+        if (res != VK_SUCCESS) {
+            return 0;
+        }
+
+        VkMemoryRequirements memReqs;
+        enc->vkGetImageMemoryRequirements(
+            device, image, &memReqs, true /* do lock */);
+        enc->vkDestroyImage(device, image, nullptr, true /* do lock */);
+
+        const VkPhysicalDeviceMemoryProperties& memProps =
+                getPhysicalDeviceMemoryProperties(context, device, VK_NULL_HANDLE);
+
+        // Currently, host looks for the last index that has with memory
+        // property type VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+        VkMemoryPropertyFlags memoryProperty = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        for (int i = VK_MAX_MEMORY_TYPES - 1; i >= 0; --i) {
+            if ((memReqs.memoryTypeBits & (1u << i)) &&
+                (memProps.memoryTypes[i].propertyFlags & memoryProperty)) {
+                return i;
+            }
+        }
+
+        return 0;
+    }
+
     VkResult on_vkGetAndroidHardwareBufferPropertiesANDROID(
             void* context, VkResult,
             VkDevice device,
@@ -1668,12 +1713,9 @@ public:
             ResourceTracker::threadingCallbacks.hostConnectionGetFunc()->grallocHelper();
 
         // Delete once goldfish Linux drivers are gone
-	if (mCaps.gfxstreamCapset.colorBufferMemoryIndex == 0xFFFFFFFF) {
-            const VkPhysicalDeviceMemoryProperties& memProps =
-                getPhysicalDeviceMemoryProperties(context, device, VK_NULL_HANDLE);
-
+        if (mCaps.gfxstreamCapset.colorBufferMemoryIndex == 0xFFFFFFFF) {
             mCaps.gfxstreamCapset.colorBufferMemoryIndex =
-                (1u << memProps.memoryTypeCount) - 1;
+                    getColorBufferMemoryIndex(context, device);
         }
 
         updateMemoryTypeBits(&pProperties->memoryTypeBits,
@@ -3443,7 +3485,8 @@ public:
 
             AHardwareBuffer_Desc ahbDesc = {};
             AHardwareBuffer_describe(ahw, &ahbDesc);
-            if (ahbDesc.format == AHARDWAREBUFFER_FORMAT_BLOB) {
+            if (ahbDesc.format == AHARDWAREBUFFER_FORMAT_BLOB
+                && !ResourceTracker::threadingCallbacks.hostConnectionGetFunc()->grallocHelper()->treatBlobAsImage()) {
                 importBufferInfo.buffer = hostHandle;
                 vk_append_struct(&structChainIter, &importBufferInfo);
             } else {
@@ -3779,7 +3822,9 @@ public:
                 enc->vkAllocateMemory(
                     device, &finalAllocInfo, pAllocator, pMemory, true /* do lock */);
 
-            if (input_result != VK_SUCCESS) _RETURN_FAILURE_WITH_DEVICE_MEMORY_REPORT(input_result);
+            if (input_result != VK_SUCCESS) {
+                _RETURN_FAILURE_WITH_DEVICE_MEMORY_REPORT(input_result);
+            }
 
             VkDeviceSize allocationSize = finalAllocInfo.allocationSize;
             setDeviceMemoryInfo(
@@ -3830,8 +3875,9 @@ public:
 
         // Host visible memory with direct mapping
         VkResult result = getCoherentMemory(&finalAllocInfo, enc, device, pMemory);
-        if (result != VK_SUCCESS)
+        if (result != VK_SUCCESS) {
             return result;
+        }
 
         _RETURN_SCUCCESS_WITH_DEVICE_MEMORY_REPORT;
     }
@@ -3940,10 +3986,14 @@ public:
             createBlob.size = info.coherentMemorySize;
 
             auto blob = instance.createBlob(createBlob);
-            if (!blob) return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+            if (!blob) {
+                return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+            }
 
             mapping = blob->createMapping();
-            if (!mapping) return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+            if (!mapping) {
+                return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+            }
 
             auto coherentMemory =
                 std::make_shared<CoherentMemory>(mapping, createBlob.size, device, memory);
@@ -4247,8 +4297,11 @@ public:
 
 // Delete `protocolVersion` check goldfish drivers are gone.
 #ifdef VK_USE_PLATFORM_ANDROID_KHR
+        if (mCaps.gfxstreamCapset.colorBufferMemoryIndex == 0xFFFFFFFF) {
+            mCaps.gfxstreamCapset.colorBufferMemoryIndex =
+                    getColorBufferMemoryIndex(context, device);
+        }
         if (extImgCiPtr &&
-            mCaps.gfxstreamCapset.protocolVersion &&
             (extImgCiPtr->handleTypes &
              VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID)) {
             updateMemoryTypeBits(&memReqs.memoryTypeBits,
@@ -4396,6 +4449,24 @@ public:
 
         VkEncoder* enc = (VkEncoder*)context;
         return enc->vkCreateSampler(device, &localCreateInfo, pAllocator, pSampler, true /* do lock */);
+    }
+
+    void on_vkGetPhysicalDeviceExternalBufferProperties(
+        void* context,
+        VkPhysicalDevice physicalDevice,
+        const VkPhysicalDeviceExternalBufferInfo* pExternalBufferInfo,
+        VkExternalBufferProperties* pExternalBufferProperties) {
+        VkEncoder* enc = (VkEncoder*)context;
+        // b/299520213
+        // We declared blob formar not supported.
+        if (ResourceTracker::threadingCallbacks.hostConnectionGetFunc()->grallocHelper()->treatBlobAsImage()
+            && pExternalBufferInfo->handleType == VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID) {
+            pExternalBufferProperties->externalMemoryProperties.externalMemoryFeatures = 0;
+            pExternalBufferProperties->externalMemoryProperties.exportFromImportedHandleTypes = 0;
+            pExternalBufferProperties->externalMemoryProperties.compatibleHandleTypes = 0;
+            return;
+        }
+        enc->vkGetPhysicalDeviceExternalBufferProperties(physicalDevice, pExternalBufferInfo, pExternalBufferProperties, true /* do lock */);
     }
 
     void on_vkGetPhysicalDeviceExternalFenceProperties(
@@ -5299,8 +5370,11 @@ public:
 
 // Delete `protocolVersion` check goldfish drivers are gone.
 #ifdef VK_USE_PLATFORM_ANDROID_KHR
+        if (mCaps.gfxstreamCapset.colorBufferMemoryIndex == 0xFFFFFFFF) {
+            mCaps.gfxstreamCapset.colorBufferMemoryIndex =
+                    getColorBufferMemoryIndex(context, device);
+        }
         if (extBufCiPtr &&
-            mCaps.gfxstreamCapset.protocolVersion &&
             (extBufCiPtr->handleTypes &
              VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID)) {
             updateMemoryTypeBits(&memReqs.memoryTypeBits,
@@ -8212,6 +8286,15 @@ VkResult ResourceTracker::on_vkCreateSampler(
     VkSampler* pSampler) {
     return mImpl->on_vkCreateSampler(
         context, input_result, device, pCreateInfo, pAllocator, pSampler);
+}
+
+void ResourceTracker::on_vkGetPhysicalDeviceExternalBufferProperties(
+    void* context,
+    VkPhysicalDevice physicalDevice,
+    const VkPhysicalDeviceExternalBufferInfo* pExternalBufferInfo,
+    VkExternalBufferProperties* pExternalBufferProperties) {
+    mImpl->on_vkGetPhysicalDeviceExternalBufferProperties(
+        context, physicalDevice, pExternalBufferInfo, pExternalBufferProperties);
 }
 
 void ResourceTracker::on_vkGetPhysicalDeviceExternalFenceProperties(

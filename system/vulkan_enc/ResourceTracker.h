@@ -252,6 +252,9 @@ public:
         void* context, VkResult input_result,
         VkQueue queue, uint32_t submitCount, const VkSubmitInfo* pSubmits, VkFence fence);
 
+    VkResult on_vkQueueSubmit2(void* context, VkResult input_result, VkQueue queue,
+                               uint32_t submitCount, const VkSubmitInfo2* pSubmits, VkFence fence);
+
     VkResult on_vkQueueWaitIdle(
         void* context, VkResult input_result,
         VkQueue queue);
@@ -363,6 +366,12 @@ public:
         const VkSamplerCreateInfo* pCreateInfo,
         const VkAllocationCallbacks* pAllocator,
         VkSampler* pSampler);
+
+    void on_vkGetPhysicalDeviceExternalBufferProperties(
+        void* context,
+        VkPhysicalDevice physicalDevice,
+        const VkPhysicalDeviceExternalBufferInfo* pExternalBufferInfo,
+        VkExternalBufferProperties* pExternalBufferProperties);
 
     void on_vkGetPhysicalDeviceExternalFenceProperties(
         void* context,

@@ -31,8 +31,6 @@ LOCAL_SHARED_LIBRARIES := \
     android.hardware.graphics.composer@2.1-resources \
     android.hardware.graphics.composer@2.2-resources \
     android.hardware.graphics.composer3-V3-ndk \
-    android.hardware.graphics.mapper@2.0 \
-    android.hardware.graphics.mapper@4.0 \
     libbase \
     libbinder_ndk \
     libEGL \
@@ -68,6 +66,7 @@ LOCAL_C_INCLUDES := \
     hardware/google/gfxstream/guest/iostream/include/libOpenglRender \
     hardware/google/gfxstream/guest/OpenglCodecCommon \
     hardware/google/gfxstream/guest/OpenglSystemCommon \
+    hardware/google/gfxstream/guest/platform/include \
     hardware/google/gfxstream/guest/renderControl_enc \
     system/core/libsync \
     system/core/libsync/include \

@@ -10,6 +10,8 @@
 # Top-level for all modules
 GOLDFISH_OPENGL_PATH := $(call my-dir)
 
+HARDWARE_GOOGLE_GFXSTREAM_PATH := $(GOLDFISH_OPENGL_PATH)/../../../hardware/google/gfxstream
+
 ifeq (true,$(GOLDFISH_OPENGL_BUILD_FOR_HOST))
 ENABLE_GOLDFISH_OPENGL_FOLDER := true
 else
@@ -37,7 +39,9 @@ GOLDFISH_OPENGL_LIB_SUFFIX :=
 # Directory containing common headers used by several modules
 # This is always set to a module's LOCAL_C_INCLUDES
 # See the definition of emugl-begin-module in common.mk
-EMUGL_COMMON_INCLUDES := $(GOLDFISH_OPENGL_PATH)/host/include/libOpenglRender $(GOLDFISH_OPENGL_PATH)/system/include
+EMUGL_COMMON_INCLUDES := \
+    $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/iostream/include/libOpenglRender \
+    $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/include
 
 # This is always set to a module's LOCAL_CFLAGS
 # See the definition of emugl-begin-module in common.mk
@@ -62,7 +66,6 @@ IS_AT_LEAST_OPD1:=true
 # The host-side Android framework implementation
 HOST_EMUGL_PATH := $(GOLDFISH_OPENGL_PATH)/../../../external/qemu/android/android-emugl
 EMUGL_COMMON_INCLUDES += $(HOST_EMUGL_PATH)/guest
-GFXSTREAM_PROTOCOLS_PATH := $(GOLDFISH_OPENGL_PATH)/../../../hardware/google/gfxstream
 
 EMUGL_COMMON_CFLAGS += \
     -DPLATFORM_SDK_VERSION=29 \
@@ -136,45 +139,17 @@ ifeq (true,$(GOLDFISH_OPENGL_SHOULD_BUILD))
 # Note that the build system will complain if you try to import a
 # module that hasn't been declared yet anyway.
 #
-include $(GOLDFISH_OPENGL_PATH)/shared/qemupipe/Android.mk
-include $(GOLDFISH_OPENGL_PATH)/shared/gralloc_cb/Android.mk
-include $(GOLDFISH_OPENGL_PATH)/shared/GoldfishAddressSpace/Android.mk
-include $(GOLDFISH_OPENGL_PATH)/platform/Android.mk
+include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/qemupipe/Android.mk
+include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/gralloc_cb/Android.mk
+include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/GoldfishAddressSpace/Android.mk
+include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/platform/Android.mk
 
 ifeq (true,$(GFXSTREAM)) # android-emu
-    include $(GOLDFISH_OPENGL_PATH)/android-emu/Android.mk
+    include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/android-emu/Android.mk
 endif
-
-include $(GOLDFISH_OPENGL_PATH)/shared/OpenglCodecCommon/Android.mk
-
-# Encoder shared libraries
-include $(GOLDFISH_OPENGL_PATH)/system/GLESv1_enc/Android.mk
-include $(GOLDFISH_OPENGL_PATH)/system/GLESv2_enc/Android.mk
-include $(GOLDFISH_OPENGL_PATH)/system/renderControl_enc/Android.mk
-
-ifeq (true,$(GFXSTREAM)) # Vulkan libs
-    include $(GOLDFISH_OPENGL_PATH)/system/vulkan_enc/Android.mk
-endif
-
-include $(GOLDFISH_OPENGL_PATH)/system/OpenglSystemCommon/Android.mk
-
-# Profiler library
-include $(GOLDFISH_OPENGL_PATH)/system/profiler/Android.mk
-
-# System shared libraries
-include $(GOLDFISH_OPENGL_PATH)/system/GLESv1/Android.mk
-include $(GOLDFISH_OPENGL_PATH)/system/GLESv2/Android.mk
-
-include $(GOLDFISH_OPENGL_PATH)/system/gralloc/Android.mk
 
 ifneq (true,$(GOLDFISH_OPENGL_BUILD_FOR_HOST))
 include $(GOLDFISH_OPENGL_PATH)/system/hals/Android.mk
-endif
-
-include $(GOLDFISH_OPENGL_PATH)/system/egl/Android.mk
-
-ifeq (true,$(GFXSTREAM)) # Vulkan libs
-    include $(GOLDFISH_OPENGL_PATH)/system/vulkan/Android.mk
 endif
 
 ifeq ($(shell test $(PLATFORM_SDK_VERSION) -gt 28 -o $(IS_AT_LEAST_QPR1) = true && echo isApi29OrHigher),isApi29OrHigher)
@@ -186,10 +161,6 @@ ifeq ($(shell test $(PLATFORM_SDK_VERSION) -gt 28 -o $(IS_AT_LEAST_QPR1) = true 
     include $(GOLDFISH_OPENGL_PATH)/system/codecs/omx/vpxdec/Android.mk
 endif
 
-endif
-
-ifeq (true,$(GFXSTREAM)) # Vulkan lib tests
-    include $(GOLDFISH_OPENGL_PATH)/system/vulkan_enc_unit_tests/Android.mk
 endif
 
 endif # ENABLE_GOLDFISH_OPENGL_FOLDER

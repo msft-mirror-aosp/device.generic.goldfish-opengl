@@ -18,9 +18,9 @@
 
 #include <cros_gralloc_handle.h>
 
-using ::android::base::guest::AutoReadLock;
-using ::android::base::guest::AutoWriteLock;
-using ::android::base::guest::ReadWriteLock;
+using ::gfxstream::guest::AutoReadLock;
+using ::gfxstream::guest::AutoWriteLock;
+using ::gfxstream::guest::ReadWriteLock;
 
 namespace aidl::android::hardware::graphics::composer3::impl {
 
@@ -30,10 +30,41 @@ DrmClient::~DrmClient() {
     }
 }
 
+::android::base::unique_fd DrmClient::OpenVirtioGpuDrmFd() {
+  for (int i = 0; i < 10; i++) {
+    const std::string path = "/dev/dri/card" + std::to_string(i);
+    DEBUG_LOG("%s: trying to open DRM device at %s",
+              __FUNCTION__, path.c_str());
+
+    ::android::base::unique_fd fd(open(path.c_str(), O_RDWR | O_CLOEXEC));
+
+    if (fd < 0) {
+      ALOGE("%s: failed to open drm device %s: %s",
+            __FUNCTION__, path.c_str(), strerror(errno));
+        continue;
+    }
+
+    auto version = drmGetVersion(fd.get());
+    const std::string name = version->name;
+    drmFreeVersion(version);
+
+    DEBUG_LOG("%s: The DRM device at %s is \"%s\"",
+              __FUNCTION__, path.c_str(), name.c_str());
+    if (name.find("virtio") != std::string::npos) {
+      return fd;
+    }
+  }
+
+  ALOGE("Failed to find virtio-gpu DRM node. Ranchu HWComposer "
+        "is only expected to be used with \"virtio_gpu\"");
+
+  return ::android::base::unique_fd(-1);
+}
+
 HWC3::Error DrmClient::init() {
     DEBUG_LOG("%s", __FUNCTION__);
 
-    mFd = ::android::base::unique_fd(open("/dev/dri/card0", O_RDWR | O_CLOEXEC));
+    mFd = OpenVirtioGpuDrmFd();
     if (mFd < 0) {
         ALOGE("%s: failed to open drm device: %s", __FUNCTION__, strerror(errno));
         return HWC3::Error::NoResources;

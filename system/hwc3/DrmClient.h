@@ -49,6 +49,8 @@ class DrmClient {
     DrmClient(DrmClient&&) = delete;
     DrmClient& operator=(DrmClient&&) = delete;
 
+    ::android::base::unique_fd OpenVirtioGpuDrmFd();
+
     HWC3::Error init();
 
     struct DisplayConfig {
@@ -98,7 +100,7 @@ class DrmClient {
     // Drm device.
     ::android::base::unique_fd mFd;
 
-    mutable ::android::base::guest::ReadWriteLock mDisplaysMutex;
+    mutable ::gfxstream::guest::ReadWriteLock mDisplaysMutex;
     std::vector<std::unique_ptr<DrmDisplay>> mDisplays;
 
     std::optional<HotplugCallback> mHotplugCallback;

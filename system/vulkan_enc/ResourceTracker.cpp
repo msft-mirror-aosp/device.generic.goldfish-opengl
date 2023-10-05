@@ -7292,6 +7292,7 @@ public:
 
             *fd = exec.handle.osHandle;
         } else {
+            ensureSyncDeviceFd();
             goldfish_sync_queue_work(
                     mSyncDeviceFd,
                     get_host_u64_VkImage(image) /* the handle */,

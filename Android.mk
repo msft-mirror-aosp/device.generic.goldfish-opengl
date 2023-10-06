@@ -139,15 +139,6 @@ ifeq (true,$(GOLDFISH_OPENGL_SHOULD_BUILD))
 # Note that the build system will complain if you try to import a
 # module that hasn't been declared yet anyway.
 #
-include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/qemupipe/Android.mk
-include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/gralloc_cb/Android.mk
-include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/GoldfishAddressSpace/Android.mk
-include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/platform/Android.mk
-
-ifeq (true,$(GFXSTREAM)) # android-emu
-    include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/android-emu/Android.mk
-endif
-
 ifneq (true,$(GOLDFISH_OPENGL_BUILD_FOR_HOST))
 include $(GOLDFISH_OPENGL_PATH)/system/hals/Android.mk
 endif

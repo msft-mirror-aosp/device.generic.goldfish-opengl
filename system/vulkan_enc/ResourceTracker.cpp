@@ -4469,7 +4469,22 @@ public:
             pExternalBufferProperties->externalMemoryProperties.compatibleHandleTypes = 0;
             return;
         }
+        uint32_t supportedHandleType = 0;
+#ifdef VK_USE_PLATFORM_FUCHSIA
+        supportedHandleType |= VK_EXTERNAL_MEMORY_HANDLE_TYPE_ZIRCON_VM_BIT_FUCHSIA;
+#endif
+#ifdef VK_USE_PLATFORM_ANDROID_KHR
+        supportedHandleType |= VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT |
+                VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID;
+#endif
+        if (supportedHandleType) {
+            // 0 is a valid handleType so we can't check against 0
+            if (pExternalBufferInfo->handleType != (pExternalBufferInfo->handleType & supportedHandleType)) {
+                return;
+            }
+        }
         enc->vkGetPhysicalDeviceExternalBufferProperties(physicalDevice, pExternalBufferInfo, pExternalBufferProperties, true /* do lock */);
+        transformImpl_VkExternalMemoryProperties_fromhost(&pExternalBufferProperties->externalMemoryProperties, 0);
     }
 
     void on_vkGetPhysicalDeviceExternalFenceProperties(
@@ -5303,6 +5318,22 @@ public:
         if (extBufCiPtr) {
             localExtBufCi = vk_make_orphan_copy(*extBufCiPtr);
             vk_append_struct(&structChainIter, &localExtBufCi);
+        }
+
+        VkBufferOpaqueCaptureAddressCreateInfo localCapAddrCi;
+        const VkBufferOpaqueCaptureAddressCreateInfo* pCapAddrCi =
+            vk_find_struct<VkBufferOpaqueCaptureAddressCreateInfo>(pCreateInfo);
+        if (pCapAddrCi) {
+            localCapAddrCi = vk_make_orphan_copy(*pCapAddrCi);
+            vk_append_struct(&structChainIter, &localCapAddrCi);
+        }
+
+        VkBufferDeviceAddressCreateInfoEXT localDevAddrCi;
+        const VkBufferDeviceAddressCreateInfoEXT* pDevAddrCi =
+            vk_find_struct<VkBufferDeviceAddressCreateInfoEXT>(pCreateInfo);
+        if (pDevAddrCi) {
+            localDevAddrCi = vk_make_orphan_copy(*pDevAddrCi);
+            vk_append_struct(&structChainIter, &localDevAddrCi);
         }
 
 #ifdef VK_USE_PLATFORM_FUCHSIA
@@ -6700,6 +6731,9 @@ public:
         VkEncoder* enc = (VkEncoder*)context;
         (void)input_result;
 
+        uint32_t supportedHandleType = 0;
+        VkExternalImageFormatProperties* ext_img_properties =
+            vk_find_struct<VkExternalImageFormatProperties>(pImageFormatProperties);
 #ifdef VK_USE_PLATFORM_FUCHSIA
 
         constexpr VkFormat kExternalImageSupportedFormats[] = {
@@ -6731,9 +6765,6 @@ public:
             VK_FORMAT_R8G8_SRGB,
         };
 
-        VkExternalImageFormatProperties* ext_img_properties =
-            vk_find_struct<VkExternalImageFormatProperties>(pImageFormatProperties);
-
         if (ext_img_properties) {
           if (std::find(std::begin(kExternalImageSupportedFormats),
                         std::end(kExternalImageSupportedFormats),
@@ -6741,13 +6772,24 @@ public:
             return VK_ERROR_FORMAT_NOT_SUPPORTED;
           }
         }
+        supportedHandleType |= VK_EXTERNAL_MEMORY_HANDLE_TYPE_ZIRCON_VM_BIT_FUCHSIA;
 #endif
 
 #ifdef VK_USE_PLATFORM_ANDROID_KHR
         VkAndroidHardwareBufferUsageANDROID* output_ahw_usage =
             vk_find_struct<VkAndroidHardwareBufferUsageANDROID>(pImageFormatProperties);
+        supportedHandleType |= VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT |
+            VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID;
 #endif
-
+        const VkPhysicalDeviceExternalImageFormatInfo* ext_img_info =
+                vk_find_struct<VkPhysicalDeviceExternalImageFormatInfo>(pImageFormatInfo);
+        
+        if (supportedHandleType && ext_img_info) {
+            // 0 is a valid handleType so we don't check against 0
+            if (ext_img_info->handleType != (ext_img_info->handleType & supportedHandleType)) {
+                return VK_ERROR_FORMAT_NOT_SUPPORTED;
+            }
+        }
         VkResult hostRes;
 
         if (isKhr) {
@@ -6764,8 +6806,6 @@ public:
 
 #ifdef VK_USE_PLATFORM_FUCHSIA
         if (ext_img_properties) {
-            const VkPhysicalDeviceExternalImageFormatInfo* ext_img_info =
-                vk_find_struct<VkPhysicalDeviceExternalImageFormatInfo>(pImageFormatInfo);
             if (ext_img_info) {
                 if (static_cast<uint32_t>(ext_img_info->handleType) ==
                     VK_EXTERNAL_MEMORY_HANDLE_TYPE_ZIRCON_VMO_BIT_FUCHSIA) {
@@ -6791,7 +6831,9 @@ public:
                     pImageFormatInfo->usage);
         }
 #endif
-
+        if (ext_img_properties) {
+            transformImpl_VkExternalMemoryProperties_fromhost(&ext_img_properties->externalMemoryProperties, 0);
+        }
         return hostRes;
     }
 

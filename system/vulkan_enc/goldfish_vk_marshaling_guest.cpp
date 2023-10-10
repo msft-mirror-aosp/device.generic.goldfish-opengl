@@ -40911,6 +40911,11 @@ const char* api_opcode_to_string(const uint32_t opcode) {
             return "OP_vkCmdWaitEvents2";
         }
 #endif
+#ifdef VK_GOOGLE_gfxstream
+        case OP_vkUpdateDescriptorSetWithTemplateSized2GOOGLE: {
+            return "OP_vkUpdateDescriptorSetWithTemplateSized2GOOGLE";
+        }
+#endif
 #ifdef VK_EXT_extended_dynamic_state3
         case OP_vkCmdSetRepresentativeFragmentTestEnableNV: {
             return "OP_vkCmdSetRepresentativeFragmentTestEnableNV";
@@ -41762,6 +41767,11 @@ const char* api_opcode_to_string(const uint32_t opcode) {
 #ifdef VK_KHR_synchronization2
         case OP_vkGetQueueCheckpointData2NV: {
             return "OP_vkGetQueueCheckpointData2NV";
+        }
+#endif
+#ifdef VK_GOOGLE_gfxstream
+        case OP_vkQueueSubmitAsync2GOOGLE: {
+            return "OP_vkQueueSubmitAsync2GOOGLE";
         }
 #endif
 #ifdef VK_EXT_opacity_micromap

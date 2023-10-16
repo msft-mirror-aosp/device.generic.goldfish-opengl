@@ -131,7 +131,7 @@ private:
 
         while (conditionFunc()) {
             doWait(currTimeout);
-            if (!conditionFunc()) {
+            if (conditionFunc()) {
                 // Decrement timeout for wakeups
                 uint64_t nextTime = currTimeUs();
                 WorkPool::TimeoutUs waited = 

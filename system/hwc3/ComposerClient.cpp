@@ -421,6 +421,16 @@ ndk::ScopedAStatus ComposerClient::getHdrCapabilities(
   return ToBinderStatus(display->getHdrCapabilities(outCapabilities));
 }
 
+ndk::ScopedAStatus ComposerClient::getOverlaySupport(
+    OverlayProperties* properties) {
+  DEBUG_LOG("%s", __FUNCTION__);
+
+  // no supported combinations
+  properties->combinations.clear();
+
+  return ToBinderStatus(HWC3::Error::None);
+}
+
 ndk::ScopedAStatus ComposerClient::getMaxVirtualDisplayCount(
     int32_t* outCount) {
   DEBUG_LOG("%s", __FUNCTION__);
@@ -582,6 +592,28 @@ ndk::ScopedAStatus ComposerClient::getPreferredBootDisplayConfig(
   return ToBinderStatus(display->getPreferredBootConfig(outConfigId));
 }
 
+ndk::ScopedAStatus ComposerClient::getHdrConversionCapabilities(
+    std::vector<aidl::android::hardware::graphics::common::HdrConversionCapability>* capabilities) {
+  DEBUG_LOG("%s", __FUNCTION__);
+  capabilities->clear();
+  return ToBinderStatus(HWC3::Error::None);
+}
+
+ndk::ScopedAStatus ComposerClient::setHdrConversionStrategy(
+    const aidl::android::hardware::graphics::common::HdrConversionStrategy& conversionStrategy,
+    aidl::android::hardware::graphics::common::Hdr* preferredHdrOutputType) {
+  DEBUG_LOG("%s", __FUNCTION__);
+  using HdrConversionStrategyTag = aidl::android::hardware::graphics::common::HdrConversionStrategy::Tag;
+  switch (conversionStrategy.getTag() == HdrConversionStrategyTag::autoAllowedHdrTypes) {
+      auto autoHdrTypes = conversionStrategy.get<HdrConversionStrategyTag::autoAllowedHdrTypes>();
+      if (autoHdrTypes.size() != 0) {
+          return ToBinderStatus(HWC3::Error::Unsupported);
+      }
+  }
+  *preferredHdrOutputType = aidl::android::hardware::graphics::common::Hdr::INVALID;
+  return ToBinderStatus(HWC3::Error::None);
+}
+
 ndk::ScopedAStatus ComposerClient::setAutoLowLatencyMode(int64_t displayId,
                                                          bool on) {
   DEBUG_LOG("%s", __FUNCTION__);
@@ -702,6 +734,15 @@ ndk::ScopedAStatus ComposerClient::setIdleTimerEnabled(int64_t displayId,
   GET_DISPLAY_OR_RETURN_ERROR();
 
   return ToBinderStatus(display->setIdleTimerEnabled(timeoutMs));
+}
+
+ndk::ScopedAStatus ComposerClient::setRefreshRateChangedCallbackDebugEnabled(
+        int64_t displayId, bool) {
+    DEBUG_LOG("%s", __FUNCTION__);
+
+    GET_DISPLAY_OR_RETURN_ERROR();
+
+    return ToBinderStatus(HWC3::Error::Unsupported);
 }
 
 ndk::SpAIBinder ComposerClient::createBinder() {

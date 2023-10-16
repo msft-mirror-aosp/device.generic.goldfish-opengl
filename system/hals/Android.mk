@@ -44,6 +44,7 @@ LOCAL_HEADER_LIBRARIES += libgralloc_cb.ranchu
 LOCAL_C_INCLUDES += \
     hardware/google/gfxstream/guest/GoldfishAddressSpace/include \
     hardware/google/gfxstream/guest/include \
+    hardware/google/gfxstream/guest/platform/include \
     hardware/google/gfxstream/guest/iostream/include/libOpenglRender \
     hardware/google/gfxstream/guest/OpenglCodecCommon \
     hardware/google/gfxstream/guest/OpenglSystemCommon \
@@ -85,6 +86,7 @@ LOCAL_HEADER_LIBRARIES += libgralloc_cb.ranchu
 LOCAL_C_INCLUDES += \
     hardware/google/gfxstream/guest/GoldfishAddressSpace/include \
     hardware/google/gfxstream/guest/include \
+    hardware/google/gfxstream/guest/platform/include \
     hardware/google/gfxstream/guest/iostream/include/libOpenglRender \
     hardware/google/gfxstream/guest/OpenglCodecCommon \
     hardware/google/gfxstream/guest/OpenglSystemCommon \

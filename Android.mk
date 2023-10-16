@@ -139,45 +139,8 @@ ifeq (true,$(GOLDFISH_OPENGL_SHOULD_BUILD))
 # Note that the build system will complain if you try to import a
 # module that hasn't been declared yet anyway.
 #
-include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/qemupipe/Android.mk
-include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/gralloc_cb/Android.mk
-include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/GoldfishAddressSpace/Android.mk
-include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/platform/Android.mk
-
-ifeq (true,$(GFXSTREAM)) # android-emu
-    include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/android-emu/Android.mk
-endif
-
-include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/OpenglCodecCommon/Android.mk
-
-# Encoder shared libraries
-include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/GLESv1_enc/Android.mk
-include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/GLESv2_enc/Android.mk
-include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/renderControl_enc/Android.mk
-
-ifeq (true,$(GFXSTREAM)) # Vulkan libs
-    include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/vulkan_enc/Android.mk
-endif
-
-include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/OpenglSystemCommon/Android.mk
-
-# Profiler library
-include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/profiler/Android.mk
-
-# System shared libraries
-include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/GLESv1/Android.mk
-include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/GLESv2/Android.mk
-
-include $(GOLDFISH_OPENGL_PATH)/system/gralloc/Android.mk
-
 ifneq (true,$(GOLDFISH_OPENGL_BUILD_FOR_HOST))
 include $(GOLDFISH_OPENGL_PATH)/system/hals/Android.mk
-endif
-
-include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/egl/Android.mk
-
-ifeq (true,$(GFXSTREAM)) # Vulkan libs
-    include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/vulkan/Android.mk
 endif
 
 ifeq ($(shell test $(PLATFORM_SDK_VERSION) -gt 28 -o $(IS_AT_LEAST_QPR1) = true && echo isApi29OrHigher),isApi29OrHigher)
@@ -189,10 +152,6 @@ ifeq ($(shell test $(PLATFORM_SDK_VERSION) -gt 28 -o $(IS_AT_LEAST_QPR1) = true 
     include $(GOLDFISH_OPENGL_PATH)/system/codecs/omx/vpxdec/Android.mk
 endif
 
-endif
-
-ifeq (true,$(GFXSTREAM)) # Vulkan lib tests
-    include $(HARDWARE_GOOGLE_GFXSTREAM_PATH)/guest/vulkan_enc_unit_tests/Android.mk
 endif
 
 endif # ENABLE_GOLDFISH_OPENGL_FOLDER

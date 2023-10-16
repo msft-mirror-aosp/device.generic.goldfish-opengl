@@ -176,23 +176,6 @@ class ComposeMsg_v2 {
   ComposeDevice_v2* mComposeDevice;
 };
 
-const native_handle_t* AllocateDisplayColorBuffer(int width, int height) {
-  const uint32_t layerCount = 1;
-  const uint64_t graphicBufferId = 0;  // not used
-  buffer_handle_t handle;
-  uint32_t stride;
-
-  if (::android::GraphicBufferAllocator::get().allocate(
-          width, height, ::android::PIXEL_FORMAT_RGBA_8888, layerCount,
-          ::android::GraphicBuffer::USAGE_HW_COMPOSER |
-              ::android::GraphicBuffer::USAGE_HW_RENDER,
-          &handle, &stride, graphicBufferId, "EmuHWC2") == ::android::OK) {
-    return static_cast<const native_handle_t*>(handle);
-  } else {
-    return nullptr;
-  }
-}
-
 void FreeDisplayColorBuffer(const native_handle_t* h) {
   ::android::GraphicBufferAllocator::get().free(h);
 }
@@ -268,29 +251,14 @@ HWC3::Error HostFrameComposer::createHostComposerDisplayInfo(
   HostComposerDisplayInfo& displayInfo = mDisplayInfos[displayId];
 
   displayInfo.hostDisplayId = hostDisplayId;
-
-  if (displayInfo.compositionResultBuffer) {
-    FreeDisplayColorBuffer(displayInfo.compositionResultBuffer);
-  }
-  displayInfo.compositionResultBuffer =
-      AllocateDisplayColorBuffer(displayWidth, displayHeight);
-  if (displayInfo.compositionResultBuffer == nullptr) {
-    ALOGE("%s: display:%" PRIu64 " failed to create target buffer",
-          __FUNCTION__, displayId);
+  displayInfo.swapchain = DrmSwapchain::create(
+      displayWidth, displayHeight,
+      ::android::GraphicBuffer::USAGE_HW_COMPOSER | ::android::GraphicBuffer::USAGE_HW_RENDER,
+      mDrmClient ? &mDrmClient.value() : nullptr);
+  if (!displayInfo.swapchain) {
+    ALOGE("%s: display:%" PRIu64 " failed to allocate swapchain", __FUNCTION__, displayId);
     return HWC3::Error::NoResources;
   }
-
-  if (mDrmClient) {
-    auto [drmBufferCreateError, drmBuffer] =
-        mDrmClient->create(displayInfo.compositionResultBuffer);
-    if (drmBufferCreateError != HWC3::Error::None) {
-      ALOGE("%s: display:%" PRIu64 " failed to create target drm buffer",
-            __FUNCTION__, displayId);
-      return HWC3::Error::NoResources;
-    }
-    displayInfo.compositionResultDrmBuffer = std::move(drmBuffer);
-  }
-
   return HWC3::Error::None;
 }
 
@@ -412,8 +380,6 @@ HWC3::Error HostFrameComposer::onDisplayDestroy(Display* display) {
     rcEnc->rcDestroyDisplay(rcEnc, displayInfo.hostDisplayId);
     hostCon->unlock();
   }
-
-  FreeDisplayColorBuffer(displayInfo.compositionResultBuffer);
 
   mDisplayInfos.erase(it);
 
@@ -554,6 +520,7 @@ HWC3::Error HostFrameComposer::presentDisplay(
   if (error != HWC3::Error::None) {
     return error;
   }
+  *outDisplayFence = ::android::base::unique_fd();
   hostCon->lock();
   bool hostCompositionV1 = rcEnc->hasHostCompositionV1();
   bool hostCompositionV2 = rcEnc->hasHostCompositionV2();
@@ -563,6 +530,9 @@ HWC3::Error HostFrameComposer::presentDisplay(
   if (hostCompositionV2) {
     hostCompositionV1 = false;
   }
+
+  auto compositionResult = displayInfo.swapchain->getNextImage();
+  compositionResult->wait();
 
   const std::vector<Layer*> layers = display->getOrderedLayers();
   if (hostCompositionV2 || hostCompositionV1) {
@@ -591,6 +561,8 @@ HWC3::Error HostFrameComposer::presentDisplay(
 
           *outDisplayFence = std::move(flushCompleteFence);
         } else {
+          rcEnc->rcSetDisplayColorBuffer(rcEnc, displayInfo.hostDisplayId,
+                  hostCon->grallocHelper()->getHostHandle(displayClientTarget.getBuffer()));
           post(hostCon, rcEnc, displayClientTarget.getBuffer());
           *outDisplayFence = std::move(fence);
         }
@@ -670,16 +642,15 @@ HWC3::Error HostFrameComposer::presentDisplay(
           layer->getZOrder(), l->composeMode, l->transform);
       l++;
     }
+
     if (hostCompositionV1) {
       p->version = 1;
-      p->targetHandle = hostCon->grallocHelper()->getHostHandle(
-          displayInfo.compositionResultBuffer);
+      p->targetHandle = hostCon->grallocHelper()->getHostHandle(compositionResult->getBuffer());
       p->numLayers = numLayer;
     } else {
       p2->version = 2;
       p2->displayId = displayInfo.hostDisplayId;
-      p2->targetHandle = hostCon->grallocHelper()->getHostHandle(
-          displayInfo.compositionResultBuffer);
+      p2->targetHandle = hostCon->grallocHelper()->getHostHandle(compositionResult->getBuffer());
       p2->numLayers = numLayer;
     }
 
@@ -730,8 +701,8 @@ HWC3::Error HostFrameComposer::presentDisplay(
     }
 
     if (mIsMinigbm) {
-      auto [_, fence] = mDrmClient->flushToDisplay(
-          displayId, displayInfo.compositionResultDrmBuffer, -1);
+      auto [_, fence] =
+          mDrmClient->flushToDisplay(displayId, compositionResult->getDrmBuffer(), -1);
       retire_fd = std::move(fence);
     } else {
       int fd;
@@ -754,7 +725,6 @@ HWC3::Error HostFrameComposer::presentDisplay(
       }
       hostCon->unlock();
     }
-
   } else {
     // we set all layers Composition::CLIENT, so do nothing.
     FencedBuffer& displayClientTarget = display->getClientTarget();
@@ -762,16 +732,20 @@ HWC3::Error HostFrameComposer::presentDisplay(
         displayClientTarget.getFence();
     if (mIsMinigbm) {
       auto [_, flushFence] = mDrmClient->flushToDisplay(
-          displayId, displayInfo.compositionResultDrmBuffer,
-          displayClientTargetFence);
+          displayId, compositionResult->getDrmBuffer(), displayClientTargetFence);
       *outDisplayFence = std::move(flushFence);
     } else {
+          rcEnc->rcSetDisplayColorBuffer(rcEnc, displayInfo.hostDisplayId,
+                  hostCon->grallocHelper()->getHostHandle(displayClientTarget.getBuffer()));
       post(hostCon, rcEnc, displayClientTarget.getBuffer());
       *outDisplayFence = std::move(displayClientTargetFence);
     }
     ALOGV("%s fallback to post, returns outRetireFence %d", __FUNCTION__,
           outDisplayFence->get());
   }
+  compositionResult->markAsInUse(outDisplayFence->ok()
+                                     ? ::android::base::unique_fd(dup(*outDisplayFence))
+                                     : ::android::base::unique_fd());
   return HWC3::Error::None;
 }
 

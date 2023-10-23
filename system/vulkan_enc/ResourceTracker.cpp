@@ -4109,6 +4109,11 @@ public:
         VkEncoder* enc = (VkEncoder*)context;
 
         VkImageCreateInfo localCreateInfo = vk_make_orphan_copy(*pCreateInfo);
+        if (localCreateInfo.sharingMode != VK_SHARING_MODE_CONCURRENT) {
+            localCreateInfo.queueFamilyIndexCount = 0;
+            localCreateInfo.pQueueFamilyIndices = nullptr;
+        }
+
         vk_struct_chain_iterator structChainIter = vk_make_chain_iterator(&localCreateInfo);
         VkExternalMemoryImageCreateInfo localExtImgCi;
 

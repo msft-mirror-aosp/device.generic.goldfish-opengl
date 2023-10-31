@@ -713,7 +713,7 @@ HWC3::Error Display::setPowerMode(PowerMode mode) {
     if (int fd = open("/dev/kmsg", O_WRONLY | O_CLOEXEC); fd != -1) {
       std::ostringstream stream;
       stream << "VIRTUAL_DEVICE_DISPLAY_POWER_MODE_CHANGED display=" << mId
-             << " mode=" << modeString;
+             << " mode=" << modeString << std::endl;
       std::string message = stream.str();
       write(fd, message.c_str(), message.length());
       close(fd);

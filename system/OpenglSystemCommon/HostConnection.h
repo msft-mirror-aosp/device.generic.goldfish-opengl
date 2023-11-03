@@ -150,6 +150,7 @@ public:
         return 0;
     }
     virtual size_t getAllocatedSize(native_handle_t const* handle) = 0;
+    virtual bool treatBlobAsImage() { return false; };
     virtual ~Gralloc() {}
 };
 

@@ -90,4 +90,44 @@ cc_binary {
 
     vintf_fragments: ["hwc3.xml"],
     init_rc: ["hwc3.rc"],
+
 }
+
+apex {
+    name: "com.android.hardware.graphics.composer.ranchu",
+    key: "com.android.hardware.key",
+    certificate: ":com.android.hardware.certificate",
+    file_contexts: "apex_file_contexts",
+    manifest: "apex_manifest.json",
+    vendor: true,
+    updatable: false,
+
+    binaries: [
+        "android.hardware.graphics.composer3-service.ranchu",
+    ],
+    prebuilts: [
+        "hwc3.xml",
+        "hwc3-apex.rc",
+    ],
+}
+
+prebuilt_etc {
+    name: "hwc3.xml",
+    src: "hwc3.xml",
+    sub_dir: "vintf",
+    installable: false,
+}
+
+prebuilt_etc {
+    name: "hwc3-apex.rc",
+    src: ":gen-hwc3-apex.rc",
+    installable: false,
+}
+
+genrule {
+    name: "gen-hwc3-apex.rc",
+    srcs: ["hwc3.rc"],
+    out: ["hwc3-apex.rc"],
+    cmd: "sed -e 's@/vendor/bin/@/apex/com.android.hardware.graphics.composer.ranchu/bin/@' $(in) > $(out)",
+}
+

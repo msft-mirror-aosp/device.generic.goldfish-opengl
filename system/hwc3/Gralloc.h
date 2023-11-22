@@ -18,7 +18,6 @@
 #define ANDROID_HWC_GRALLOC_H
 
 #include <aidl/android/hardware/graphics/common/PlaneLayout.h>
-#include <android/hardware/graphics/mapper/4.0/IMapper.h>
 #include <hardware/gralloc.h>
 #include <system/graphics.h>
 #include <utils/StrongPointer.h>
@@ -103,7 +102,6 @@ class GrallocBuffer {
 
 class Gralloc {
  public:
-  Gralloc();
   virtual ~Gralloc() = default;
 
   // Imports the given buffer handle into the current process and returns an
@@ -145,14 +143,6 @@ class Gralloc {
   // Returns the stride of the buffer if it is a single plane buffer or fails
   // and returns nullopt if the buffer is for a multi plane buffer.
   std::optional<uint32_t> GetMonoPlanarStrideBytes(buffer_handle_t);
-
-  // See GrallocBuffer::GetMetadata.
-  ::android::hardware::graphics::mapper::V4_0::Error GetMetadata(
-      buffer_handle_t buffer,
-      ::android::hardware::graphics::mapper::V4_0::IMapper::MetadataType type,
-      ::android::hardware::hidl_vec<uint8_t>* metadata);
-
-  ::android::sp<::android::hardware::graphics::mapper::V4_0::IMapper> gralloc4_;
 };
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl

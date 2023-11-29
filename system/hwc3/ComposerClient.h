@@ -147,68 +147,75 @@ class ComposerClient : public BnComposerClient {
  private:
   class CommandResultWriter;
 
-  void executeDisplayCommand(const DisplayCommand& displayCommand);
-  void executeLayerCommand(Display* display, const LayerCommand& layerCommand);
+  void executeDisplayCommand(CommandResultWriter& commandResults,
+                             const DisplayCommand& displayCommand);
 
-  void executeDisplayCommandSetColorTransform(Display* display,
+  void executeLayerCommand(CommandResultWriter& commandResults, Display* display,
+                           const LayerCommand& layerCommand);
+
+  void executeDisplayCommandSetColorTransform(CommandResultWriter& commandResults, Display* display,
                                               const std::vector<float>& matrix);
-  void executeDisplayCommandSetBrightness(Display* display,
+  void executeDisplayCommandSetBrightness(CommandResultWriter& commandResults, Display* display,
                                           const DisplayBrightness& brightness);
-  void executeDisplayCommandSetClientTarget(Display* display,
+  void executeDisplayCommandSetClientTarget(CommandResultWriter& commandResults, Display* display,
                                             const ClientTarget& command);
-  void executeDisplayCommandSetOutputBuffer(Display* display,
+  void executeDisplayCommandSetOutputBuffer(CommandResultWriter& commandResults, Display* display,
                                             const Buffer& buffer);
   void executeDisplayCommandValidateDisplay(
-      Display* display,
+      CommandResultWriter& commandResults, Display* display,
       const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
-  void executeDisplayCommandAcceptDisplayChanges(Display* display);
+  void executeDisplayCommandAcceptDisplayChanges(CommandResultWriter& commandResults,
+                                                 Display* display);
   void executeDisplayCommandPresentOrValidateDisplay(
-      Display* display,
+      CommandResultWriter& commandResults, Display* display,
       const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
-  void executeDisplayCommandPresentDisplay(Display* display);
+  void executeDisplayCommandPresentDisplay(CommandResultWriter& commandResults, Display* display);
 
-  void executeLayerCommandSetLayerCursorPosition(
-      Display* display, Layer* layer, const common::Point& cursorPosition);
-  void executeLayerCommandSetLayerBuffer(Display* display, Layer* layer,
-                                         const Buffer& buffer);
+  void executeLayerCommandSetLayerCursorPosition(CommandResultWriter& commandResults,
+                                                 Display* display, Layer* layer,
+                                                 const common::Point& cursorPosition);
+  void executeLayerCommandSetLayerBuffer(CommandResultWriter& commandResults, Display* display,
+                                         Layer* layer, const Buffer& buffer);
   void executeLayerCommandSetLayerSurfaceDamage(
-      Display* display, Layer* layer,
+      CommandResultWriter& commandResults, Display* display, Layer* layer,
       const std::vector<std::optional<common::Rect>>& damage);
-  void executeLayerCommandSetLayerBlendMode(
-      Display* display, Layer* layer, const ParcelableBlendMode& blendMode);
-  void executeLayerCommandSetLayerColor(Display* display, Layer* layer,
-                                        const Color& color);
-  void executeLayerCommandSetLayerComposition(
-      Display* display, Layer* layer, const ParcelableComposition& composition);
-  void executeLayerCommandSetLayerDataspace(
-      Display* display, Layer* layer, const ParcelableDataspace& dataspace);
-  void executeLayerCommandSetLayerDisplayFrame(Display* display, Layer* layer,
+  void executeLayerCommandSetLayerBlendMode(CommandResultWriter& commandResults, Display* display,
+                                            Layer* layer, const ParcelableBlendMode& blendMode);
+  void executeLayerCommandSetLayerColor(CommandResultWriter& commandResults, Display* display,
+                                        Layer* layer, const Color& color);
+  void executeLayerCommandSetLayerComposition(CommandResultWriter& commandResults, Display* display,
+                                              Layer* layer,
+                                              const ParcelableComposition& composition);
+  void executeLayerCommandSetLayerDataspace(CommandResultWriter& commandResults, Display* display,
+                                            Layer* layer, const ParcelableDataspace& dataspace);
+  void executeLayerCommandSetLayerDisplayFrame(CommandResultWriter& commandResults,
+                                               Display* display, Layer* layer,
                                                const common::Rect& rect);
-  void executeLayerCommandSetLayerPlaneAlpha(Display* display, Layer* layer,
-                                             const PlaneAlpha& planeAlpha);
+  void executeLayerCommandSetLayerPlaneAlpha(CommandResultWriter& commandResults, Display* display,
+                                             Layer* layer, const PlaneAlpha& planeAlpha);
   void executeLayerCommandSetLayerSidebandStream(
-      Display* display, Layer* layer,
+      CommandResultWriter& commandResults, Display* display, Layer* layer,
       const aidl::android::hardware::common::NativeHandle& sidebandStream);
-  void executeLayerCommandSetLayerSourceCrop(Display* display, Layer* layer,
-                                             const common::FRect& sourceCrop);
-  void executeLayerCommandSetLayerTransform(
-      Display* display, Layer* layer, const ParcelableTransform& transform);
+  void executeLayerCommandSetLayerSourceCrop(CommandResultWriter& commandResults, Display* display,
+                                             Layer* layer, const common::FRect& sourceCrop);
+  void executeLayerCommandSetLayerTransform(CommandResultWriter& commandResults, Display* display,
+                                            Layer* layer, const ParcelableTransform& transform);
   void executeLayerCommandSetLayerVisibleRegion(
-      Display* display, Layer* layer,
+      CommandResultWriter& commandResults, Display* display, Layer* layer,
       const std::vector<std::optional<common::Rect>>& visibleRegion);
-  void executeLayerCommandSetLayerZOrder(Display* display, Layer* layer,
-                                         const ZOrder& zOrder);
+  void executeLayerCommandSetLayerZOrder(CommandResultWriter& commandResults, Display* display,
+                                         Layer* layer, const ZOrder& zOrder);
   void executeLayerCommandSetLayerPerFrameMetadata(
-      Display* display, Layer* layer,
+      CommandResultWriter& commandResults, Display* display, Layer* layer,
       const std::vector<std::optional<PerFrameMetadata>>& perFrameMetadata);
-  void executeLayerCommandSetLayerColorTransform(
-      Display* display, Layer* layer, const std::vector<float>& colorTransform);
-  void executeLayerCommandSetLayerBrightness(Display* display, Layer* layer,
-                                             const LayerBrightness& brightness);
+  void executeLayerCommandSetLayerColorTransform(CommandResultWriter& commandResults,
+                                                 Display* display, Layer* layer,
+                                                 const std::vector<float>& colorTransform);
+  void executeLayerCommandSetLayerBrightness(CommandResultWriter& commandResults, Display* display,
+                                             Layer* layer, const LayerBrightness& brightness);
   void executeLayerCommandSetLayerPerFrameMetadataBlobs(
-      Display* display, Layer* layer,
-      const std::vector<std::optional<PerFrameMetadataBlob>>&
-          perFrameMetadataBlob);
+      CommandResultWriter& commandResults, Display* display, Layer* layer,
+      const std::vector<std::optional<PerFrameMetadataBlob>>& perFrameMetadataBlob);
 
   // Returns the display with the given id or nullptr if not found.
   Display* getDisplay(int64_t displayId);
@@ -245,10 +252,6 @@ class ComposerClient : public BnComposerClient {
   // Underlying interface for composing layers in the guest using libyuv or in
   // the host using opengl. Owned by Device.
   FrameComposer* mComposer = nullptr;
-
-  // For the duration of a executeCommands(), the helper used to collect
-  // individual command results.
-  std::unique_ptr<CommandResultWriter> mCommandResults;
 
   // Manages importing and caching gralloc buffers for displays and layers.
   std::unique_ptr<ComposerResources> mResources;

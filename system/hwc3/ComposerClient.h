@@ -150,75 +150,75 @@ class ComposerClient : public BnComposerClient {
   void executeDisplayCommand(CommandResultWriter& commandResults,
                              const DisplayCommand& displayCommand);
 
-  void executeLayerCommand(CommandResultWriter& commandResults, Display* display,
+  void executeLayerCommand(CommandResultWriter& commandResults, Display& display,
                            const LayerCommand& layerCommand);
 
-  void executeDisplayCommandSetColorTransform(CommandResultWriter& commandResults, Display* display,
+  void executeDisplayCommandSetColorTransform(CommandResultWriter& commandResults, Display& display,
                                               const std::vector<float>& matrix);
-  void executeDisplayCommandSetBrightness(CommandResultWriter& commandResults, Display* display,
+  void executeDisplayCommandSetBrightness(CommandResultWriter& commandResults, Display& display,
                                           const DisplayBrightness& brightness);
-  void executeDisplayCommandSetClientTarget(CommandResultWriter& commandResults, Display* display,
+  void executeDisplayCommandSetClientTarget(CommandResultWriter& commandResults, Display& display,
                                             const ClientTarget& command);
-  void executeDisplayCommandSetOutputBuffer(CommandResultWriter& commandResults, Display* display,
+  void executeDisplayCommandSetOutputBuffer(CommandResultWriter& commandResults, Display& display,
                                             const Buffer& buffer);
   void executeDisplayCommandValidateDisplay(
-      CommandResultWriter& commandResults, Display* display,
+      CommandResultWriter& commandResults, Display& display,
       const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
   void executeDisplayCommandAcceptDisplayChanges(CommandResultWriter& commandResults,
-                                                 Display* display);
+                                                 Display& display);
   void executeDisplayCommandPresentOrValidateDisplay(
-      CommandResultWriter& commandResults, Display* display,
+      CommandResultWriter& commandResults, Display& display,
       const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
-  void executeDisplayCommandPresentDisplay(CommandResultWriter& commandResults, Display* display);
+  void executeDisplayCommandPresentDisplay(CommandResultWriter& commandResults, Display& display);
 
   void executeLayerCommandSetLayerCursorPosition(CommandResultWriter& commandResults,
-                                                 Display* display, Layer* layer,
+                                                 Display& display, Layer* layer,
                                                  const common::Point& cursorPosition);
-  void executeLayerCommandSetLayerBuffer(CommandResultWriter& commandResults, Display* display,
+  void executeLayerCommandSetLayerBuffer(CommandResultWriter& commandResults, Display& display,
                                          Layer* layer, const Buffer& buffer);
   void executeLayerCommandSetLayerSurfaceDamage(
-      CommandResultWriter& commandResults, Display* display, Layer* layer,
+      CommandResultWriter& commandResults, Display& display, Layer* layer,
       const std::vector<std::optional<common::Rect>>& damage);
-  void executeLayerCommandSetLayerBlendMode(CommandResultWriter& commandResults, Display* display,
+  void executeLayerCommandSetLayerBlendMode(CommandResultWriter& commandResults, Display& display,
                                             Layer* layer, const ParcelableBlendMode& blendMode);
-  void executeLayerCommandSetLayerColor(CommandResultWriter& commandResults, Display* display,
+  void executeLayerCommandSetLayerColor(CommandResultWriter& commandResults, Display& display,
                                         Layer* layer, const Color& color);
-  void executeLayerCommandSetLayerComposition(CommandResultWriter& commandResults, Display* display,
+  void executeLayerCommandSetLayerComposition(CommandResultWriter& commandResults, Display& display,
                                               Layer* layer,
                                               const ParcelableComposition& composition);
-  void executeLayerCommandSetLayerDataspace(CommandResultWriter& commandResults, Display* display,
+  void executeLayerCommandSetLayerDataspace(CommandResultWriter& commandResults, Display& display,
                                             Layer* layer, const ParcelableDataspace& dataspace);
   void executeLayerCommandSetLayerDisplayFrame(CommandResultWriter& commandResults,
-                                               Display* display, Layer* layer,
+                                               Display& display, Layer* layer,
                                                const common::Rect& rect);
-  void executeLayerCommandSetLayerPlaneAlpha(CommandResultWriter& commandResults, Display* display,
+  void executeLayerCommandSetLayerPlaneAlpha(CommandResultWriter& commandResults, Display& display,
                                              Layer* layer, const PlaneAlpha& planeAlpha);
   void executeLayerCommandSetLayerSidebandStream(
-      CommandResultWriter& commandResults, Display* display, Layer* layer,
+      CommandResultWriter& commandResults, Display& display, Layer* layer,
       const aidl::android::hardware::common::NativeHandle& sidebandStream);
-  void executeLayerCommandSetLayerSourceCrop(CommandResultWriter& commandResults, Display* display,
+  void executeLayerCommandSetLayerSourceCrop(CommandResultWriter& commandResults, Display& display,
                                              Layer* layer, const common::FRect& sourceCrop);
-  void executeLayerCommandSetLayerTransform(CommandResultWriter& commandResults, Display* display,
+  void executeLayerCommandSetLayerTransform(CommandResultWriter& commandResults, Display& display,
                                             Layer* layer, const ParcelableTransform& transform);
   void executeLayerCommandSetLayerVisibleRegion(
-      CommandResultWriter& commandResults, Display* display, Layer* layer,
+      CommandResultWriter& commandResults, Display& display, Layer* layer,
       const std::vector<std::optional<common::Rect>>& visibleRegion);
-  void executeLayerCommandSetLayerZOrder(CommandResultWriter& commandResults, Display* display,
+  void executeLayerCommandSetLayerZOrder(CommandResultWriter& commandResults, Display& display,
                                          Layer* layer, const ZOrder& zOrder);
   void executeLayerCommandSetLayerPerFrameMetadata(
-      CommandResultWriter& commandResults, Display* display, Layer* layer,
+      CommandResultWriter& commandResults, Display& display, Layer* layer,
       const std::vector<std::optional<PerFrameMetadata>>& perFrameMetadata);
   void executeLayerCommandSetLayerColorTransform(CommandResultWriter& commandResults,
-                                                 Display* display, Layer* layer,
+                                                 Display& display, Layer* layer,
                                                  const std::vector<float>& colorTransform);
-  void executeLayerCommandSetLayerBrightness(CommandResultWriter& commandResults, Display* display,
+  void executeLayerCommandSetLayerBrightness(CommandResultWriter& commandResults, Display& display,
                                              Layer* layer, const LayerBrightness& brightness);
   void executeLayerCommandSetLayerPerFrameMetadataBlobs(
-      CommandResultWriter& commandResults, Display* display, Layer* layer,
+      CommandResultWriter& commandResults, Display& display, Layer* layer,
       const std::vector<std::optional<PerFrameMetadataBlob>>& perFrameMetadataBlob);
 
   // Returns the display with the given id or nullptr if not found.
-  Display* getDisplay(int64_t displayId);
+  std::shared_ptr<Display> getDisplay(int64_t displayId);
 
   // Finds the Cuttlefish/Goldfish specific configuration and initializes the
   // displays.
@@ -240,9 +240,8 @@ class ComposerClient : public BnComposerClient {
                             uint32_t dpiY,    //
                             uint32_t refreshRate);
 
-  std::mutex mStateMutex;
-
-  std::map<int64_t, std::unique_ptr<Display>> mDisplays;
+  std::mutex mDisplaysMutex;
+  std::map<int64_t, std::shared_ptr<Display>> mDisplays;
 
   // The onHotplug(), onVsync(), etc callbacks registered by SurfaceFlinger.
   std::shared_ptr<IComposerCallback> mCallbacks;

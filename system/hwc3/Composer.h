@@ -18,7 +18,7 @@
 #define ANDROID_HWC_COMPOSER_H
 
 #include <aidl/android/hardware/graphics/composer3/BnComposer.h>
-#include <utils/Mutex.h>
+#include <android-base/thread_annotations.h>
 
 #include <memory>
 
@@ -46,7 +46,7 @@ class Composer : public BnComposer {
   void onClientDestroyed();
 
   std::mutex mClientMutex;
-  std::weak_ptr<ComposerClient> mClient GUARDED_BY(mClientMutex);
+  std::weak_ptr<ComposerClient> mClient;
   std::condition_variable mClientDestroyedCondition;
 };
 

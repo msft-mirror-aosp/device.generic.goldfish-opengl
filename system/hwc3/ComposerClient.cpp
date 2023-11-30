@@ -106,7 +106,7 @@ ComposerClient::ComposerClient() { DEBUG_LOG("%s", __FUNCTION__); }
 ComposerClient::~ComposerClient() {
   DEBUG_LOG("%s", __FUNCTION__);
 
-  std::unique_lock<std::mutex> lock(mDisplaysMutex);
+  std::lock_guard<std::mutex> lock(mDisplaysMutex);
 
   destroyDisplaysLocked();
 
@@ -120,7 +120,7 @@ HWC3::Error ComposerClient::init() {
 
   HWC3::Error error = HWC3::Error::None;
 
-  std::unique_lock<std::mutex> lock(mDisplaysMutex);
+  std::lock_guard<std::mutex> lock(mDisplaysMutex);
 
   mResources = std::make_unique<ComposerResources>();
   if (!mResources) {
@@ -465,14 +465,17 @@ ndk::ScopedAStatus ComposerClient::registerCallback(
 
   mCallbacks = callback;
 
-  for (auto& [_, display] : mDisplays) {
-    display->registerCallback(callback);
+  {
+    std::lock_guard<std::mutex> lock(mDisplaysMutex);
+    for (auto& [_, display] : mDisplays) {
+      display->registerCallback(callback);
+    }
   }
 
   if (isFirstRegisterCallback) {
     std::vector<int64_t> displayIds;
     {
-      std::unique_lock<std::mutex> lock(mDisplaysMutex);
+      std::lock_guard<std::mutex> lock(mDisplaysMutex);
       for (auto& [displayId, _] : mDisplays) {
         displayIds.push_back(displayId);
       }
@@ -1225,7 +1228,7 @@ void ComposerClient::executeLayerCommandSetLayerPerFrameMetadataBlobs(
 }
 
 std::shared_ptr<Display> ComposerClient::getDisplay(int64_t displayId) {
-  std::unique_lock<std::mutex> lock(mDisplaysMutex);
+  std::lock_guard<std::mutex> lock(mDisplaysMutex);
 
   auto it = mDisplays.find(displayId);
   if (it == mDisplays.end()) {
@@ -1368,7 +1371,7 @@ HWC3::Error ComposerClient::handleHotplug(bool connected, uint32_t id,
                       static_cast<int>(height), static_cast<int>(dpiX),
                       static_cast<int>(dpiY), static_cast<int>(refreshRate))};
     {
-      std::unique_lock<std::mutex> lock(mDisplaysMutex);
+      std::lock_guard<std::mutex> lock(mDisplaysMutex);
       createDisplayLocked(displayId, configId, configs);
     }
 
@@ -1381,7 +1384,7 @@ HWC3::Error ComposerClient::handleHotplug(bool connected, uint32_t id,
     mCallbacks->onHotplug(displayId, /*connected=*/false);
 
     {
-      std::unique_lock<std::mutex> lock(mDisplaysMutex);
+      std::lock_guard<std::mutex> lock(mDisplaysMutex);
       destroyDisplayLocked(displayId);
     }
   }

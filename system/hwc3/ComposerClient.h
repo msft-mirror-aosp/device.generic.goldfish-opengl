@@ -18,7 +18,7 @@
 #define ANDROID_HWC_COMPOSERCLIENT_H
 
 #include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
-#include <utils/Mutex.h>
+#include <android-base/thread_annotations.h>
 
 #include <memory>
 
@@ -222,15 +222,16 @@ class ComposerClient : public BnComposerClient {
 
   // Finds the Cuttlefish/Goldfish specific configuration and initializes the
   // displays.
-  HWC3::Error createDisplaysLocked();
+  HWC3::Error createDisplaysLocked() EXCLUSIVE_LOCKS_REQUIRED(mDisplaysMutex);
 
   // Creates a display with the given properties.
   HWC3::Error createDisplayLocked(int64_t displayId, int32_t activeConfigId,
-                                  const std::vector<DisplayConfig>& configs);
+                                  const std::vector<DisplayConfig>& configs)
+      EXCLUSIVE_LOCKS_REQUIRED(mDisplaysMutex);
 
-  HWC3::Error destroyDisplaysLocked();
+  HWC3::Error destroyDisplaysLocked() EXCLUSIVE_LOCKS_REQUIRED(mDisplaysMutex);
 
-  HWC3::Error destroyDisplayLocked(int64_t displayId);
+  HWC3::Error destroyDisplayLocked(int64_t displayId) EXCLUSIVE_LOCKS_REQUIRED(mDisplaysMutex);
 
   HWC3::Error handleHotplug(bool connected,   //
                             uint32_t id,      //
@@ -241,7 +242,7 @@ class ComposerClient : public BnComposerClient {
                             uint32_t refreshRate);
 
   std::mutex mDisplaysMutex;
-  std::map<int64_t, std::shared_ptr<Display>> mDisplays;
+  std::map<int64_t, std::shared_ptr<Display>> mDisplays GUARDED_BY(mDisplaysMutex);
 
   // The onHotplug(), onVsync(), etc callbacks registered by SurfaceFlinger.
   std::shared_ptr<IComposerCallback> mCallbacks;

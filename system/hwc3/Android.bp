@@ -22,7 +22,6 @@ package {
 }
 
 cc_binary {
-
     name: "android.hardware.graphics.composer3-service.ranchu",
 
     relative_install_path: "hw",
@@ -88,6 +87,10 @@ cc_binary {
         "Main.cpp",
         "NoOpFrameComposer.cpp",
         "VsyncThread.cpp",
+    ],
+
+    cflags: [
+        "-Wthread-safety",
     ],
 
     vintf_fragments: ["hwc3.xml"],

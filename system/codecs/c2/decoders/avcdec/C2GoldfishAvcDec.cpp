@@ -803,15 +803,15 @@ void C2GoldfishAvcDec::removePts(uint64_t pts) {
     if (!mOldPts2Index.empty()) {
         auto iter = mOldPts2Index.find(pts);
         if (iter != mOldPts2Index.end()) {
-            mOldPts2Index.erase(iter);
             index = iter->second;
+            mOldPts2Index.erase(iter);
             found = true;
         }
     } else {
         auto iter = mPts2Index.find(pts);
         if (iter != mPts2Index.end()) {
-            mPts2Index.erase(iter);
             index = iter->second;
+            mPts2Index.erase(iter);
             found = true;
         }
     }

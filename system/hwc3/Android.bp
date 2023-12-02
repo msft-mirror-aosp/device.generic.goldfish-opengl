@@ -59,6 +59,7 @@ cc_binary {
     ],
 
     srcs: [
+        "AlternatingImageStorage.cpp",
         "ClientFrameComposer.cpp",
         "Common.cpp",
         "Composer.cpp",

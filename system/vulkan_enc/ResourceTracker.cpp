@@ -1269,6 +1269,9 @@ public:
             "VK_KHR_create_renderpass2",
             "VK_KHR_imageless_framebuffer",
 #endif
+            // Vulkan 1.3
+            "VK_KHR_synchronization2",
+            "VK_EXT_private_data",
         };
 
         VkEncoder* enc = (VkEncoder*)context;
@@ -1674,7 +1677,7 @@ public:
             .usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT |  VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                         VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
                         VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
-            .initialLayout = VK_IMAGE_LAYOUT_MAX_ENUM,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         };
         VkImage image = VK_NULL_HANDLE;
         VkResult res = enc->vkCreateImage(device, &createInfo, nullptr, &image, true /* do lock */);
@@ -4106,6 +4109,11 @@ public:
         VkEncoder* enc = (VkEncoder*)context;
 
         VkImageCreateInfo localCreateInfo = vk_make_orphan_copy(*pCreateInfo);
+        if (localCreateInfo.sharingMode != VK_SHARING_MODE_CONCURRENT) {
+            localCreateInfo.queueFamilyIndexCount = 0;
+            localCreateInfo.pQueueFamilyIndices = nullptr;
+        }
+
         vk_struct_chain_iterator structChainIter = vk_make_chain_iterator(&localCreateInfo);
         VkExternalMemoryImageCreateInfo localExtImgCi;
 
@@ -4466,7 +4474,22 @@ public:
             pExternalBufferProperties->externalMemoryProperties.compatibleHandleTypes = 0;
             return;
         }
+        uint32_t supportedHandleType = 0;
+#ifdef VK_USE_PLATFORM_FUCHSIA
+        supportedHandleType |= VK_EXTERNAL_MEMORY_HANDLE_TYPE_ZIRCON_VM_BIT_FUCHSIA;
+#endif
+#ifdef VK_USE_PLATFORM_ANDROID_KHR
+        supportedHandleType |= VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT |
+                VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID;
+#endif
+        if (supportedHandleType) {
+            // 0 is a valid handleType so we can't check against 0
+            if (pExternalBufferInfo->handleType != (pExternalBufferInfo->handleType & supportedHandleType)) {
+                return;
+            }
+        }
         enc->vkGetPhysicalDeviceExternalBufferProperties(physicalDevice, pExternalBufferInfo, pExternalBufferProperties, true /* do lock */);
+        transformImpl_VkExternalMemoryProperties_fromhost(&pExternalBufferProperties->externalMemoryProperties, 0);
     }
 
     void on_vkGetPhysicalDeviceExternalFenceProperties(
@@ -5300,6 +5323,22 @@ public:
         if (extBufCiPtr) {
             localExtBufCi = vk_make_orphan_copy(*extBufCiPtr);
             vk_append_struct(&structChainIter, &localExtBufCi);
+        }
+
+        VkBufferOpaqueCaptureAddressCreateInfo localCapAddrCi;
+        const VkBufferOpaqueCaptureAddressCreateInfo* pCapAddrCi =
+            vk_find_struct<VkBufferOpaqueCaptureAddressCreateInfo>(pCreateInfo);
+        if (pCapAddrCi) {
+            localCapAddrCi = vk_make_orphan_copy(*pCapAddrCi);
+            vk_append_struct(&structChainIter, &localCapAddrCi);
+        }
+
+        VkBufferDeviceAddressCreateInfoEXT localDevAddrCi;
+        const VkBufferDeviceAddressCreateInfoEXT* pDevAddrCi =
+            vk_find_struct<VkBufferDeviceAddressCreateInfoEXT>(pCreateInfo);
+        if (pDevAddrCi) {
+            localDevAddrCi = vk_make_orphan_copy(*pDevAddrCi);
+            vk_append_struct(&structChainIter, &localDevAddrCi);
         }
 
 #ifdef VK_USE_PLATFORM_FUCHSIA
@@ -6697,6 +6736,9 @@ public:
         VkEncoder* enc = (VkEncoder*)context;
         (void)input_result;
 
+        uint32_t supportedHandleType = 0;
+        VkExternalImageFormatProperties* ext_img_properties =
+            vk_find_struct<VkExternalImageFormatProperties>(pImageFormatProperties);
 #ifdef VK_USE_PLATFORM_FUCHSIA
 
         constexpr VkFormat kExternalImageSupportedFormats[] = {
@@ -6728,9 +6770,6 @@ public:
             VK_FORMAT_R8G8_SRGB,
         };
 
-        VkExternalImageFormatProperties* ext_img_properties =
-            vk_find_struct<VkExternalImageFormatProperties>(pImageFormatProperties);
-
         if (ext_img_properties) {
           if (std::find(std::begin(kExternalImageSupportedFormats),
                         std::end(kExternalImageSupportedFormats),
@@ -6738,13 +6777,24 @@ public:
             return VK_ERROR_FORMAT_NOT_SUPPORTED;
           }
         }
+        supportedHandleType |= VK_EXTERNAL_MEMORY_HANDLE_TYPE_ZIRCON_VM_BIT_FUCHSIA;
 #endif
 
 #ifdef VK_USE_PLATFORM_ANDROID_KHR
         VkAndroidHardwareBufferUsageANDROID* output_ahw_usage =
             vk_find_struct<VkAndroidHardwareBufferUsageANDROID>(pImageFormatProperties);
+        supportedHandleType |= VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT |
+            VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID;
 #endif
-
+        const VkPhysicalDeviceExternalImageFormatInfo* ext_img_info =
+                vk_find_struct<VkPhysicalDeviceExternalImageFormatInfo>(pImageFormatInfo);
+        
+        if (supportedHandleType && ext_img_info) {
+            // 0 is a valid handleType so we don't check against 0
+            if (ext_img_info->handleType != (ext_img_info->handleType & supportedHandleType)) {
+                return VK_ERROR_FORMAT_NOT_SUPPORTED;
+            }
+        }
         VkResult hostRes;
 
         if (isKhr) {
@@ -6761,8 +6811,6 @@ public:
 
 #ifdef VK_USE_PLATFORM_FUCHSIA
         if (ext_img_properties) {
-            const VkPhysicalDeviceExternalImageFormatInfo* ext_img_info =
-                vk_find_struct<VkPhysicalDeviceExternalImageFormatInfo>(pImageFormatInfo);
             if (ext_img_info) {
                 if (static_cast<uint32_t>(ext_img_info->handleType) ==
                     VK_EXTERNAL_MEMORY_HANDLE_TYPE_ZIRCON_VMO_BIT_FUCHSIA) {
@@ -6788,7 +6836,9 @@ public:
                     pImageFormatInfo->usage);
         }
 #endif
-
+        if (ext_img_properties) {
+            transformImpl_VkExternalMemoryProperties_fromhost(&ext_img_properties->externalMemoryProperties, 0);
+        }
         return hostRes;
     }
 
@@ -6831,7 +6881,16 @@ public:
                 VK_EXTERNAL_SEMAPHORE_FEATURE_IMPORTABLE_BIT;
         }
 #else
-        if (pExternalSemaphoreInfo->handleType ==
+        const VkSemaphoreTypeCreateInfo* semaphoreTypeCi =
+            vk_find_struct<VkSemaphoreTypeCreateInfo>(pExternalSemaphoreInfo);
+        bool isSemaphoreTimeline = semaphoreTypeCi != nullptr && semaphoreTypeCi->semaphoreType == VK_SEMAPHORE_TYPE_TIMELINE;
+        if (isSemaphoreTimeline) {
+            // b/304373623
+            // dEQP-VK.api.external.semaphore.sync_fd#info_timeline
+            pExternalSemaphoreProperties->compatibleHandleTypes = 0;
+            pExternalSemaphoreProperties->exportFromImportedHandleTypes = 0;
+            pExternalSemaphoreProperties->externalSemaphoreFeatures = 0;
+        } else if (pExternalSemaphoreInfo->handleType ==
             VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT) {
             pExternalSemaphoreProperties->compatibleHandleTypes |=
                 VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT;
@@ -7289,6 +7348,7 @@ public:
 
             *fd = exec.handle.osHandle;
         } else {
+            ensureSyncDeviceFd();
             goldfish_sync_queue_work(
                     mSyncDeviceFd,
                     get_host_u64_VkImage(image) /* the handle */,
@@ -7421,12 +7481,27 @@ public:
                 graphicsPipelineCreateInfo.pMultisampleState = nullptr;
             }
 
+            bool forceDepthStencilState = false;
+            bool forceColorBlendState = false;
+
+            const VkPipelineRenderingCreateInfo* pipelineRenderingInfo =
+                vk_find_struct<VkPipelineRenderingCreateInfo>(&graphicsPipelineCreateInfo);
+            if (pipelineRenderingInfo) {
+                forceDepthStencilState |= pipelineRenderingInfo->depthAttachmentFormat != VK_FORMAT_UNDEFINED;
+                forceDepthStencilState |= pipelineRenderingInfo->stencilAttachmentFormat != VK_FORMAT_UNDEFINED;
+                forceColorBlendState |= pipelineRenderingInfo->colorAttachmentCount != 0;
+            }
             // VUID-VkGraphicsPipelineCreateInfo-renderPass-06043
             // VUID-VkGraphicsPipelineCreateInfo-renderPass-06044
             if (graphicsPipelineCreateInfo.renderPass == VK_NULL_HANDLE
                     || !shouldIncludeFragmentShaderState) {
-                graphicsPipelineCreateInfo.pDepthStencilState = nullptr;
-                graphicsPipelineCreateInfo.pColorBlendState = nullptr;
+                // VUID-VkGraphicsPipelineCreateInfo-renderPass-06053
+                if (!forceDepthStencilState) {
+                    graphicsPipelineCreateInfo.pDepthStencilState = nullptr;
+                }
+                if (!forceColorBlendState) {
+                    graphicsPipelineCreateInfo.pColorBlendState = nullptr;
+                }
             }
         }
         return enc->vkCreateGraphicsPipelines(device, pipelineCache, localCreateInfos.size(),

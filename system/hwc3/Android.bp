@@ -88,6 +88,7 @@ cc_binary {
     ],
 
     cflags: [
+        "-Wall",
         "-Wthread-safety",
     ],
 

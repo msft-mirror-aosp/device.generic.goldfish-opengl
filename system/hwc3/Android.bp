@@ -88,6 +88,7 @@ cc_binary {
 
     cflags: [
         "-Wall",
+        "-Werror=conversion",
     ],
 
     vintf_fragments: ["hwc3.xml"],

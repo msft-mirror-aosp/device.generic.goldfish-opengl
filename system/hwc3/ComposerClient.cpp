@@ -141,13 +141,13 @@ HWC3::Error ComposerClient::init() {
   }
 
   const auto HotplugCallback = [this](bool connected,   //
-                                      int32_t id,       //
+                                      uint32_t id,      //
                                       uint32_t width,   //
                                       uint32_t height,  //
                                       uint32_t dpiX,    //
                                       uint32_t dpiY,    //
                                       uint32_t refreshRate) {
-    handleHotplug(connected, id, width, height, dpiX, dpiY, refreshRate);
+      handleHotplug(connected, id, width, height, dpiX, dpiY, refreshRate);
   };
   error = mComposer->registerOnHotplugCallback(HotplugCallback);
   if (error != HWC3::Error::None) {
@@ -181,7 +181,7 @@ ndk::ScopedAStatus ComposerClient::createLayer(int64_t displayId,
     return ToBinderStatus(error);
   }
 
-  error = mResources->addLayer(displayId, *layerId, bufferSlotCount);
+  error = mResources->addLayer(displayId, *layerId, static_cast<uint32_t>(bufferSlotCount));
   if (error != HWC3::Error::None) {
     ALOGE("%s: display:%" PRIu64 " resources failed to create layer",
           __FUNCTION__, displayId);
@@ -641,7 +641,7 @@ ndk::ScopedAStatus ComposerClient::setClientTargetSlotCount(int64_t displayId,
   GET_DISPLAY_OR_RETURN_ERROR();
 
   return ToBinderStatus(
-      mResources->setDisplayClientTargetCacheSize(displayId, count));
+      mResources->setDisplayClientTargetCacheSize(displayId, static_cast<uint32_t>(count)));
 }
 
 ndk::ScopedAStatus ComposerClient::setColorMode(int64_t displayId,

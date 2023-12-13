@@ -163,7 +163,7 @@ void VsyncThread::threadLoop() {
         DEBUG_LOG("%s: for display:%" PRIu64 " calling vsync", __FUNCTION__,
                   mDisplayId);
         mCallbacks->onVsync(mDisplayId, asNanosTimePoint(nextVsync),
-                            asNanosDuration(vsyncPeriod));
+                            static_cast<int32_t>(asNanosDuration(vsyncPeriod)));
       }
     }
 

@@ -20,7 +20,6 @@
 #include <android-base/properties.h>
 #include <android-base/strings.h>
 #include <android/hardware/graphics/common/1.0/types.h>
-#include <device_config_shared.h>
 #include <drm_fourcc.h>
 #include <libyuv.h>
 #include <sync/sync.h>
@@ -567,26 +566,6 @@ HWC3::Error GuestFrameComposer::onDisplayClientTargetSet(Display*) {
 HWC3::Error GuestFrameComposer::onActiveConfigChange(Display* /*display*/) {
   return HWC3::Error::None;
 };
-
-HWC3::Error GuestFrameComposer::getDisplayConfigsFromDeviceConfig(
-    std::vector<GuestFrameComposer::DisplayConfig>* configs) {
-  DEBUG_LOG("%s", __FUNCTION__);
-
-  const auto deviceConfig = cuttlefish::GetDeviceConfig();
-  for (const auto& deviceDisplayConfig : deviceConfig.display_config()) {
-    DisplayConfig displayConfig = {
-        .width = deviceDisplayConfig.width(),
-        .height = deviceDisplayConfig.height(),
-        .dpiX = deviceDisplayConfig.dpi(),
-        .dpiY = deviceDisplayConfig.dpi(),
-        .refreshRateHz = deviceDisplayConfig.refresh_rate_hz(),
-    };
-
-    configs->push_back(displayConfig);
-  }
-
-  return HWC3::Error::None;
-}
 
 HWC3::Error GuestFrameComposer::getDisplayConfigsFromSystemProp(
     std::vector<GuestFrameComposer::DisplayConfig>* configs) {

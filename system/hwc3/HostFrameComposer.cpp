@@ -26,8 +26,6 @@
 #include <poll.h>
 #include <sync/sync.h>
 #include <ui/GraphicBuffer.h>
-#include <ui/GraphicBufferAllocator.h>
-#include <ui/GraphicBufferMapper.h>
 
 #include <optional>
 #include <tuple>
@@ -160,10 +158,6 @@ class ComposeMsg_v2 {
   uint32_t mLayerCnt;
   ComposeDevice_v2* mComposeDevice;
 };
-
-void FreeDisplayColorBuffer(const native_handle_t* h) {
-  ::android::GraphicBufferAllocator::get().free(h);
-}
 
 }  // namespace
 

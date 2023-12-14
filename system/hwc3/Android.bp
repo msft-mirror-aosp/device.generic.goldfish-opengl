@@ -34,8 +34,6 @@ cc_binary {
         "libbase",
         "libbinder_ndk",
         "libcutils",
-        "libcuttlefish_device_config",
-        "libcuttlefish_device_config_proto",
         "libdrm",
         "libgralloctypes",
         "libhidlbase",

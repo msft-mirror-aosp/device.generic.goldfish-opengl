@@ -60,10 +60,10 @@ hwc_frect AsHwcFrect(const common::FRect& rect) {
 
 hwc_color AsHwcColor(const Color& color) {
   hwc_color out;
-  out.r = color.r;
-  out.g = color.g;
-  out.b = color.b;
-  out.a = color.a;
+  out.r = static_cast<uint8_t>(color.r * 255.0f);
+  out.g = static_cast<uint8_t>(color.g * 255.0f);
+  out.b = static_cast<uint8_t>(color.b * 255.0f);
+  out.a = static_cast<uint8_t>(color.a * 255.0f);
   return out;
 }
 

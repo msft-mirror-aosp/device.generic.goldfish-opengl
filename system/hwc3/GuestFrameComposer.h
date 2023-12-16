@@ -76,9 +76,6 @@ class GuestFrameComposer : public FrameComposer {
     int refreshRateHz;
   };
 
-  HWC3::Error getDisplayConfigsFromDeviceConfig(
-      std::vector<DisplayConfig>* configs);
-
   HWC3::Error getDisplayConfigsFromSystemProp(
       std::vector<DisplayConfig>* configs);
 

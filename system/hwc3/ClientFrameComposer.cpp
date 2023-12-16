@@ -20,7 +20,6 @@
 #include <android-base/properties.h>
 #include <android-base/strings.h>
 #include <android/hardware/graphics/common/1.0/types.h>
-#include <device_config_shared.h>
 #include <drm_fourcc.h>
 #include <libyuv.h>
 #include <sync/sync.h>

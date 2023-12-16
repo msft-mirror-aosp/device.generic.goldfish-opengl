@@ -20,7 +20,6 @@
 #include <android-base/properties.h>
 #include <android-base/strings.h>
 #include <android/hardware/graphics/common/1.0/types.h>
-#include <device_config_shared.h>
 #include <drm_fourcc.h>
 #include <libyuv.h>
 #include <sync/sync.h>
@@ -568,26 +567,6 @@ HWC3::Error GuestFrameComposer::onActiveConfigChange(Display* /*display*/) {
   return HWC3::Error::None;
 };
 
-HWC3::Error GuestFrameComposer::getDisplayConfigsFromDeviceConfig(
-    std::vector<GuestFrameComposer::DisplayConfig>* configs) {
-  DEBUG_LOG("%s", __FUNCTION__);
-
-  const auto deviceConfig = cuttlefish::GetDeviceConfig();
-  for (const auto& deviceDisplayConfig : deviceConfig.display_config()) {
-    DisplayConfig displayConfig = {
-        .width = deviceDisplayConfig.width(),
-        .height = deviceDisplayConfig.height(),
-        .dpiX = deviceDisplayConfig.dpi(),
-        .dpiY = deviceDisplayConfig.dpi(),
-        .refreshRateHz = deviceDisplayConfig.refresh_rate_hz(),
-    };
-
-    configs->push_back(displayConfig);
-  }
-
-  return HWC3::Error::None;
-}
-
 HWC3::Error GuestFrameComposer::getDisplayConfigsFromSystemProp(
     std::vector<GuestFrameComposer::DisplayConfig>* configs) {
   DEBUG_LOG("%s", __FUNCTION__);
@@ -855,11 +834,12 @@ HWC3::Error GuestFrameComposer::presentDisplay(
         continue;
       }
 
-      HWC3::Error error = composeLayerInto(layer,                          //
-                                           compositionResultBufferData,    //
-                                           compositionResultBufferWidth,   //
-                                           compositionResultBufferHeight,  //
-                                           compositionResultBufferStride,  //
+      HWC3::Error error = composeLayerInto(displayInfo.compositionIntermediateStorage,  //
+                                           layer,                                       //
+                                           compositionResultBufferData,                 //
+                                           compositionResultBufferWidth,                //
+                                           compositionResultBufferHeight,               //
+                                           compositionResultBufferStride,               //
                                            4);
       if (error != HWC3::Error::None) {
         ALOGE("%s: display:%" PRIu64 " failed to compose layer:%" PRIu64,
@@ -935,6 +915,7 @@ bool GuestFrameComposer::canComposeLayer(Layer* layer) {
 }
 
 HWC3::Error GuestFrameComposer::composeLayerInto(
+    AlternatingImageStorage& compositionIntermediateStorage,
     Layer* srcLayer,                     //
     std::uint8_t* dstBuffer,             //
     std::uint32_t dstBufferWidth,        //
@@ -1012,11 +993,10 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
   // framebuffer) is one of them, so only N-1 temporary buffers are needed.
   // Vertical flip is not taken into account because it can be done together
   // with any other operation.
-  int neededScratchBuffers = (needsFill ? 1 : 0) +
-                             (needsConversion ? 1 : 0) +
-                             (needsScaling ? 1 : 0) + (needsRotation ? 1 : 0) +
-                             (needsAttenuation ? 1 : 0) +
-                             (needsBlending ? 1 : 0) + (needsCopy ? 1 : 0) - 1;
+  int neededIntermediateImages = (needsFill ? 1 : 0) + (needsConversion ? 1 : 0) +
+                                 (needsScaling ? 1 : 0) + (needsRotation ? 1 : 0) +
+                                 (needsAttenuation ? 1 : 0) + (needsBlending ? 1 : 0) +
+                                 (needsCopy ? 1 : 0) - 1;
 
   int mScratchBufferWidth =
       srcLayerDisplayFrame.right - srcLayerDisplayFrame.left;
@@ -1027,9 +1007,9 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
   int mScratchBufferSizeBytes =
       mScratchBufferHeight * mScratchBufferStrideBytes;
 
-  for (int i = 0; i < neededScratchBuffers; i++) {
+  for (int i = 0; i < neededIntermediateImages; i++) {
     BufferSpec mScratchBufferspec(
-        getRotatingScratchBuffer(mScratchBufferSizeBytes, i),
+        compositionIntermediateStorage.getRotatingScratchBuffer(mScratchBufferSizeBytes, i),
         mScratchBufferWidth, mScratchBufferHeight, mScratchBufferStrideBytes);
     dstBufferStack.push_back(mScratchBufferspec);
   }
@@ -1064,7 +1044,7 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
       int srcHeight = srcLayerSpec.cropHeight;
       int dst_stride_bytes =
           AlignToPower2(srcWidth * dstBufferBytesPerPixel, 4);
-      size_t needed_size = dst_stride_bytes * srcHeight;
+      size_t neededSize = dst_stride_bytes * srcHeight;
       dstBufferSpec.width = srcWidth;
       dstBufferSpec.height = srcHeight;
       // Adjust the stride accordingly
@@ -1076,7 +1056,7 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
 
       // In case of a scale, the source frame may be bigger than the default tmp
       // buffer size
-      dstBufferSpec.buffer = getSpecialScratchBuffer(needed_size);
+      dstBufferSpec.buffer = compositionIntermediateStorage.getSpecialScratchBuffer(neededSize);
     }
 
     int retval = DoConversion(srcLayerSpec, dstBufferSpec, needsVFlip);
@@ -1196,28 +1176,6 @@ HWC3::Error GuestFrameComposer::applyColorTransformToRGBA(
                           bufferHeight);
 
   return HWC3::Error::None;
-}
-
-uint8_t* GuestFrameComposer::getRotatingScratchBuffer(std::size_t neededSize,
-                                                      std::uint32_t order) {
-  static constexpr const int kNumScratchBufferPieces = 2;
-
-  std::size_t totalNeededSize = neededSize * kNumScratchBufferPieces;
-  if (mScratchBuffer.size() < totalNeededSize) {
-    mScratchBuffer.resize(totalNeededSize);
-  }
-
-  std::size_t bufferIndex = order % kNumScratchBufferPieces;
-  std::size_t bufferOffset = bufferIndex * neededSize;
-  return &mScratchBuffer[bufferOffset];
-}
-
-uint8_t* GuestFrameComposer::getSpecialScratchBuffer(size_t neededSize) {
-  if (mSpecialScratchBuffer.size() < neededSize) {
-    mSpecialScratchBuffer.resize(neededSize);
-  }
-
-  return &mSpecialScratchBuffer[0];
 }
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl

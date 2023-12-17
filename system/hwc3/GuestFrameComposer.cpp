@@ -20,7 +20,6 @@
 #include <android-base/properties.h>
 #include <android-base/strings.h>
 #include <android/hardware/graphics/common/1.0/types.h>
-#include <device_config_shared.h>
 #include <drm_fourcc.h>
 #include <libyuv.h>
 #include <sync/sync.h>
@@ -29,6 +28,7 @@
 #include <ui/GraphicBufferMapper.h>
 
 #include "Display.h"
+#include "DisplayFinder.h"
 #include "Drm.h"
 #include "Layer.h"
 
@@ -488,24 +488,46 @@ HWC3::Error GuestFrameComposer::onDisplayCreate(Display* display) {
   }
 
   DisplayInfo& displayInfo = mDisplayInfos[displayId];
-  displayInfo.swapchain = DrmSwapchain::create(displayWidth, displayHeight,
-                                               ::android::GraphicBuffer::USAGE_HW_COMPOSER |
-                                                   ::android::GraphicBuffer::USAGE_SW_READ_OFTEN |
-                                                   ::android::GraphicBuffer::USAGE_SW_WRITE_OFTEN,
-                                               &mDrmClient);
+
+  uint32_t bufferStride;
+  buffer_handle_t bufferHandle;
+
+  auto status = ::android::GraphicBufferAllocator::get().allocate(
+      displayWidth,                       //
+      displayHeight,                      //
+      ::android::PIXEL_FORMAT_RGBA_8888,  //
+      /*layerCount=*/1,                   //
+      ::android::GraphicBuffer::USAGE_HW_COMPOSER |
+          ::android::GraphicBuffer::USAGE_SW_READ_OFTEN |
+          ::android::GraphicBuffer::USAGE_SW_WRITE_OFTEN,  //
+      &bufferHandle,                                       //
+      &bufferStride,                                       //
+      "RanchuHwc");
+  if (status != ::android::OK) {
+    ALOGE("%s: failed to allocate composition buffer for display:%" PRIu64,
+          __FUNCTION__, displayId);
+    return HWC3::Error::NoResources;
+  }
+
+  displayInfo.compositionResultBuffer = bufferHandle;
+
+  auto [drmBufferCreateError, drmBuffer] = mDrmClient.create(bufferHandle);
+  if (drmBufferCreateError != HWC3::Error::None) {
+    ALOGE("%s: failed to create drm buffer for display:%" PRIu64, __FUNCTION__,
+          displayId);
+    return drmBufferCreateError;
+  }
+  displayInfo.compositionResultDrmBuffer = std::move(drmBuffer);
 
   if (displayId == 0) {
-    auto compositionResult = displayInfo.swapchain->getNextImage();
-    auto [flushError, flushSyncFd] =
-        mDrmClient.flushToDisplay(displayId, compositionResult->getDrmBuffer(), -1);
+    auto [flushError, flushSyncFd] = mDrmClient.flushToDisplay(
+        displayId, displayInfo.compositionResultDrmBuffer, -1);
     if (flushError != HWC3::Error::None) {
       ALOGW(
           "%s: Initial display flush failed. HWComposer assuming that we are "
           "running in QEMU without a display and disabling presenting.",
           __FUNCTION__);
       mPresentDisabled = true;
-    } else {
-      compositionResult->markAsInUse(std::move(flushSyncFd));
     }
   }
 
@@ -526,7 +548,14 @@ HWC3::Error GuestFrameComposer::onDisplayDestroy(Display* display) {
           displayId);
     return HWC3::Error::BadDisplay;
   }
-  mDisplayInfos.erase(displayId);
+
+  DisplayInfo& displayInfo = mDisplayInfos[displayId];
+
+  ::android::GraphicBufferAllocator::get().free(
+      displayInfo.compositionResultBuffer);
+
+  mDisplayInfos.erase(it);
+
   return HWC3::Error::None;
 }
 
@@ -538,59 +567,12 @@ HWC3::Error GuestFrameComposer::onActiveConfigChange(Display* /*display*/) {
   return HWC3::Error::None;
 };
 
-HWC3::Error GuestFrameComposer::getDisplayConfigsFromDeviceConfig(
-    std::vector<GuestFrameComposer::DisplayConfig>* configs) {
-  DEBUG_LOG("%s", __FUNCTION__);
-
-  const auto deviceConfig = cuttlefish::GetDeviceConfig();
-  for (const auto& deviceDisplayConfig : deviceConfig.display_config()) {
-    DisplayConfig displayConfig = {
-        .width = deviceDisplayConfig.width(),
-        .height = deviceDisplayConfig.height(),
-        .dpiX = deviceDisplayConfig.dpi(),
-        .dpiY = deviceDisplayConfig.dpi(),
-        .refreshRateHz = deviceDisplayConfig.refresh_rate_hz(),
-    };
-
-    configs->push_back(displayConfig);
-  }
-
-  return HWC3::Error::None;
-}
-
 HWC3::Error GuestFrameComposer::getDisplayConfigsFromSystemProp(
     std::vector<GuestFrameComposer::DisplayConfig>* configs) {
   DEBUG_LOG("%s", __FUNCTION__);
 
-  static constexpr const char kExternalDisplayProp[] =
-      "hwservicemanager.external.displays";
-
-  const auto propString =
-      ::android::base::GetProperty(kExternalDisplayProp, "");
-  DEBUG_LOG("%s: prop value is: %s", __FUNCTION__, propString.c_str());
-
-  if (propString.empty()) {
-    return HWC3::Error::None;
-  }
-
-  const std::vector<std::string> propStringParts =
-      ::android::base::Split(propString, ",");
-  if (propStringParts.size() % 5 != 0) {
-    ALOGE("%s: Invalid syntax for system prop %s which is %s", __FUNCTION__,
-          kExternalDisplayProp, propString.c_str());
-    return HWC3::Error::BadParameter;
-  }
-
   std::vector<int> propIntParts;
-  for (const std::string& propStringPart : propStringParts) {
-    int propIntPart;
-    if (!::android::base::ParseInt(propStringPart, &propIntPart)) {
-      ALOGE("%s: Invalid syntax for system prop %s which is %s", __FUNCTION__,
-            kExternalDisplayProp, propString.c_str());
-      return HWC3::Error::BadParameter;
-    }
-    propIntParts.push_back(propIntPart);
-  }
+  parseExternalDisplaysFromProperties(propIntParts);
 
   while (!propIntParts.empty()) {
     DisplayConfig display_config = {
@@ -724,23 +706,21 @@ HWC3::Error GuestFrameComposer::presentDisplay(
   }
 
   DisplayInfo& displayInfo = it->second;
-  auto compositionResult = displayInfo.swapchain->getNextImage();
-  compositionResult->wait();
 
-  if (compositionResult->getBuffer() == nullptr) {
+  if (displayInfo.compositionResultBuffer == nullptr) {
     ALOGE("%s: display:%" PRIu64 " missing composition result buffer",
           __FUNCTION__, displayId);
     return HWC3::Error::NoResources;
   }
 
-  if (compositionResult->getDrmBuffer() == nullptr) {
+  if (displayInfo.compositionResultDrmBuffer == nullptr) {
     ALOGE("%s: display:%" PRIu64 " missing composition result drm buffer",
           __FUNCTION__, displayId);
     return HWC3::Error::NoResources;
   }
 
   std::optional<GrallocBuffer> compositionResultBufferOpt =
-      mGralloc.Import(compositionResult->getBuffer());
+      mGralloc.Import(displayInfo.compositionResultBuffer);
   if (!compositionResultBufferOpt) {
     ALOGE("%s: display:%" PRIu64 " failed to import buffer", __FUNCTION__,
           displayId);
@@ -885,16 +865,14 @@ HWC3::Error GuestFrameComposer::presentDisplay(
   DEBUG_LOG("%s display:%" PRIu64 " flushing drm buffer", __FUNCTION__,
             displayId);
 
-  auto [error, fence] = mDrmClient.flushToDisplay(displayId, compositionResult->getDrmBuffer(), -1);
+  auto [error, fence] = mDrmClient.flushToDisplay(
+      displayId, displayInfo.compositionResultDrmBuffer, -1);
   if (error != HWC3::Error::None) {
     ALOGE("%s: display:%" PRIu64 " failed to flush drm buffer" PRIu64,
           __FUNCTION__, displayId);
   }
 
   *outDisplayFence = std::move(fence);
-  compositionResult->markAsInUse(outDisplayFence->ok()
-                                     ? ::android::base::unique_fd(dup(*outDisplayFence))
-                                     : ::android::base::unique_fd());
   return error;
 }
 

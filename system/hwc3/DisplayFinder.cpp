@@ -19,7 +19,6 @@
 #include <android-base/parseint.h>
 #include <android-base/properties.h>
 #include <android-base/strings.h>
-#include <device_config_shared.h>
 
 #include "Common.h"
 #include "HostUtils.h"
@@ -29,37 +28,6 @@ namespace {
 
 constexpr int32_t HertzToPeriodNanos(uint32_t hertz) {
   return 1000 * 1000 * 1000 / hertz;
-}
-
-HWC3::Error findCuttlefishDisplays(std::vector<DisplayMultiConfigs>* outDisplays) {
-  DEBUG_LOG("%s", __FUNCTION__);
-
-  // TODO: replace with initializing directly from DRM info.
-  const auto deviceConfig = cuttlefish::GetDeviceConfig();
-
-  int64_t displayId = 0;
-  for (const auto& deviceDisplayConfig : deviceConfig.display_config()) {
-    const auto vsyncPeriodNanos =
-        HertzToPeriodNanos(deviceDisplayConfig.refresh_rate_hz());
-
-    DisplayMultiConfigs display = {
-        .displayId = displayId,
-        .activeConfigId = 0,
-        .configs =
-            {
-                DisplayConfig(0,                             //
-                              deviceDisplayConfig.width(),   //
-                              deviceDisplayConfig.height(),  //
-                              deviceDisplayConfig.dpi(),     //
-                              deviceDisplayConfig.dpi(),     //
-                              vsyncPeriodNanos),
-            },
-    };
-    outDisplays->push_back(display);
-    ++displayId;
-  }
-
-  return HWC3::Error::None;
 }
 
 static int getVsyncHzFromProperty() {
@@ -272,8 +240,6 @@ HWC3::Error findDisplays(const DrmClient* drm,
       return HWC3::Error::NoResources;
     }
     error = findDrmDisplays(*drm, outDisplays);
-  } else if (IsCuttlefish()) {
-    error = findCuttlefishDisplays(outDisplays);
   } else {
     error = findGoldfishDisplays(outDisplays);
   }

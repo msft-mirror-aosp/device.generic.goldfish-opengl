@@ -612,6 +612,7 @@ private:  // **** impl ****
         case PixelFormat::RGBA_1010102:
         case PixelFormat::YV12:
         case PixelFormat::YCBCR_420_888:
+        case PixelFormat::YCBCR_P010:
             RETURN(true);
 
         case PixelFormat::IMPLEMENTATION_DEFINED:

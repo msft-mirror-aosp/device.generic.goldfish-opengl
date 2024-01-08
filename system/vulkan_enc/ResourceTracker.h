@@ -252,14 +252,23 @@ public:
         void* context, VkResult input_result,
         VkQueue queue, uint32_t submitCount, const VkSubmitInfo* pSubmits, VkFence fence);
 
+    VkResult on_vkQueueSubmit2(void* context, VkResult input_result, VkQueue queue,
+                               uint32_t submitCount, const VkSubmitInfo2* pSubmits, VkFence fence);
+
     VkResult on_vkQueueWaitIdle(
         void* context, VkResult input_result,
         VkQueue queue);
 
-    void unwrap_VkNativeBufferANDROID(
+    void unwrap_vkCreateImage_pCreateInfo(
         const VkImageCreateInfo* pCreateInfo,
         VkImageCreateInfo* local_pCreateInfo);
+
     void unwrap_vkAcquireImageANDROID_nativeFenceFd(int fd, int* fd_out);
+
+    void unwrap_VkBindImageMemory2_pBindInfos(
+        uint32_t bindInfoCount,
+        const VkBindImageMemoryInfo* inputBindInfos,
+        VkBindImageMemoryInfo* outputBindInfos);
 
 #ifdef VK_USE_PLATFORM_FUCHSIA
     VkResult on_vkGetMemoryZirconHandleFUCHSIA(
@@ -357,6 +366,12 @@ public:
         const VkSamplerCreateInfo* pCreateInfo,
         const VkAllocationCallbacks* pAllocator,
         VkSampler* pSampler);
+
+    void on_vkGetPhysicalDeviceExternalBufferProperties(
+        void* context,
+        VkPhysicalDevice physicalDevice,
+        const VkPhysicalDeviceExternalBufferInfo* pExternalBufferInfo,
+        VkExternalBufferProperties* pExternalBufferProperties);
 
     void on_vkGetPhysicalDeviceExternalFenceProperties(
         void* context,

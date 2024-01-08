@@ -24,6 +24,7 @@
 
 #include "Common.h"
 #include "DrmClient.h"
+#include "DrmSwapchain.h"
 #include "FrameComposer.h"
 #include "HostConnection.h"
 
@@ -87,13 +88,7 @@ class HostFrameComposer : public FrameComposer {
 
   struct HostComposerDisplayInfo {
     uint32_t hostDisplayId = 0;
-
-    // Additional per display buffer for the composition result.
-    const native_handle_t* compositionResultBuffer = nullptr;
-
-    // Drm info for the additional composition result buffer.
-    std::shared_ptr<DrmBuffer> compositionResultDrmBuffer;
-
+    std::unique_ptr<DrmSwapchain> swapchain = {};
     // Drm info for the displays client target buffer.
     std::shared_ptr<DrmBuffer> clientTargetDrmBuffer;
   };

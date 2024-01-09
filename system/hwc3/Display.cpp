@@ -252,6 +252,7 @@ HWC3::Error Display::getDisplayCapabilities(
 
   outCapabilities->clear();
   outCapabilities->push_back(DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM);
+  outCapabilities->push_back(DisplayCapability::MULTI_THREADED_PRESENT);
 
   return HWC3::Error::None;
 }

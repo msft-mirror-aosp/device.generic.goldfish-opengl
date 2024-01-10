@@ -36,7 +36,6 @@ namespace {
 
 }  // namespace
 
-using ::aidl::android::hardware::graphics::common::DisplayHotplugEvent;
 using ::aidl::android::hardware::graphics::common::PixelFormat;
 
 class ComposerClient::CommandResultWriter {
@@ -485,7 +484,7 @@ ndk::ScopedAStatus ComposerClient::registerCallback(
     for (auto displayId : displayIds) {
       DEBUG_LOG("%s initial registration, hotplug connecting display:%" PRIu64, __FUNCTION__,
                 displayId);
-      mCallbacks->onHotplugEvent(displayId, DisplayHotplugEvent::CONNECTED);
+      mCallbacks->onHotplug(displayId, /*connected=*/true);
     }
   }
 
@@ -1379,10 +1378,10 @@ HWC3::Error ComposerClient::handleHotplug(bool connected, uint32_t id,
     ALOGI("Hotplug connecting display:%" PRIu32 " w:%" PRIu32 " h:%" PRIu32
           " dpiX:%" PRIu32 " dpiY %" PRIu32 "fps %" PRIu32,
           id, width, height, dpiX, dpiY, refreshRate);
-    mCallbacks->onHotplugEvent(displayId, DisplayHotplugEvent::CONNECTED);
+    mCallbacks->onHotplug(displayId, /*connected=*/true);
   } else {
     ALOGI("Hotplug disconnecting display:%" PRIu64, displayId);
-    mCallbacks->onHotplugEvent(displayId, DisplayHotplugEvent::DISCONNECTED);
+    mCallbacks->onHotplug(displayId, /*connected=*/false);
 
     {
       std::lock_guard<std::mutex> lock(mDisplaysMutex);

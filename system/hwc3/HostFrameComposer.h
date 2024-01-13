@@ -82,8 +82,6 @@ class HostFrameComposer : public FrameComposer {
 
   bool mIsMinigbm = false;
 
-  bool mUseAngle = false;
-
   int mSyncDeviceFd = -1;
 
   struct HostComposerDisplayInfo {

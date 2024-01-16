@@ -427,10 +427,10 @@ HWC3::Error HostFrameComposer::validateDisplay(Display* display,
   // layers will fall back to the client composition type.
   bool fallBackToClient = (!hostCompositionV1 && !hostCompositionV2) ||
                           display->hasColorTransform();
+  std::unordered_map<Layer*, Composition> changes;
 
   if (!fallBackToClient) {
     for (const auto& layer : layers) {
-      const auto& layerId = layer->getId();
       const auto& layerCompositionType = layer->getCompositionType();
 
       std::optional<Composition> layerFallBackTo = std::nullopt;
@@ -462,24 +462,28 @@ HWC3::Error HostFrameComposer::validateDisplay(Display* display,
         fallBackToClient = true;
       }
       if (layerFallBackTo.has_value()) {
-        outChanges->addLayerCompositionChange(displayId, layerId,
-                                              *layerFallBackTo);
+        changes.emplace(layer, layerFallBackTo.value());
       }
     }
   }
 
   if (fallBackToClient) {
-    outChanges->clearLayerCompositionChanges();
+    changes.clear();
     for (auto& layer : layers) {
       const auto& layerId = layer->getId();
       if (layer->getCompositionType() == Composition::INVALID) {
         continue;
       }
       if (layer->getCompositionType() != Composition::CLIENT) {
-        outChanges->addLayerCompositionChange(displayId, layerId,
-                                              Composition::CLIENT);
+        changes.emplace(layer, Composition::CLIENT);
       }
     }
+  }
+
+  outChanges->clearLayerCompositionChanges();
+  for (auto& [layer, newCompositionType] : changes) {
+    layer->logCompositionFallbackIfChanged(newCompositionType);
+    outChanges->addLayerCompositionChange(displayId, layer->getId(), newCompositionType);
   }
 
   return HWC3::Error::None;

@@ -17,6 +17,7 @@
 #ifndef ANDROID_HWC_LAYER_H
 #define ANDROID_HWC_LAYER_H
 
+#include <optional>
 #include <vector>
 
 #include "Common.h"
@@ -93,6 +94,9 @@ class Layer {
   HWC3::Error setPerFrameMetadataBlobs(
       const std::vector<std::optional<PerFrameMetadataBlob>>& perFrameMetadata);
 
+  // For log use only.
+  void logCompositionFallbackIfChanged(Composition to);
+
  private:
   const int64_t mId;
   common::Point mCursorPosition;
@@ -101,6 +105,12 @@ class Layer {
   Color mColor = {0, 0, 0, 0};
   Composition mCompositionType = Composition::INVALID;
   common::Dataspace mDataspace = common::Dataspace::UNKNOWN;
+  struct CompositionTypeFallback {
+    Composition from;
+    Composition to;
+  };
+  // For log use only.
+  std::optional<CompositionTypeFallback> mLastCompositionFallback = std::nullopt;
   common::Rect mDisplayFrame = {0, 0, -1, -1};
   float mPlaneAlpha = 0.0f;
   common::FRect mSourceCrop = {0.0f, 0.0f, -1.0f, -1.0f};

@@ -88,6 +88,8 @@ cc_binary {
     ],
 
     cflags: [
+        "-Wall",
+        "-Werror=conversion",
         "-Wthread-safety",
     ],
 

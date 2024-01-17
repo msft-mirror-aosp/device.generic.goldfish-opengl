@@ -154,7 +154,7 @@ HWC3::Error ClientFrameComposer::presentDisplay(
   ::android::base::unique_fd fence = display->getClientTarget().getFence();
 
   auto [flushError, flushCompleteFence] = mDrmClient.flushToDisplay(
-        displayId, displayInfo.clientTargetDrmBuffer, fence);
+      static_cast<uint32_t>(displayId), displayInfo.clientTargetDrmBuffer, fence);
   if (flushError != HWC3::Error::None) {
     ALOGE("%s: display:%" PRIu64 " failed to flush drm buffer" PRIu64,
           __FUNCTION__, displayId);

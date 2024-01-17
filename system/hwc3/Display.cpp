@@ -31,6 +31,7 @@
 
 #include "Common.h"
 #include "Device.h"
+#include "Time.h"
 
 namespace aidl::android::hardware::graphics::composer3::impl {
 namespace {
@@ -142,12 +143,12 @@ HWC3::Error Display::updateParameters(
     ALOGE("%s: failed to find config %" PRId32, __func__, *mActiveConfigId);
     return HWC3::Error::NoResources;
   }
-  it->second.setAttribute(DisplayAttribute::VSYNC_PERIOD,
-                          1000 * 1000 * 1000 / refreshRateHz);
-  it->second.setAttribute(DisplayAttribute::WIDTH, width);
-  it->second.setAttribute(DisplayAttribute::HEIGHT, height);
-  it->second.setAttribute(DisplayAttribute::DPI_X, dpiX);
-  it->second.setAttribute(DisplayAttribute::DPI_Y, dpiY);
+  DisplayConfig& config = it->second;
+  config.setAttribute(DisplayAttribute::VSYNC_PERIOD, HertzToPeriodNanos(refreshRateHz));
+  config.setAttribute(DisplayAttribute::WIDTH, static_cast<int32_t>(width));
+  config.setAttribute(DisplayAttribute::HEIGHT, static_cast<int32_t>(height));
+  config.setAttribute(DisplayAttribute::DPI_X, static_cast<int32_t>(dpiX));
+  config.setAttribute(DisplayAttribute::DPI_Y, static_cast<int32_t>(dpiY));
 
   if (edid.has_value()) {
     mEdid = *edid;
@@ -318,7 +319,7 @@ HWC3::Error Display::getDisplayIdentificationData(
     return HWC3::Error::BadParameter;
   }
 
-  outIdentification->port = mId;
+  outIdentification->port = static_cast<int8_t>(mId);
   outIdentification->data = mEdid;
 
   return HWC3::Error::None;
@@ -1037,7 +1038,7 @@ void Display::setLegacyEdid() {
     }
     default: {
       mEdid.insert(mEdid.end(), kEdid2.begin(), kEdid2.end());
-      const uint32_t size = mEdid.size();
+      const size_t size = mEdid.size();
       // Update the name to EMU_display_<mID>
       mEdid[size - 3] = '0' + (uint8_t)mId;
       // Update the checksum byte

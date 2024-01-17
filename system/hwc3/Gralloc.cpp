@@ -147,9 +147,9 @@ std::optional<void*> Gralloc::Lock(buffer_handle_t buffer) {
   buffer_region.left = 0;
   buffer_region.top = 0;
   // width = right - left
-  buffer_region.right = *width_opt;
+  buffer_region.right = static_cast<int32_t>(*width_opt);
   // height = bottom - top
-  buffer_region.bottom = *height_opt;
+  buffer_region.bottom = static_cast<int32_t>(*height_opt);
 
   void* data = nullptr;
 
@@ -212,17 +212,17 @@ std::optional<android_ycbcr> Gralloc::LockYCbCr(buffer_handle_t buffer) {
       switch (static_cast<PlaneLayoutComponentType>(type.value)) {
         case PlaneLayoutComponentType::Y:
           buffer_ycbcr.y = component_data;
-          buffer_ycbcr.ystride = plane_layout.strideInBytes;
+          buffer_ycbcr.ystride = static_cast<size_t>(plane_layout.strideInBytes);
           break;
         case PlaneLayoutComponentType::CB:
           buffer_ycbcr.cb = component_data;
-          buffer_ycbcr.cstride = plane_layout.strideInBytes;
-          buffer_ycbcr.chroma_step = plane_layout.sampleIncrementInBits / 8;
+          buffer_ycbcr.cstride = static_cast<size_t>(plane_layout.strideInBytes);
+          buffer_ycbcr.chroma_step = static_cast<size_t>(plane_layout.sampleIncrementInBits / 8);
           break;
         case PlaneLayoutComponentType::CR:
           buffer_ycbcr.cr = component_data;
-          buffer_ycbcr.cstride = plane_layout.strideInBytes;
-          buffer_ycbcr.chroma_step = plane_layout.sampleIncrementInBits / 8;
+          buffer_ycbcr.cstride = static_cast<size_t>(plane_layout.strideInBytes);
+          buffer_ycbcr.chroma_step = static_cast<size_t>(plane_layout.sampleIncrementInBits / 8);
           break;
         default:
           break;

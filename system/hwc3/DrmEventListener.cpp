@@ -73,11 +73,11 @@ void DrmEventListener::threadLoop() {
 
     char buffer[1024];
     while (true) {
-        ret = read(mEventFd.get(), &buffer, sizeof(buffer));
+        ssize_t ret = read(mEventFd.get(), &buffer, sizeof(buffer));
         if (ret == 0) {
             return;
         } else if (ret < 0) {
-            ALOGE("Got error reading uevent %d", ret);
+            ALOGE("Got error reading uevent %zd", ret);
             return;
         }
 

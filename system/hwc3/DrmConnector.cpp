@@ -19,7 +19,7 @@
 namespace aidl::android::hardware::graphics::composer3::impl {
 namespace {
 
-static constexpr const float kMillimetersPerInch = 25.4;
+static constexpr const float kMillimetersPerInch = 25.4f;
 
 }  // namespace
 
@@ -71,7 +71,8 @@ bool DrmConnector::update(::android::base::borrowed_fd drmFd) {
     }
 
     DEBUG_LOG("%s: connector:%" PRIu32 " widthMillimeters:%" PRIu32 " heightMillimeters:%" PRIu32,
-              __FUNCTION__, mId, mWidthMillimeters, mHeightMillimeters);
+              __FUNCTION__, mId, (mWidthMillimeters ? *mWidthMillimeters : 0),
+              (mHeightMillimeters ? *mHeightMillimeters : 0));
 
     return true;
 }
@@ -79,16 +80,13 @@ bool DrmConnector::update(::android::base::borrowed_fd drmFd) {
 bool DrmConnector::loadEdid(::android::base::borrowed_fd drmFd) {
     DEBUG_LOG("%s: display:%" PRIu32, __FUNCTION__, mId);
 
-    mWidthMillimeters = 0;
-    mHeightMillimeters = 0;
-
     const uint64_t edidBlobId = mEdidProp.getValue();
     if (edidBlobId == -1) {
         ALOGW("%s: display:%" PRIu32 " does not have EDID.", __FUNCTION__, mId);
         return true;
     }
 
-    auto blob = drmModeGetPropertyBlob(drmFd.get(), edidBlobId);
+    auto blob = drmModeGetPropertyBlob(drmFd.get(), static_cast<uint32_t>(edidBlobId));
     if (!blob) {
         ALOGE("%s: display:%" PRIu32 " failed to read EDID blob (%" PRIu64 "): %s", __FUNCTION__,
               mId, edidBlobId, strerror(errno));
@@ -143,42 +141,42 @@ uint32_t DrmConnector::getHeight() const {
     return mModes[0]->vdisplay;
 }
 
-int32_t DrmConnector::getDpiX() const {
+uint32_t DrmConnector::getDpiX() const {
     DEBUG_LOG("%s: connector:%" PRIu32, __FUNCTION__, mId);
 
     if (mModes.empty()) {
-        return -1;
+        return 0;
     }
 
     const auto& mode = mModes[0];
     if (mWidthMillimeters) {
-        const int32_t dpi = static_cast<int32_t>(
-            (static_cast<float>(mode->hdisplay) / static_cast<float>(mWidthMillimeters)) *
+        const uint32_t dpi = static_cast<uint32_t>(
+            (static_cast<float>(mode->hdisplay) / static_cast<float>(*mWidthMillimeters)) *
             kMillimetersPerInch);
-        DEBUG_LOG("%s: connector:%" PRIu32 " has dpi-x:%" PRId32, __FUNCTION__, mId, dpi);
+        DEBUG_LOG("%s: connector:%" PRIu32 " has dpi-x:%" PRIu32, __FUNCTION__, mId, dpi);
         return dpi;
     }
 
-    return -1;
+    return 0;
 }
 
-int32_t DrmConnector::getDpiY() const {
+uint32_t DrmConnector::getDpiY() const {
     DEBUG_LOG("%s: connector:%" PRIu32, __FUNCTION__, mId);
 
     if (mModes.empty()) {
-        return -1;
+        return 0;
     }
 
     const auto& mode = mModes[0];
     if (mHeightMillimeters) {
-        const int32_t dpi = static_cast<int32_t>(
-            (static_cast<float>(mode->vdisplay) / static_cast<float>(mHeightMillimeters)) *
+        const uint32_t dpi = static_cast<uint32_t>(
+            (static_cast<float>(mode->vdisplay) / static_cast<float>(*mHeightMillimeters)) *
             kMillimetersPerInch);
-        DEBUG_LOG("%s: connector:%" PRIu32 " has dpi-x:%" PRId32, __FUNCTION__, mId, dpi);
+        DEBUG_LOG("%s: connector:%" PRIu32 " has dpi-x:%" PRIu32, __FUNCTION__, mId, dpi);
         return dpi;
     }
 
-    return -1;
+    return 0;
 }
 
 float DrmConnector::getRefreshRate() const {

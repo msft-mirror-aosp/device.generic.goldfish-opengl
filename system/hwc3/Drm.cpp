@@ -128,7 +128,7 @@ const char* GetDrmFormatString(uint32_t drm_format) {
     return "Unknown";
 }
 
-int GetDrmFormatBytesPerPixel(uint32_t drm_format) {
+uint32_t GetDrmFormatBytesPerPixel(uint32_t drm_format) {
     switch (drm_format) {
         case DRM_FORMAT_ABGR8888:
         case DRM_FORMAT_ARGB8888:
@@ -150,7 +150,7 @@ int GetDrmFormatBytesPerPixel(uint32_t drm_format) {
     return 8;
 }
 
-int GetDrmFormatFromHalFormat(int hal_format) {
+uint32_t GetDrmFormatFromHalFormat(int hal_format) {
     switch (hal_format) {
         case HAL_PIXEL_FORMAT_RGBA_FP16:
             return DRM_FORMAT_ABGR16161616F;

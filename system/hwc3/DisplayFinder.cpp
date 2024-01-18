@@ -22,28 +22,25 @@
 
 #include "Common.h"
 #include "HostUtils.h"
+#include "Time.h"
 
 namespace aidl::android::hardware::graphics::composer3::impl {
 namespace {
 
-constexpr int32_t HertzToPeriodNanos(uint32_t hertz) {
-  return 1000 * 1000 * 1000 / hertz;
-}
+static uint32_t getVsyncHzFromProperty() {
+    static constexpr const auto kVsyncProp = "ro.boot.qemu.vsync";
 
-static int getVsyncHzFromProperty() {
-  static constexpr const auto kVsyncProp = "ro.boot.qemu.vsync";
+    const auto vsyncProp = ::android::base::GetProperty(kVsyncProp, "");
+    DEBUG_LOG("%s: prop value is: %s", __FUNCTION__, vsyncProp.c_str());
 
-  const auto vsyncProp = ::android::base::GetProperty(kVsyncProp, "");
-  DEBUG_LOG("%s: prop value is: %s", __FUNCTION__, vsyncProp.c_str());
+    uint64_t vsyncPeriod;
+    if (!::android::base::ParseUint(vsyncProp, &vsyncPeriod)) {
+        ALOGE("%s: failed to parse vsync period '%s', returning default 60", __FUNCTION__,
+              vsyncProp.c_str());
+        return 60;
+    }
 
-  uint64_t vsyncPeriod;
-  if (!::android::base::ParseUint(vsyncProp, &vsyncPeriod)) {
-    ALOGE("%s: failed to parse vsync period '%s', returning default 60",
-          __FUNCTION__, vsyncProp.c_str());
-    return 60;
-  }
-
-  return static_cast<int>(vsyncPeriod);
+    return static_cast<uint32_t>(vsyncPeriod);
 }
 
 HWC3::Error findGoldfishPrimaryDisplay(
@@ -210,16 +207,17 @@ HWC3::Error findDrmDisplays(const DrmClient& drm,
 
   for (const DrmClient::DisplayConfig drmDisplayConfig : drmDisplayConfigs) {
     outDisplays->push_back(DisplayMultiConfigs{
-      .displayId = drmDisplayConfig.id,
-      .activeConfigId = static_cast<int32_t>(drmDisplayConfig.id),
-      .configs = {
-        DisplayConfig(static_cast<int32_t>(drmDisplayConfig.id),
-                      drmDisplayConfig.width,
-                      drmDisplayConfig.height,
-                      drmDisplayConfig.dpiX,
-                      drmDisplayConfig.dpiY,
-                      HertzToPeriodNanos(drmDisplayConfig.refreshRateHz)),
-      },
+        .displayId = drmDisplayConfig.id,
+        .activeConfigId = static_cast<int32_t>(drmDisplayConfig.id),
+        .configs =
+            {
+                DisplayConfig(static_cast<int32_t>(drmDisplayConfig.id),
+                              static_cast<int32_t>(drmDisplayConfig.width),
+                              static_cast<int32_t>(drmDisplayConfig.height),
+                              static_cast<int32_t>(drmDisplayConfig.dpiX),
+                              static_cast<int32_t>(drmDisplayConfig.dpiY),
+                              HertzToPeriodNanos(drmDisplayConfig.refreshRateHz)),
+            },
     });
   }
 

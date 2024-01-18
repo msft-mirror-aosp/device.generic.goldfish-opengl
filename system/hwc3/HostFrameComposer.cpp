@@ -26,8 +26,6 @@
 #include <poll.h>
 #include <sync/sync.h>
 #include <ui/GraphicBuffer.h>
-#include <ui/GraphicBufferAllocator.h>
-#include <ui/GraphicBufferMapper.h>
 
 #include <optional>
 #include <tuple>
@@ -161,10 +159,6 @@ class ComposeMsg_v2 {
   ComposeDevice_v2* mComposeDevice;
 };
 
-void FreeDisplayColorBuffer(const native_handle_t* h) {
-  ::android::GraphicBufferAllocator::get().free(h);
-}
-
 }  // namespace
 
 HWC3::Error HostFrameComposer::init() {
@@ -236,7 +230,7 @@ HWC3::Error HostFrameComposer::createHostComposerDisplayInfo(
 
   displayInfo.hostDisplayId = hostDisplayId;
   displayInfo.swapchain = DrmSwapchain::create(
-      displayWidth, displayHeight,
+      static_cast<uint32_t>(displayWidth), static_cast<uint32_t>(displayHeight),
       ::android::GraphicBuffer::USAGE_HW_COMPOSER | ::android::GraphicBuffer::USAGE_HW_RENDER,
       mDrmClient ? &mDrmClient.value() : nullptr);
   if (!displayInfo.swapchain) {
@@ -249,7 +243,7 @@ HWC3::Error HostFrameComposer::createHostComposerDisplayInfo(
 HWC3::Error HostFrameComposer::onDisplayCreate(Display* display) {
   HWC3::Error error = HWC3::Error::None;
 
-  int64_t displayId = display->getId();
+  const uint32_t displayId = static_cast<uint32_t>(display->getId());
   int32_t displayConfigId;
   int32_t displayWidth;
   int32_t displayHeight;
@@ -257,32 +251,28 @@ HWC3::Error HostFrameComposer::onDisplayCreate(Display* display) {
 
   error = display->getActiveConfig(&displayConfigId);
   if (error != HWC3::Error::None) {
-    ALOGE("%s: display:%" PRIu64 " has no active config", __FUNCTION__,
-          displayId);
+    ALOGE("%s: display:%" PRIu32 " has no active config", __FUNCTION__, displayId);
     return error;
   }
 
   error = display->getDisplayAttribute(displayConfigId, DisplayAttribute::WIDTH,
                                        &displayWidth);
   if (error != HWC3::Error::None) {
-    ALOGE("%s: display:%" PRIu64 " failed to get width", __FUNCTION__,
-          displayId);
+    ALOGE("%s: display:%" PRIu32 " failed to get width", __FUNCTION__, displayId);
     return error;
   }
 
   error = display->getDisplayAttribute(
       displayConfigId, DisplayAttribute::HEIGHT, &displayHeight);
   if (error != HWC3::Error::None) {
-    ALOGE("%s: display:%" PRIu64 " failed to get height", __FUNCTION__,
-          displayId);
+    ALOGE("%s: display:%" PRIu32 " failed to get height", __FUNCTION__, displayId);
     return error;
   }
 
   error = display->getDisplayAttribute(displayConfigId, DisplayAttribute::DPI_X,
                                        &displayDpiX);
   if (error != HWC3::Error::None) {
-    ALOGE("%s: display:%" PRIu64 " failed to get height", __FUNCTION__,
-          displayId);
+    ALOGE("%s: display:%" PRIu32 " failed to get height", __FUNCTION__, displayId);
     return error;
   }
 
@@ -293,13 +283,14 @@ HWC3::Error HostFrameComposer::onDisplayCreate(Display* display) {
     // Primary display:
     hostCon->lock();
     if (rcEnc->rcCreateDisplayById(rcEnc, displayId)) {
-      ALOGE("%s host failed to create display %" PRIu64, __func__, displayId);
+      ALOGE("%s host failed to create display %" PRIu32, __func__, displayId);
       hostCon->unlock();
       return HWC3::Error::NoResources;
     }
-    if (rcEnc->rcSetDisplayPoseDpi(rcEnc, displayId, -1, -1, displayWidth,
-                                   displayHeight, displayDpiX / 1000)) {
-      ALOGE("%s host failed to set display %" PRIu64, __func__, displayId);
+    if (rcEnc->rcSetDisplayPoseDpi(rcEnc, displayId, -1, -1, static_cast<uint32_t>(displayWidth),
+                                   static_cast<uint32_t>(displayHeight),
+                                   static_cast<uint32_t>(displayDpiX / 1000))) {
+      ALOGE("%s host failed to set display %" PRIu32, __func__, displayId);
       hostCon->unlock();
       return HWC3::Error::NoResources;
     }
@@ -314,8 +305,8 @@ HWC3::Error HostFrameComposer::onDisplayCreate(Display* display) {
     hostCon->lock();
     rcEnc->rcDestroyDisplay(rcEnc, expectedHostDisplayId);
     rcEnc->rcCreateDisplay(rcEnc, &actualHostDisplayId);
-    rcEnc->rcSetDisplayPose(rcEnc, actualHostDisplayId, -1, -1, displayWidth,
-                            displayHeight);
+    rcEnc->rcSetDisplayPose(rcEnc, actualHostDisplayId, -1, -1, static_cast<uint32_t>(displayWidth),
+                            static_cast<uint32_t>(displayHeight));
     hostCon->unlock();
 
     if (actualHostDisplayId != expectedHostDisplayId) {
@@ -330,8 +321,7 @@ HWC3::Error HostFrameComposer::onDisplayCreate(Display* display) {
 
   error = createHostComposerDisplayInfo(display, hostDisplayId);
   if (error != HWC3::Error::None) {
-    ALOGE("%s failed to initialize host info for display:%" PRIu64,
-          __FUNCTION__, displayId);
+    ALOGE("%s failed to initialize host info for display:%" PRIu32, __FUNCTION__, displayId);
     return error;
   }
 
@@ -427,10 +417,10 @@ HWC3::Error HostFrameComposer::validateDisplay(Display* display,
   // layers will fall back to the client composition type.
   bool fallBackToClient = (!hostCompositionV1 && !hostCompositionV2) ||
                           display->hasColorTransform();
+  std::unordered_map<Layer*, Composition> changes;
 
   if (!fallBackToClient) {
     for (const auto& layer : layers) {
-      const auto& layerId = layer->getId();
       const auto& layerCompositionType = layer->getCompositionType();
 
       std::optional<Composition> layerFallBackTo = std::nullopt;
@@ -462,24 +452,28 @@ HWC3::Error HostFrameComposer::validateDisplay(Display* display,
         fallBackToClient = true;
       }
       if (layerFallBackTo.has_value()) {
-        outChanges->addLayerCompositionChange(displayId, layerId,
-                                              *layerFallBackTo);
+        changes.emplace(layer, layerFallBackTo.value());
       }
     }
   }
 
   if (fallBackToClient) {
-    outChanges->clearLayerCompositionChanges();
+    changes.clear();
     for (auto& layer : layers) {
       const auto& layerId = layer->getId();
       if (layer->getCompositionType() == Composition::INVALID) {
         continue;
       }
       if (layer->getCompositionType() != Composition::CLIENT) {
-        outChanges->addLayerCompositionChange(displayId, layerId,
-                                              Composition::CLIENT);
+        changes.emplace(layer, Composition::CLIENT);
       }
     }
+  }
+
+  outChanges->clearLayerCompositionChanges();
+  for (auto& [layer, newCompositionType] : changes) {
+    layer->logCompositionFallbackIfChanged(newCompositionType);
+    outChanges->addLayerCompositionChange(displayId, layer->getId(), newCompositionType);
   }
 
   return HWC3::Error::None;
@@ -488,11 +482,10 @@ HWC3::Error HostFrameComposer::validateDisplay(Display* display,
 HWC3::Error HostFrameComposer::presentDisplay(
     Display* display, ::android::base::unique_fd* outDisplayFence,
     std::unordered_map<int64_t, ::android::base::unique_fd>* outLayerFences) {
-  auto displayId = display->getId();
+  const uint32_t displayId = static_cast<uint32_t>(display->getId());
   auto displayInfoIt = mDisplayInfos.find(displayId);
   if (displayInfoIt == mDisplayInfos.end()) {
-    ALOGE("%s: failed to find display buffers for display:%" PRIu64,
-          __FUNCTION__, displayId);
+    ALOGE("%s: failed to find display buffers for display:%" PRIu32, __FUNCTION__, displayId);
     return HWC3::Error::BadDisplay;
   }
 
@@ -528,8 +521,8 @@ HWC3::Error HostFrameComposer::presentDisplay(
       }
     }
 
-    DEBUG_LOG("%s: presenting display:%" PRIu64 " with %d layers", __FUNCTION__,
-              displayId, static_cast<int>(layers.size()));
+    DEBUG_LOG("%s: presenting display:%" PRIu32 " with %d layers", __FUNCTION__, displayId,
+              static_cast<int>(layers.size()));
 
     if (numLayer == 0) {
       ALOGV(
@@ -745,11 +738,11 @@ void HostFrameComposer::post(HostConnection* hostCon,
 }
 
 HWC3::Error HostFrameComposer::onActiveConfigChange(Display* display) {
-  DEBUG_LOG("%s: display:%" PRIu64, __FUNCTION__, display->getId());
-  HWC3::Error error = createHostComposerDisplayInfo(display, display->getId());
+  const uint32_t displayId = static_cast<uint32_t>(display->getId());
+  DEBUG_LOG("%s: display:%" PRIu32, __FUNCTION__, displayId);
+  HWC3::Error error = createHostComposerDisplayInfo(display, displayId);
   if (error != HWC3::Error::None) {
-    ALOGE("%s failed to update host info for display:%" PRIu64, __FUNCTION__,
-          display->getId());
+    ALOGE("%s failed to update host info for display:%" PRIu32, __FUNCTION__, displayId);
     return error;
   }
   return HWC3::Error::None;

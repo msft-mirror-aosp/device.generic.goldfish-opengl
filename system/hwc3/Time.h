@@ -37,14 +37,14 @@ inline TimePoint now() {
   return asTimePoint(systemTime(SYSTEM_TIME_MONOTONIC));
 }
 
-inline int32_t asNanosDuration(Nanoseconds duration) {
-  return duration.count();
-}
+inline int64_t asNanosDuration(Nanoseconds duration) { return duration.count(); }
 
 inline int64_t asNanosTimePoint(TimePoint time) {
   TimePoint zero(Nanoseconds(0));
-  return std::chrono::duration_cast<Nanoseconds>(time - zero).count();
+  return static_cast<int64_t>(std::chrono::duration_cast<Nanoseconds>(time - zero).count());
 }
+
+constexpr int32_t HertzToPeriodNanos(uint32_t hertz) { return 1000 * 1000 * 1000 / hertz; }
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl
 

@@ -32,7 +32,7 @@
 #include <utils/Trace.h>
 
 // Uncomment to enable additional debug logging.
-#define DEBUG_RANCHU_HWC
+//#define DEBUG_RANCHU_HWC
 
 #if defined(DEBUG_RANCHU_HWC)
 #define DEBUG_LOG ALOGE

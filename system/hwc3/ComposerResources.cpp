@@ -189,9 +189,9 @@ HWC3::Error ComposerResources::getDisplayClientTarget(
     bufferHandle = ::android::makeFromAidl(*buffer.handle);
   }
 
-  return toHwc3Error(mImpl->getDisplayClientTarget(
-      display, buffer.slot, useCache, bufferHandle, outHandle,
-      releaser->getReplacedHandle()));
+  return toHwc3Error(mImpl->getDisplayClientTarget(display, static_cast<uint32_t>(buffer.slot),
+                                                   useCache, bufferHandle, outHandle,
+                                                   releaser->getReplacedHandle()));
 }
 
 HWC3::Error ComposerResources::getDisplayOutputBuffer(
@@ -207,9 +207,9 @@ HWC3::Error ComposerResources::getDisplayOutputBuffer(
     bufferHandle = ::android::makeFromAidl(*buffer.handle);
   }
 
-  return toHwc3Error(mImpl->getDisplayOutputBuffer(
-      display, buffer.slot, useCache, bufferHandle, outHandle,
-      releaser->getReplacedHandle()));
+  return toHwc3Error(mImpl->getDisplayOutputBuffer(display, static_cast<uint32_t>(buffer.slot),
+                                                   useCache, bufferHandle, outHandle,
+                                                   releaser->getReplacedHandle()));
 }
 
 HWC3::Error ComposerResources::getLayerBuffer(
@@ -231,7 +231,7 @@ HWC3::Error ComposerResources::getLayerBuffer(
   }
 
   DEBUG_LOG("%s fromCache:%s", __FUNCTION__, (useCache ? "yes" : "no"));
-  return toHwc3Error(mImpl->getLayerBuffer(display, layer, buffer.slot,
+  return toHwc3Error(mImpl->getLayerBuffer(display, layer, static_cast<uint32_t>(buffer.slot),
                                            useCache, bufferHandle, outHandle,
                                            releaser->getReplacedHandle()));
 }

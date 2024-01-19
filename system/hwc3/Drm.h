@@ -22,9 +22,9 @@ namespace aidl::android::hardware::graphics::composer3::impl {
 
 const char* GetDrmFormatString(uint32_t drm_format);
 
-int GetDrmFormatBytesPerPixel(uint32_t drm_format);
+uint32_t GetDrmFormatBytesPerPixel(uint32_t drm_format);
 
-int GetDrmFormatFromHalFormat(int hal_format);
+uint32_t GetDrmFormatFromHalFormat(int hal_format);
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl
 

@@ -23,6 +23,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -44,8 +45,8 @@ class DrmConnector {
     uint32_t getWidth() const;
     uint32_t getHeight() const;
 
-    int32_t getDpiX() const;
-    int32_t getDpiY() const;
+    uint32_t getDpiX() const;
+    uint32_t getDpiY() const;
 
     float getRefreshRate() const;
     uint32_t getRefreshRateUint() const { return (uint32_t)(getRefreshRate() + 0.5f); }
@@ -67,8 +68,8 @@ class DrmConnector {
     const uint32_t mId;
 
     drmModeConnection mStatus = DRM_MODE_UNKNOWNCONNECTION;
-    uint32_t mWidthMillimeters = -1;
-    uint32_t mHeightMillimeters = -1;
+    std::optional<uint32_t> mWidthMillimeters;
+    std::optional<uint32_t> mHeightMillimeters;
     std::vector<std::unique_ptr<DrmMode>> mModes;
 
     DrmProperty mCrtc;

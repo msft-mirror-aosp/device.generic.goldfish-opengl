@@ -32,7 +32,6 @@
 #include "aemu/base/threads/AndroidThread.h"
 #include "glUtils.h"
 #include "goldfish_address_space.h"
-#include "goldfish_dma.h"
 #include "gralloc_common.h"
 
 #if PLATFORM_SDK_VERSION < 26
@@ -229,17 +228,13 @@ struct gralloc_dmaregion_t {
         sz(INITIAL_DMA_REGION_SIZE),
         refcount(0),
         bigbufCount(0) {
-        memset(&goldfish_dma, 0, sizeof(goldfish_dma));
         pthread_mutex_init(&lock, NULL);
 
         if (rcEnc->hasDirectMem()) {
             host_memory_allocator.hostMalloc(&address_space_block, sz);
-        } else if (rcEnc->getDmaVersion() > 0) {
-            goldfish_dma_create_region(sz, &goldfish_dma);
         }
     }
 
-    goldfish_dma_context goldfish_dma;
     GoldfishAddressSpaceHostMemoryAllocator host_memory_allocator;
     GoldfishAddressSpaceBlock address_space_block;
     uint32_t sz;
@@ -260,7 +255,7 @@ static gralloc_memregions_t* init_gralloc_memregions() {
 }
 
 static bool has_DMA_support(const ExtendedRCEncoderContext *rcEnc) {
-    return rcEnc->getDmaVersion() > 0 || rcEnc->hasDirectMem();
+    return false;
 }
 
 static gralloc_dmaregion_t* init_gralloc_dmaregion(ExtendedRCEncoderContext *rcEnc) {
@@ -281,11 +276,6 @@ static void get_gralloc_region(ExtendedRCEncoderContext *rcEnc) {
 }
 
 static void resize_gralloc_dmaregion_locked(gralloc_dmaregion_t* grdma, uint32_t new_sz) {
-    if (grdma->goldfish_dma.mapped_addr) {
-        goldfish_dma_unmap(&grdma->goldfish_dma);
-    }
-    close(grdma->goldfish_dma.fd);
-    goldfish_dma_create_region(new_sz, &grdma->goldfish_dma);
     grdma->sz = new_sz;
 }
 
@@ -354,9 +344,6 @@ static void gralloc_dmaregion_register_ashmem_dma_locked(gralloc_dmaregion_t* gr
             D("%s: change sz from %u to %u", __func__, grdma->sz, new_sz);
             resize_gralloc_dmaregion_locked(grdma, new_sz);
         }
-    }
-    if (!grdma->goldfish_dma.mapped_addr) {
-        goldfish_dma_map(&grdma->goldfish_dma);
     }
 }
 
@@ -554,15 +541,6 @@ static void updateHostColorBuffer(cb_handle_old_t* cb,
         case HAL_PIXEL_FORMAT_YCbCr_420_888:
             get_yuv420p_offsets(width, height, NULL, NULL, &send_buffer_size);
             break;
-        }
-
-        if (grdma->address_space_block.guestPtr()) {
-            rcEnc->bindDmaDirectly(grdma->address_space_block.guestPtr(),
-                                   grdma->address_space_block.physAddr());
-        } else if (grdma->goldfish_dma.mapped_addr) {
-            rcEnc->bindDmaContext(&grdma->goldfish_dma);
-        } else {
-            ALOGE("%s: Unexpected DMA", __func__);
         }
 
         D("%s: call. dma update with sz=%u", __func__, send_buffer_size);

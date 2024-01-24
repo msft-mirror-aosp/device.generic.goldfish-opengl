@@ -36,6 +36,8 @@ class Device : public ::android::Singleton<Device> {
 
     HWC3::Error getComposer(FrameComposer** outComposer);
 
+    bool persistentKeyValueEnabled() const;
+
     HWC3::Error getPersistentKeyValue(const std::string& key, const std::string& defaultVal,
                                       std::string* outValue);
 

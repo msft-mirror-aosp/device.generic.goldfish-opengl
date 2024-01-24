@@ -37,9 +37,9 @@ namespace {
 
 using ::android::hardware::graphics::common::V1_0::ColorTransform;
 
-uint64_t AlignToPower2(uint64_t val, uint8_t align_log) {
-  uint64_t align = 1ULL << align_log;
-  return ((val + (align - 1)) / align) * align;
+uint32_t AlignToPower2(uint32_t val, uint8_t align_log) {
+    uint32_t align = 1 << align_log;
+    return ((val + (align - 1)) / align) * align;
 }
 
 bool LayerNeedsScaling(const Layer& layer) {
@@ -126,22 +126,21 @@ bool GetVFlipFromTransform(common::Transform transform) {
 struct BufferSpec {
   uint8_t* buffer;
   std::optional<android_ycbcr> buffer_ycbcr;
-  int width;
-  int height;
-  int cropX;
-  int cropY;
-  int cropWidth;
-  int cropHeight;
+  uint32_t width;
+  uint32_t height;
+  uint32_t cropX;
+  uint32_t cropY;
+  uint32_t cropWidth;
+  uint32_t cropHeight;
   uint32_t drmFormat;
-  int strideBytes;
-  int sampleBytes;
+  uint32_t strideBytes;
+  uint32_t sampleBytes;
 
   BufferSpec() = default;
 
-  BufferSpec(uint8_t* buffer, std::optional<android_ycbcr> buffer_ycbcr,
-             int width, int height, int cropX, int cropY, int cropWidth,
-             int cropHeight, uint32_t drmFormat, int strideBytes,
-             int sampleBytes)
+  BufferSpec(uint8_t* buffer, std::optional<android_ycbcr> buffer_ycbcr, uint32_t width,
+             uint32_t height, uint32_t cropX, uint32_t cropY, uint32_t cropWidth,
+             uint32_t cropHeight, uint32_t drmFormat, uint32_t strideBytes, uint32_t sampleBytes)
       : buffer(buffer),
         buffer_ycbcr(buffer_ycbcr),
         width(width),
@@ -154,7 +153,7 @@ struct BufferSpec {
         strideBytes(strideBytes),
         sampleBytes(sampleBytes) {}
 
-  BufferSpec(uint8_t* buffer, int width, int height, int strideBytes)
+  BufferSpec(uint8_t* buffer, uint32_t width, uint32_t height, uint32_t strideBytes)
       : BufferSpec(buffer,
                    /*buffer_ycbcr=*/std::nullopt, width, height,
                    /*cropX=*/0,
@@ -173,17 +172,15 @@ int DoFill(const BufferSpec& dst, const Color& color) {
   const uint8_t b = static_cast<uint8_t>(color.b * 255.0f);
   const uint8_t a = static_cast<uint8_t>(color.a * 255.0f);
 
-  const uint32_t rgba = r | g << 8 | b << 16 | a << 24;
+  const uint32_t rgba = static_cast<uint32_t>(r) | static_cast<uint32_t>(g) << 8 |
+                        static_cast<uint32_t>(b) << 16 | static_cast<uint32_t>(a) << 24;
 
   // Point to the upper left corner of the crop rectangle.
   uint8_t* dstBuffer =
       dst.buffer + dst.cropY * dst.strideBytes + dst.cropX * dst.sampleBytes;
 
-  libyuv::SetPlane(dstBuffer,
-                   dst.strideBytes,
-                   dst.cropWidth,
-                   dst.cropHeight,
-                   rgba);
+  libyuv::SetPlane(dstBuffer, static_cast<int>(dst.strideBytes), static_cast<int>(dst.cropWidth),
+                   static_cast<int>(dst.cropHeight), rgba);
   return 0;
 }
 
@@ -194,17 +191,19 @@ int ConvertFromRGB565(const BufferSpec& src, const BufferSpec& dst,
   // Point to the upper left corner of the crop rectangle
   uint8_t* srcBuffer =
       src.buffer + src.cropY * src.strideBytes + src.cropX * src.sampleBytes;
+  const int srcStrideBytes = static_cast<int>(src.strideBytes);
   uint8_t* dstBuffer =
       dst.buffer + dst.cropY * dst.strideBytes + dst.cropX * dst.sampleBytes;
+  const int dstStrideBytes = static_cast<int>(dst.strideBytes);
 
-  int width = src.cropWidth;
-  int height = src.cropHeight;
+  int width = static_cast<int>(src.cropWidth);
+  int height = static_cast<int>(src.cropHeight);
   if (vFlip) {
     height = -height;
   }
 
-  return libyuv::RGB565ToARGB(srcBuffer, src.strideBytes,  //
-                              dstBuffer, dst.strideBytes,  //
+  return libyuv::RGB565ToARGB(srcBuffer, srcStrideBytes,  //
+                              dstBuffer, dstStrideBytes,  //
                               width, height);
 }
 
@@ -229,29 +228,32 @@ int ConvertFromYV12(const BufferSpec& src, const BufferSpec& dst, bool vFlip) {
   }
 
   uint8_t* srcY = reinterpret_cast<uint8_t*>(srcBufferYCbCr.y);
-  int strideY = srcBufferYCbCr.ystride;
+  const int strideYBytes = static_cast<int>(srcBufferYCbCr.ystride);
   uint8_t* srcU = reinterpret_cast<uint8_t*>(srcBufferYCbCr.cb);
-  int strideU = srcBufferYCbCr.cstride;
+  const int strideUBytes = static_cast<int>(srcBufferYCbCr.cstride);
   uint8_t* srcV = reinterpret_cast<uint8_t*>(srcBufferYCbCr.cr);
-  int strideV = srcBufferYCbCr.cstride;
+  const int strideVBytes = static_cast<int>(srcBufferYCbCr.cstride);
 
   // Adjust for crop
-  srcY += src.cropY * strideY + src.cropX;
-  srcV += (src.cropY / 2) * strideV + (src.cropX / 2);
-  srcU += (src.cropY / 2) * strideU + (src.cropX / 2);
+  srcY += src.cropY * srcBufferYCbCr.ystride + src.cropX;
+  srcV += (src.cropY / 2) * srcBufferYCbCr.cstride + (src.cropX / 2);
+  srcU += (src.cropY / 2) * srcBufferYCbCr.cstride + (src.cropX / 2);
   uint8_t* dstBuffer =
       dst.buffer + dst.cropY * dst.strideBytes + dst.cropX * dst.sampleBytes;
+  const int dstStrideBytes = static_cast<int>(dst.strideBytes);
 
-  int width = dst.cropWidth;
-  int height = dst.cropHeight;
+  int width = static_cast<int>(dst.cropWidth);
+  int height = static_cast<int>(dst.cropHeight);
 
   if (vFlip) {
     height = -height;
   }
 
   // YV12 is the same as I420, with the U and V planes swapped
-  return libyuv::I420ToARGB(srcY, strideY, srcV, strideV, srcU, strideU,
-                            dstBuffer, dst.strideBytes, width, height);
+  return libyuv::I420ToARGB(srcY, strideYBytes,  //
+                            srcV, strideVBytes,  //
+                            srcU, strideUBytes,  //
+                            dstBuffer, dstStrideBytes, width, height);
 }
 
 int DoConversion(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
@@ -269,10 +271,12 @@ int DoCopy(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
   // Point to the upper left corner of the crop rectangle
   uint8_t* srcBuffer =
       src.buffer + src.cropY * src.strideBytes + src.cropX * src.sampleBytes;
+  const int srcStrideBytes = static_cast<int>(src.strideBytes);
   uint8_t* dstBuffer =
       dst.buffer + dst.cropY * dst.strideBytes + dst.cropX * dst.sampleBytes;
-  int width = src.cropWidth;
-  int height = src.cropHeight;
+  const int dstStrideBytes = static_cast<int>(dst.strideBytes);
+  int width = static_cast<int>(src.cropWidth);
+  int height = static_cast<int>(src.cropHeight);
 
   if (v_flip) {
     height = -height;
@@ -282,8 +286,9 @@ int DoCopy(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
   // byte stream, while libyuv formats are named based on the order of those
   // pixel components in an integer written from left to right. So
   // libyuv::FOURCC_ARGB is equivalent to HAL_PIXEL_FORMAT_BGRA_8888.
-  auto ret = libyuv::ARGBCopy(srcBuffer, src.strideBytes, dstBuffer,
-                              dst.strideBytes, width, height);
+  auto ret = libyuv::ARGBCopy(srcBuffer, srcStrideBytes,  //
+                              dstBuffer, dstStrideBytes,  //
+                              width, height);
   return ret;
 }
 
@@ -294,17 +299,20 @@ int DoRotation(const BufferSpec& src, const BufferSpec& dst,
   // Point to the upper left corner of the crop rectangles
   uint8_t* srcBuffer =
       src.buffer + src.cropY * src.strideBytes + src.cropX * src.sampleBytes;
+  const int srcStrideBytes = static_cast<int>(src.strideBytes);
   uint8_t* dstBuffer =
       dst.buffer + dst.cropY * dst.strideBytes + dst.cropX * dst.sampleBytes;
-  int width = src.cropWidth;
-  int height = src.cropHeight;
+  const int dstStrideBytes = static_cast<int>(dst.strideBytes);
+  int width = static_cast<int>(src.cropWidth);
+  int height = static_cast<int>(src.cropHeight);
 
   if (v_flip) {
     height = -height;
   }
 
-  return libyuv::ARGBRotate(srcBuffer, src.strideBytes, dstBuffer,
-                            dst.strideBytes, width, height, rotation);
+  return libyuv::ARGBRotate(srcBuffer, srcStrideBytes,  //
+                            dstBuffer, dstStrideBytes,  //
+                            width, height, rotation);
 }
 
 int DoScaling(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
@@ -315,18 +323,19 @@ int DoScaling(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
       src.buffer + src.cropY * src.strideBytes + src.cropX * src.sampleBytes;
   uint8_t* dstBuffer =
       dst.buffer + dst.cropY * dst.strideBytes + dst.cropX * dst.sampleBytes;
-  int srcWidth = src.cropWidth;
-  int srcHeight = src.cropHeight;
-  int dstWidth = dst.cropWidth;
-  int dstHeight = dst.cropHeight;
+  const int srcStrideBytes = static_cast<int>(src.strideBytes);
+  const int dstStrideBytes = static_cast<int>(dst.strideBytes);
+  const int srcWidth = static_cast<int>(src.cropWidth);
+  int srcHeight = static_cast<int>(src.cropHeight);
+  const int dstWidth = static_cast<int>(dst.cropWidth);
+  const int dstHeight = static_cast<int>(dst.cropHeight);
 
   if (v_flip) {
     srcHeight = -srcHeight;
   }
 
-  return libyuv::ARGBScale(srcBuffer, src.strideBytes, srcWidth, srcHeight,
-                           dstBuffer, dst.strideBytes, dstWidth, dstHeight,
-                           libyuv::kFilterBilinear);
+  return libyuv::ARGBScale(srcBuffer, srcStrideBytes, srcWidth, srcHeight, dstBuffer,
+                           dstStrideBytes, dstWidth, dstHeight, libyuv::kFilterBilinear);
 }
 
 int DoAttenuation(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
@@ -337,15 +346,17 @@ int DoAttenuation(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
       src.buffer + src.cropY * src.strideBytes + src.cropX * src.sampleBytes;
   uint8_t* dstBuffer =
       dst.buffer + dst.cropY * dst.strideBytes + dst.cropX * dst.sampleBytes;
-  int width = dst.cropWidth;
-  int height = dst.cropHeight;
-
+  const int srcStrideBytes = static_cast<int>(src.strideBytes);
+  const int dstStrideBytes = static_cast<int>(dst.strideBytes);
+  const int width = static_cast<int>(dst.cropWidth);
+  int height = static_cast<int>(dst.cropHeight);
   if (v_flip) {
     height = -height;
   }
 
-  return libyuv::ARGBAttenuate(srcBuffer, src.strideBytes, dstBuffer,
-                               dst.strideBytes, width, height);
+  return libyuv::ARGBAttenuate(srcBuffer, srcStrideBytes,  //
+                               dstBuffer, dstStrideBytes,  //
+                               width, height);
 }
 
 int DoBlending(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
@@ -356,9 +367,10 @@ int DoBlending(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
       src.buffer + src.cropY * src.strideBytes + src.cropX * src.sampleBytes;
   uint8_t* dstBuffer =
       dst.buffer + dst.cropY * dst.strideBytes + dst.cropX * dst.sampleBytes;
-  int width = dst.cropWidth;
-  int height = dst.cropHeight;
-
+  const int srcStrideBytes = static_cast<int>(src.strideBytes);
+  const int dstStrideBytes = static_cast<int>(dst.strideBytes);
+  const int width = static_cast<int>(dst.cropWidth);
+  int height = static_cast<int>(dst.cropHeight);
   if (v_flip) {
     height = -height;
   }
@@ -366,9 +378,10 @@ int DoBlending(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
   // libyuv's ARGB format is hwcomposer's BGRA format, since blending only cares
   // for the position of alpha in the pixel and not the position of the colors
   // this function is perfectly usable.
-  return libyuv::ARGBBlend(srcBuffer, src.strideBytes, dstBuffer,
-                           dst.strideBytes, dstBuffer, dst.strideBytes, width,
-                           height);
+  return libyuv::ARGBBlend(srcBuffer, srcStrideBytes,  //
+                           dstBuffer, dstStrideBytes,  //
+                           dstBuffer, dstStrideBytes,  //
+                           width, height);
 }
 
 std::optional<BufferSpec> GetBufferSpec(GrallocBuffer& buffer,
@@ -422,11 +435,14 @@ std::optional<BufferSpec> GetBufferSpec(GrallocBuffer& buffer,
     bufferStrideBytes = *bufferStrideBytesOpt;
   }
 
-  return BufferSpec(bufferData, bufferYCbCrData, bufferWidth, bufferHeight,
-                    bufferCrop.left, bufferCrop.top,
-                    bufferCrop.right - bufferCrop.left,
-                    bufferCrop.bottom - bufferCrop.top, bufferFormat,
-                    bufferStrideBytes, GetDrmFormatBytesPerPixel(bufferFormat));
+  uint32_t bufferCropX = static_cast<uint32_t>(bufferCrop.left);
+  uint32_t bufferCropY = static_cast<uint32_t>(bufferCrop.top);
+  uint32_t bufferCropWidth = static_cast<uint32_t>(bufferCrop.right - bufferCrop.left);
+  uint32_t bufferCropHeight = static_cast<uint32_t>(bufferCrop.bottom - bufferCrop.top);
+
+  return BufferSpec(bufferData, bufferYCbCrData, bufferWidth, bufferHeight, bufferCropX,
+                    bufferCropY, bufferCropWidth, bufferCropHeight, bufferFormat, bufferStrideBytes,
+                    GetDrmFormatBytesPerPixel(bufferFormat));
 }
 
 }  // namespace
@@ -454,37 +470,34 @@ HWC3::Error GuestFrameComposer::unregisterOnHotplugCallback() {
 }
 
 HWC3::Error GuestFrameComposer::onDisplayCreate(Display* display) {
-  int64_t displayId = display->getId();
+  const uint32_t displayId = static_cast<uint32_t>(display->getId());
   int32_t displayConfigId;
   int32_t displayWidth;
   int32_t displayHeight;
 
   HWC3::Error error = display->getActiveConfig(&displayConfigId);
   if (error != HWC3::Error::None) {
-    ALOGE("%s: display:%" PRIu64 " has no active config", __FUNCTION__,
-          displayId);
+    ALOGE("%s: display:%" PRIu32 " has no active config", __FUNCTION__, displayId);
     return error;
   }
 
   error = display->getDisplayAttribute(displayConfigId, DisplayAttribute::WIDTH,
                                        &displayWidth);
   if (error != HWC3::Error::None) {
-    ALOGE("%s: display:%" PRIu64 " failed to get width", __FUNCTION__,
-          displayId);
+    ALOGE("%s: display:%" PRIu32 " failed to get width", __FUNCTION__, displayId);
     return error;
   }
 
   error = display->getDisplayAttribute(
       displayConfigId, DisplayAttribute::HEIGHT, &displayHeight);
   if (error != HWC3::Error::None) {
-    ALOGE("%s: display:%" PRIu64 " failed to get height", __FUNCTION__,
-          displayId);
+    ALOGE("%s: display:%" PRIu32 " failed to get height", __FUNCTION__, displayId);
     return error;
   }
 
   auto it = mDisplayInfos.find(displayId);
   if (it != mDisplayInfos.end()) {
-    ALOGE("%s: display:%" PRIu64 " already created?", __FUNCTION__, displayId);
+    ALOGE("%s: display:%" PRIu32 " already created?", __FUNCTION__, displayId);
   }
 
   DisplayInfo& displayInfo = mDisplayInfos[displayId];
@@ -493,19 +506,18 @@ HWC3::Error GuestFrameComposer::onDisplayCreate(Display* display) {
   buffer_handle_t bufferHandle;
 
   auto status = ::android::GraphicBufferAllocator::get().allocate(
-      displayWidth,                       //
-      displayHeight,                      //
-      ::android::PIXEL_FORMAT_RGBA_8888,  //
-      /*layerCount=*/1,                   //
-      ::android::GraphicBuffer::USAGE_HW_COMPOSER |
-          ::android::GraphicBuffer::USAGE_SW_READ_OFTEN |
+      static_cast<uint32_t>(displayWidth),   //
+      static_cast<uint32_t>(displayHeight),  //
+      ::android::PIXEL_FORMAT_RGBA_8888,     //
+      /*layerCount=*/1,                      //
+      ::android::GraphicBuffer::USAGE_HW_COMPOSER | ::android::GraphicBuffer::USAGE_SW_READ_OFTEN |
           ::android::GraphicBuffer::USAGE_SW_WRITE_OFTEN,  //
       &bufferHandle,                                       //
       &bufferStride,                                       //
       "RanchuHwc");
   if (status != ::android::OK) {
-    ALOGE("%s: failed to allocate composition buffer for display:%" PRIu64,
-          __FUNCTION__, displayId);
+    ALOGE("%s: failed to allocate composition buffer for display:%" PRIu32, __FUNCTION__,
+          displayId);
     return HWC3::Error::NoResources;
   }
 
@@ -513,8 +525,7 @@ HWC3::Error GuestFrameComposer::onDisplayCreate(Display* display) {
 
   auto [drmBufferCreateError, drmBuffer] = mDrmClient.create(bufferHandle);
   if (drmBufferCreateError != HWC3::Error::None) {
-    ALOGE("%s: failed to create drm buffer for display:%" PRIu64, __FUNCTION__,
-          displayId);
+    ALOGE("%s: failed to create drm buffer for display:%" PRIu32, __FUNCTION__, displayId);
     return drmBufferCreateError;
   }
   displayInfo.compositionResultDrmBuffer = std::move(drmBuffer);
@@ -692,8 +703,8 @@ HWC3::Error GuestFrameComposer::presentDisplay(
     Display* display, ::android::base::unique_fd* outDisplayFence,
     std::unordered_map<int64_t,
                        ::android::base::unique_fd>* /*outLayerFences*/) {
-  const auto displayId = display->getId();
-  DEBUG_LOG("%s display:%" PRIu64, __FUNCTION__, displayId);
+  const uint32_t displayId = static_cast<uint32_t>(display->getId());
+  DEBUG_LOG("%s display:%" PRIu32, __FUNCTION__, displayId);
 
   if (mPresentDisabled) {
     return HWC3::Error::None;
@@ -701,69 +712,61 @@ HWC3::Error GuestFrameComposer::presentDisplay(
 
   auto it = mDisplayInfos.find(displayId);
   if (it == mDisplayInfos.end()) {
-    ALOGE("%s: display:%" PRIu64 " not found", __FUNCTION__, displayId);
+    ALOGE("%s: display:%" PRIu32 " not found", __FUNCTION__, displayId);
     return HWC3::Error::NoResources;
   }
 
   DisplayInfo& displayInfo = it->second;
 
   if (displayInfo.compositionResultBuffer == nullptr) {
-    ALOGE("%s: display:%" PRIu64 " missing composition result buffer",
-          __FUNCTION__, displayId);
+    ALOGE("%s: display:%" PRIu32 " missing composition result buffer", __FUNCTION__, displayId);
     return HWC3::Error::NoResources;
   }
 
   if (displayInfo.compositionResultDrmBuffer == nullptr) {
-    ALOGE("%s: display:%" PRIu64 " missing composition result drm buffer",
-          __FUNCTION__, displayId);
+    ALOGE("%s: display:%" PRIu32 " missing composition result drm buffer", __FUNCTION__, displayId);
     return HWC3::Error::NoResources;
   }
 
   std::optional<GrallocBuffer> compositionResultBufferOpt =
       mGralloc.Import(displayInfo.compositionResultBuffer);
   if (!compositionResultBufferOpt) {
-    ALOGE("%s: display:%" PRIu64 " failed to import buffer", __FUNCTION__,
-          displayId);
+    ALOGE("%s: display:%" PRIu32 " failed to import buffer", __FUNCTION__, displayId);
     return HWC3::Error::NoResources;
   }
 
   std::optional<uint32_t> compositionResultBufferWidthOpt =
       compositionResultBufferOpt->GetWidth();
   if (!compositionResultBufferWidthOpt) {
-    ALOGE("%s: display:%" PRIu64 " failed to query buffer width", __FUNCTION__,
-          displayId);
+    ALOGE("%s: display:%" PRIu32 " failed to query buffer width", __FUNCTION__, displayId);
     return HWC3::Error::NoResources;
   }
 
   std::optional<uint32_t> compositionResultBufferHeightOpt =
       compositionResultBufferOpt->GetHeight();
   if (!compositionResultBufferHeightOpt) {
-    ALOGE("%s: display:%" PRIu64 " failed to query buffer height", __FUNCTION__,
-          displayId);
+    ALOGE("%s: display:%" PRIu32 " failed to query buffer height", __FUNCTION__, displayId);
     return HWC3::Error::NoResources;
   }
 
   std::optional<uint32_t> compositionResultBufferStrideOpt =
       compositionResultBufferOpt->GetMonoPlanarStrideBytes();
   if (!compositionResultBufferStrideOpt) {
-    ALOGE("%s: display:%" PRIu64 " failed to query buffer stride", __FUNCTION__,
-          displayId);
+    ALOGE("%s: display:%" PRIu32 " failed to query buffer stride", __FUNCTION__, displayId);
     return HWC3::Error::NoResources;
   }
 
   std::optional<GrallocBufferView> compositionResultBufferViewOpt =
       compositionResultBufferOpt->Lock();
   if (!compositionResultBufferViewOpt) {
-    ALOGE("%s: display:%" PRIu64 " failed to get buffer view", __FUNCTION__,
-          displayId);
+    ALOGE("%s: display:%" PRIu32 " failed to get buffer view", __FUNCTION__, displayId);
     return HWC3::Error::NoResources;
   }
 
   const std::optional<void*> compositionResultBufferDataOpt =
       compositionResultBufferViewOpt->Get();
   if (!compositionResultBufferDataOpt) {
-    ALOGE("%s: display:%" PRIu64 " failed to get buffer data", __FUNCTION__,
-          displayId);
+    ALOGE("%s: display:%" PRIu32 " failed to get buffer data", __FUNCTION__, displayId);
     return HWC3::Error::NoResources;
   }
 
@@ -784,7 +787,7 @@ HWC3::Error GuestFrameComposer::presentDisplay(
                   });
 
   if (noOpComposition) {
-    ALOGW("%s: display:%" PRIu64 " empty composition", __FUNCTION__, displayId);
+    ALOGW("%s: display:%" PRIu32 " empty composition", __FUNCTION__, displayId);
   } else if (allLayersClientComposed) {
     auto clientTargetBufferOpt =
         mGralloc.Import(display->waitAndGetClientTargetBuffer());
@@ -814,7 +817,7 @@ HWC3::Error GuestFrameComposer::presentDisplay(
     }
 
     std::size_t clientTargetPlaneSize =
-        clientTargetPlaneLayouts[0].totalSizeInBytes;
+        static_cast<std::size_t>(clientTargetPlaneLayouts[0].totalSizeInBytes);
 
     auto clientTargetDataOpt = clientTargetBufferView.Get();
     if (!clientTargetDataOpt) {
@@ -841,8 +844,8 @@ HWC3::Error GuestFrameComposer::presentDisplay(
                                            compositionResultBufferStride,  //
                                            4);
       if (error != HWC3::Error::None) {
-        ALOGE("%s: display:%" PRIu64 " failed to compose layer:%" PRIu64,
-              __FUNCTION__, displayId, layerId);
+        ALOGE("%s: display:%" PRIu32 " failed to compose layer:%" PRIu64, __FUNCTION__, displayId,
+              layerId);
         return error;
       }
     }
@@ -856,20 +859,17 @@ HWC3::Error GuestFrameComposer::presentDisplay(
                                   compositionResultBufferHeight,  //
                                   compositionResultBufferStride);
     if (error != HWC3::Error::None) {
-      ALOGE("%s: display:%" PRIu64 " failed to apply color transform",
-            __FUNCTION__, displayId);
+      ALOGE("%s: display:%" PRIu32 " failed to apply color transform", __FUNCTION__, displayId);
       return error;
     }
   }
 
-  DEBUG_LOG("%s display:%" PRIu64 " flushing drm buffer", __FUNCTION__,
-            displayId);
+  DEBUG_LOG("%s display:%" PRIu32 " flushing drm buffer", __FUNCTION__, displayId);
 
   auto [error, fence] = mDrmClient.flushToDisplay(
       displayId, displayInfo.compositionResultDrmBuffer, -1);
   if (error != HWC3::Error::None) {
-    ALOGE("%s: display:%" PRIu64 " failed to flush drm buffer" PRIu64,
-          __FUNCTION__, displayId);
+    ALOGE("%s: display:%" PRIu32 " failed to flush drm buffer" PRIu64, __FUNCTION__, displayId);
   }
 
   *outDisplayFence = std::move(fence);
@@ -976,9 +976,10 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
   BufferSpec dstLayerSpec(
       dstBuffer,
       /*buffer_ycbcr=*/std::nullopt, dstBufferWidth, dstBufferHeight,
-      srcLayerDisplayFrame.left, srcLayerDisplayFrame.top,
-      srcLayerDisplayFrame.right - srcLayerDisplayFrame.left,
-      srcLayerDisplayFrame.bottom - srcLayerDisplayFrame.top,
+      static_cast<uint32_t>(srcLayerDisplayFrame.left),
+      static_cast<uint32_t>(srcLayerDisplayFrame.top),
+      static_cast<uint32_t>(srcLayerDisplayFrame.right - srcLayerDisplayFrame.left),
+      static_cast<uint32_t>(srcLayerDisplayFrame.bottom - srcLayerDisplayFrame.top),
       DRM_FORMAT_XBGR8888, dstBufferStrideBytes, dstBufferBytesPerPixel);
 
   // Add the destination layer to the bottom of the buffer stack
@@ -997,19 +998,18 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
                              (needsAttenuation ? 1 : 0) +
                              (needsBlending ? 1 : 0) + (needsCopy ? 1 : 0) - 1;
 
-  int mScratchBufferWidth =
-      srcLayerDisplayFrame.right - srcLayerDisplayFrame.left;
-  int mScratchBufferHeight =
-      srcLayerDisplayFrame.bottom - srcLayerDisplayFrame.top;
-  int mScratchBufferStrideBytes =
+  uint32_t mScratchBufferWidth =
+      static_cast<uint32_t>(srcLayerDisplayFrame.right - srcLayerDisplayFrame.left);
+  uint32_t mScratchBufferHeight =
+      static_cast<uint32_t>(srcLayerDisplayFrame.bottom - srcLayerDisplayFrame.top);
+  uint32_t mScratchBufferStrideBytes =
       AlignToPower2(mScratchBufferWidth * dstBufferBytesPerPixel, 4);
-  int mScratchBufferSizeBytes =
-      mScratchBufferHeight * mScratchBufferStrideBytes;
+  uint32_t mScratchBufferSizeBytes = mScratchBufferHeight * mScratchBufferStrideBytes;
 
-  for (int i = 0; i < neededScratchBuffers; i++) {
-    BufferSpec mScratchBufferspec(
-        getRotatingScratchBuffer(mScratchBufferSizeBytes, i),
-        mScratchBufferWidth, mScratchBufferHeight, mScratchBufferStrideBytes);
+  for (uint32_t i = 0; i < neededScratchBuffers; i++) {
+    BufferSpec mScratchBufferspec(getRotatingScratchBuffer(mScratchBufferSizeBytes, i),
+                                  mScratchBufferWidth, mScratchBufferHeight,
+                                  mScratchBufferStrideBytes);
     dstBufferStack.push_back(mScratchBufferspec);
   }
 
@@ -1039,11 +1039,10 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
       // top of the buffer stack are wrong (wrong sizes for scaling, swapped
       // width and height for 90 and 270 rotations).
       // Make width and height match the crop sizes on the source
-      int srcWidth = srcLayerSpec.cropWidth;
-      int srcHeight = srcLayerSpec.cropHeight;
-      int dst_stride_bytes =
-          AlignToPower2(srcWidth * dstBufferBytesPerPixel, 4);
-      size_t needed_size = dst_stride_bytes * srcHeight;
+      uint32_t srcWidth = srcLayerSpec.cropWidth;
+      uint32_t srcHeight = srcLayerSpec.cropHeight;
+      uint32_t dst_stride_bytes = AlignToPower2(srcWidth * dstBufferBytesPerPixel, 4);
+      uint32_t needed_size = dst_stride_bytes * srcHeight;
       dstBufferSpec.width = srcWidth;
       dstBufferSpec.height = srcHeight;
       // Adjust the stride accordingly
@@ -1144,13 +1143,13 @@ std::array<std::int8_t, 16> ToLibyuvColorMatrix(
     const std::array<float, 16>& in) {
   std::array<std::int8_t, 16> out;
 
-  for (int r = 0; r < 4; r++) {
-    for (int c = 0; c < 4; c++) {
-      int indexIn = (4 * r) + c;
-      int indexOut = (4 * c) + r;
+  for (size_t r = 0; r < 4; r++) {
+    for (size_t c = 0; c < 4; c++) {
+      size_t indexIn = (4 * r) + c;
+      size_t indexOut = (4 * c) + r;
 
-      out[indexOut] = std::max(
-          -128, std::min(127, static_cast<int>(in[indexIn] * 64.0f + 0.5f)));
+      out[indexOut] = static_cast<std::int8_t>(
+          std::max(-128, std::min(127, static_cast<int>(in[indexIn] * 64.0f + 0.5f))));
     }
   }
 
@@ -1168,11 +1167,11 @@ HWC3::Error GuestFrameComposer::applyColorTransformToRGBA(
   ATRACE_CALL();
 
   const auto transformMatrixLibyuv = ToLibyuvColorMatrix(transfromMatrix);
-  libyuv::ARGBColorMatrix(buffer, bufferStrideBytes,     // in buffer params
-                          buffer, bufferStrideBytes,     // out buffer params
-                          transformMatrixLibyuv.data(),  //
-                          bufferWidth,                   //
-                          bufferHeight);
+  libyuv::ARGBColorMatrix(buffer, static_cast<int>(bufferStrideBytes),  //
+                          buffer, static_cast<int>(bufferStrideBytes),  //
+                          transformMatrixLibyuv.data(),                 //
+                          static_cast<int>(bufferWidth),                //
+                          static_cast<int>(bufferHeight));
 
   return HWC3::Error::None;
 }

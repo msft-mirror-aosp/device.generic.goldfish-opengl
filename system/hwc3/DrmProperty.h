@@ -22,6 +22,7 @@
 #include <xf86drmMode.h>
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <unordered_map>
 
@@ -44,8 +45,8 @@ class DrmProperty {
     const std::string& getName() const { return mName; }
 
    private:
-    uint32_t mId = -1;
-    uint64_t mValue = -1;
+    uint32_t mId = std::numeric_limits<uint32_t>::max();
+    uint64_t mValue = std::numeric_limits<uint64_t>::max();
     std::string mName;
 };
 

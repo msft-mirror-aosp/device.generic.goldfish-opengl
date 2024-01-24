@@ -343,7 +343,7 @@ bool DrmClient::handleHotplug() {
 }
 
 std::tuple<HWC3::Error, ::android::base::unique_fd> DrmClient::flushToDisplay(
-    int displayId, const std::shared_ptr<DrmBuffer>& buffer,
+    uint32_t displayId, const std::shared_ptr<DrmBuffer>& buffer,
     ::android::base::borrowed_fd inSyncFd) {
     ATRACE_CALL();
 

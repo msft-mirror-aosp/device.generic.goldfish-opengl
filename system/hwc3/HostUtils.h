@@ -24,36 +24,36 @@ namespace aidl::android::hardware::graphics::composer3::impl {
 
 HostConnection* createOrGetHostConnection();
 
-inline HWC3::Error getAndValidateHostConnection(
-    HostConnection** ppHostCon, ExtendedRCEncoderContext** ppRcEnc) {
-  *ppHostCon = nullptr;
-  *ppRcEnc = nullptr;
+inline HWC3::Error getAndValidateHostConnection(HostConnection** ppHostCon,
+                                                ExtendedRCEncoderContext** ppRcEnc) {
+    *ppHostCon = nullptr;
+    *ppRcEnc = nullptr;
 
-  HostConnection* hostCon = createOrGetHostConnection();
-  if (!hostCon) {
-    ALOGE("%s: Failed to get host connection\n", __FUNCTION__);
-    return HWC3::Error::NoResources;
-  }
-  ExtendedRCEncoderContext* rcEnc = hostCon->rcEncoder();
-  if (!rcEnc) {
-    ALOGE("%s: Failed to get renderControl encoder context\n", __FUNCTION__);
-    return HWC3::Error::NoResources;
-  }
+    HostConnection* hostCon = createOrGetHostConnection();
+    if (!hostCon) {
+        ALOGE("%s: Failed to get host connection\n", __FUNCTION__);
+        return HWC3::Error::NoResources;
+    }
+    ExtendedRCEncoderContext* rcEnc = hostCon->rcEncoder();
+    if (!rcEnc) {
+        ALOGE("%s: Failed to get renderControl encoder context\n", __FUNCTION__);
+        return HWC3::Error::NoResources;
+    }
 
-  *ppHostCon = hostCon;
-  *ppRcEnc = rcEnc;
-  return HWC3::Error::None;
+    *ppHostCon = hostCon;
+    *ppRcEnc = rcEnc;
+    return HWC3::Error::None;
 }
 
-#define DEFINE_AND_VALIDATE_HOST_CONNECTION                           \
-  HostConnection* hostCon;                                            \
-  ExtendedRCEncoderContext* rcEnc;                                    \
-  {                                                                   \
-    HWC3::Error res = getAndValidateHostConnection(&hostCon, &rcEnc); \
-    if (res != HWC3::Error::None) {                                   \
-      return res;                                                     \
-    }                                                                 \
-  }
+#define DEFINE_AND_VALIDATE_HOST_CONNECTION                               \
+    HostConnection* hostCon;                                              \
+    ExtendedRCEncoderContext* rcEnc;                                      \
+    {                                                                     \
+        HWC3::Error res = getAndValidateHostConnection(&hostCon, &rcEnc); \
+        if (res != HWC3::Error::None) {                                   \
+            return res;                                                   \
+        }                                                                 \
+    }
 }  // namespace aidl::android::hardware::graphics::composer3::impl
 
 #endif

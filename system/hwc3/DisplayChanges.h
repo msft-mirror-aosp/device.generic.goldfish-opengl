@@ -26,32 +26,32 @@
 namespace aidl::android::hardware::graphics::composer3::impl {
 
 struct DisplayChanges {
-  std::optional<ChangedCompositionTypes> compositionChanges;
-  std::optional<DisplayRequest> displayRequestChanges;
+    std::optional<ChangedCompositionTypes> compositionChanges;
+    std::optional<DisplayRequest> displayRequestChanges;
 
-  void addLayerCompositionChange(int64_t displayId, int64_t layerId,
-                                 Composition layerComposition) {
-    if (!compositionChanges) {
-      compositionChanges.emplace();
-      compositionChanges->display = displayId;
+    void addLayerCompositionChange(int64_t displayId, int64_t layerId,
+                                   Composition layerComposition) {
+        if (!compositionChanges) {
+            compositionChanges.emplace();
+            compositionChanges->display = displayId;
+        }
+
+        ChangedCompositionLayer compositionChange;
+        compositionChange.layer = layerId;
+        compositionChange.composition = layerComposition;
+        compositionChanges->layers.emplace_back(std::move(compositionChange));
     }
 
-    ChangedCompositionLayer compositionChange;
-    compositionChange.layer = layerId;
-    compositionChange.composition = layerComposition;
-    compositionChanges->layers.emplace_back(std::move(compositionChange));
-  }
+    void clearLayerCompositionChanges() { compositionChanges.reset(); }
 
-  void clearLayerCompositionChanges() { compositionChanges.reset(); }
+    bool hasAnyChanges() const {
+        return compositionChanges.has_value() || displayRequestChanges.has_value();
+    }
 
-  bool hasAnyChanges() const {
-    return compositionChanges.has_value() || displayRequestChanges.has_value();
-  }
-
-  void reset() {
-    compositionChanges.reset();
-    displayRequestChanges.reset();
-  }
+    void reset() {
+        compositionChanges.reset();
+        displayRequestChanges.reset();
+    }
 };
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl

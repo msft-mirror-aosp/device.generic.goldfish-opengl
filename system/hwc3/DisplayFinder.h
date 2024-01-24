@@ -27,16 +27,15 @@
 namespace aidl::android::hardware::graphics::composer3::impl {
 
 struct DisplayMultiConfigs {
-  int64_t displayId;
-  int32_t activeConfigId;
-  // Modes that this display can be configured to use.
-  std::vector<DisplayConfig> configs;
+    int64_t displayId;
+    int32_t activeConfigId;
+    // Modes that this display can be configured to use.
+    std::vector<DisplayConfig> configs;
 };
 
 void parseExternalDisplaysFromProperties(std::vector<int>& outPropIntParts);
 
-HWC3::Error findDisplays(const DrmClient* drm,
-                         std::vector<DisplayMultiConfigs>* outDisplays);
+HWC3::Error findDisplays(const DrmClient* drm, std::vector<DisplayMultiConfigs>* outDisplays);
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl
 

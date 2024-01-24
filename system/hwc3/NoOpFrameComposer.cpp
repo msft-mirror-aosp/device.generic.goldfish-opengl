@@ -23,61 +23,59 @@
 namespace aidl::android::hardware::graphics::composer3::impl {
 
 HWC3::Error NoOpFrameComposer::init() {
-  DEBUG_LOG("%s", __FUNCTION__);
+    DEBUG_LOG("%s", __FUNCTION__);
 
-  return HWC3::Error::None;
+    return HWC3::Error::None;
 }
 
-HWC3::Error NoOpFrameComposer::registerOnHotplugCallback(
-    const HotplugCallback&) {
-  DEBUG_LOG("%s", __FUNCTION__);
+HWC3::Error NoOpFrameComposer::registerOnHotplugCallback(const HotplugCallback&) {
+    DEBUG_LOG("%s", __FUNCTION__);
 
-  return HWC3::Error::None;
+    return HWC3::Error::None;
 }
 
 HWC3::Error NoOpFrameComposer::unregisterOnHotplugCallback() {
-  DEBUG_LOG("%s", __FUNCTION__);
+    DEBUG_LOG("%s", __FUNCTION__);
 
-  return HWC3::Error::None;
+    return HWC3::Error::None;
 }
 
 HWC3::Error NoOpFrameComposer::onDisplayCreate(Display*) {
-  DEBUG_LOG("%s", __FUNCTION__);
+    DEBUG_LOG("%s", __FUNCTION__);
 
-  return HWC3::Error::None;
+    return HWC3::Error::None;
 }
 
 HWC3::Error NoOpFrameComposer::onDisplayDestroy(Display*) {
-  DEBUG_LOG("%s", __FUNCTION__);
+    DEBUG_LOG("%s", __FUNCTION__);
 
-  return HWC3::Error::None;
+    return HWC3::Error::None;
 }
 
 HWC3::Error NoOpFrameComposer::onDisplayClientTargetSet(Display*) {
-  DEBUG_LOG("%s", __FUNCTION__);
+    DEBUG_LOG("%s", __FUNCTION__);
 
-  return HWC3::Error::None;
+    return HWC3::Error::None;
 }
 
 HWC3::Error NoOpFrameComposer::onActiveConfigChange(Display*) {
-  DEBUG_LOG("%s", __FUNCTION__);
+    DEBUG_LOG("%s", __FUNCTION__);
 
-  return HWC3::Error::None;
+    return HWC3::Error::None;
 };
 
 HWC3::Error NoOpFrameComposer::validateDisplay(Display*, DisplayChanges*) {
-  DEBUG_LOG("%s", __FUNCTION__);
+    DEBUG_LOG("%s", __FUNCTION__);
 
-  return HWC3::Error::None;
+    return HWC3::Error::None;
 }
 
 HWC3::Error NoOpFrameComposer::presentDisplay(
     Display*, ::android::base::unique_fd*,
-    std::unordered_map<int64_t,
-                       ::android::base::unique_fd>* /*outLayerFences*/) {
-  DEBUG_LOG("%s", __FUNCTION__);
+    std::unordered_map<int64_t, ::android::base::unique_fd>* /*outLayerFences*/) {
+    DEBUG_LOG("%s", __FUNCTION__);
 
-  return HWC3::Error::None;
+    return HWC3::Error::None;
 }
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl

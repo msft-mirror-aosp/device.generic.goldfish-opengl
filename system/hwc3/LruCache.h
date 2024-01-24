@@ -19,10 +19,8 @@
 
 template <typename Key, typename Value>
 class LruCache {
-  public:
-    LruCache(std::size_t maxSize) : m_maxSize(maxSize) {
-        m_table.reserve(maxSize);
-    }
+   public:
+    LruCache(std::size_t maxSize) : m_maxSize(maxSize) { m_table.reserve(maxSize); }
 
     Value* get(const Key& key) {
         auto tableIt = m_table.find(key);
@@ -70,7 +68,7 @@ class LruCache {
         m_table.clear();
     }
 
-  private:
+   private:
     struct KeyValue {
         Key key;
         Value value;

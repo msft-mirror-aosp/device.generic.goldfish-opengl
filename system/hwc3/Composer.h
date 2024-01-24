@@ -28,26 +28,25 @@ namespace aidl::android::hardware::graphics::composer3::impl {
 
 // This class is basically just the interface to create a client.
 class Composer : public BnComposer {
- public:
-  Composer() = default;
+   public:
+    Composer() = default;
 
-  binder_status_t dump(int fd, const char** args, uint32_t numArgs) override;
+    binder_status_t dump(int fd, const char** args, uint32_t numArgs) override;
 
-  // compser3 api
-  ndk::ScopedAStatus createClient(
-      std::shared_ptr<IComposerClient>* client) override;
-  ndk::ScopedAStatus getCapabilities(std::vector<Capability>* caps) override;
+    // compser3 api
+    ndk::ScopedAStatus createClient(std::shared_ptr<IComposerClient>* client) override;
+    ndk::ScopedAStatus getCapabilities(std::vector<Capability>* caps) override;
 
- protected:
-  ndk::SpAIBinder createBinder() override;
+   protected:
+    ndk::SpAIBinder createBinder() override;
 
- private:
-  bool waitForClientDestroyedLocked(std::unique_lock<std::mutex>& lock);
-  void onClientDestroyed();
+   private:
+    bool waitForClientDestroyedLocked(std::unique_lock<std::mutex>& lock);
+    void onClientDestroyed();
 
-  std::mutex mClientMutex;
-  std::weak_ptr<ComposerClient> mClient;
-  std::condition_variable mClientDestroyedCondition;
+    std::mutex mClientMutex;
+    std::weak_ptr<ComposerClient> mClient;
+    std::condition_variable mClientDestroyedCondition;
 };
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl

@@ -262,6 +262,30 @@ HWC3::Error Display::getDisplayConfigs(std::vector<int32_t>* outConfigIds) {
     return HWC3::Error::None;
 }
 
+HWC3::Error Display::getDisplayConfigurations(std::vector<DisplayConfiguration>* outConfigs) {
+  DEBUG_LOG("%s: display:%" PRId64, __FUNCTION__, mId);
+
+  std::unique_lock<std::recursive_mutex> lock(mStateMutex);
+
+  outConfigs->clear();
+  outConfigs->reserve(mConfigs.size());
+
+  for (const auto& [configId, displayConfig] : mConfigs) {
+    DisplayConfiguration displayConfiguration;
+    displayConfiguration.configId = configId;
+    displayConfiguration.width = displayConfig.getWidth();
+    displayConfiguration.height = displayConfig.getHeight();
+    displayConfiguration.dpi = { static_cast<float>(displayConfig.getDpiX()),
+                                static_cast<float>(displayConfig.getDpiY()) };
+    displayConfiguration.vsyncPeriod = displayConfig.getVsyncPeriod();
+    displayConfiguration.configGroup = displayConfig.getConfigGroup();
+
+    outConfigs->emplace_back(displayConfiguration);
+  }
+
+  return HWC3::Error::None;
+}
+
 HWC3::Error Display::getDisplayConnectionType(DisplayConnectionType* outType) {
     if (IsCuttlefishFoldable() || IsAutoDevice()) {
         // Android Auto OS needs to set all displays to INTERNAL since they're used

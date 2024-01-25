@@ -18,7 +18,7 @@
 #define ANDROID_HWC_COMPOSERCLIENT_H
 
 #include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
-#include <utils/Mutex.h>
+#include <android-base/thread_annotations.h>
 
 #include <memory>
 
@@ -118,6 +118,11 @@ class ComposerClient : public BnComposerClient {
     ndk::ScopedAStatus setIdleTimerEnabled(int64_t displayId, int32_t timeoutMs) override;
     ndk::ScopedAStatus setRefreshRateChangedCallbackDebugEnabled(int64_t displayId,
                                                                  bool enabled) override;
+    ndk::ScopedAStatus getDisplayConfigurations(int64_t displayId, int32_t maxFrameIntervalNs,
+                                                std::vector<DisplayConfiguration>*) override;
+    ndk::ScopedAStatus notifyExpectedPresent(int64_t displayId,
+                                             const ClockMonotonicTimestamp& expectedPresentTime,
+                                             int32_t maxFrameIntervalNs) override;
 
    protected:
     ndk::SpAIBinder createBinder() override;
@@ -125,72 +130,94 @@ class ComposerClient : public BnComposerClient {
    private:
     class CommandResultWriter;
 
-    void executeDisplayCommand(const DisplayCommand& displayCommand);
-    void executeLayerCommand(Display* display, const LayerCommand& layerCommand);
+    void executeDisplayCommand(CommandResultWriter& commandResults,
+                               const DisplayCommand& displayCommand);
 
-    void executeDisplayCommandSetColorTransform(Display* display, const std::vector<float>& matrix);
-    void executeDisplayCommandSetBrightness(Display* display, const DisplayBrightness& brightness);
-    void executeDisplayCommandSetClientTarget(Display* display, const ClientTarget& command);
-    void executeDisplayCommandSetOutputBuffer(Display* display, const Buffer& buffer);
+    void executeLayerCommand(CommandResultWriter& commandResults, Display& display,
+                             const LayerCommand& layerCommand);
+
+    void executeDisplayCommandSetColorTransform(CommandResultWriter& commandResults,
+                                                Display& display, const std::vector<float>& matrix);
+    void executeDisplayCommandSetBrightness(CommandResultWriter& commandResults, Display& display,
+                                            const DisplayBrightness& brightness);
+    void executeDisplayCommandSetClientTarget(CommandResultWriter& commandResults, Display& display,
+                                              const ClientTarget& command);
+    void executeDisplayCommandSetOutputBuffer(CommandResultWriter& commandResults, Display& display,
+                                              const Buffer& buffer);
     void executeDisplayCommandValidateDisplay(
-        Display* display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
-    void executeDisplayCommandAcceptDisplayChanges(Display* display);
+        CommandResultWriter& commandResults, Display& display,
+        const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
+    void executeDisplayCommandAcceptDisplayChanges(CommandResultWriter& commandResults,
+                                                   Display& display);
     void executeDisplayCommandPresentOrValidateDisplay(
-        Display* display, const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
-    void executeDisplayCommandPresentDisplay(Display* display);
+        CommandResultWriter& commandResults, Display& display,
+        const std::optional<ClockMonotonicTimestamp> expectedPresentTime);
+    void executeDisplayCommandPresentDisplay(CommandResultWriter& commandResults, Display& display);
 
-    void executeLayerCommandSetLayerCursorPosition(Display* display, Layer* layer,
+    void executeLayerCommandSetLayerCursorPosition(CommandResultWriter& commandResults,
+                                                   Display& display, Layer* layer,
                                                    const common::Point& cursorPosition);
-    void executeLayerCommandSetLayerBuffer(Display* display, Layer* layer, const Buffer& buffer);
+    void executeLayerCommandSetLayerBuffer(CommandResultWriter& commandResults, Display& display,
+                                           Layer* layer, const Buffer& buffer);
     void executeLayerCommandSetLayerSurfaceDamage(
-        Display* display, Layer* layer, const std::vector<std::optional<common::Rect>>& damage);
-    void executeLayerCommandSetLayerBlendMode(Display* display, Layer* layer,
-                                              const ParcelableBlendMode& blendMode);
-    void executeLayerCommandSetLayerColor(Display* display, Layer* layer, const Color& color);
-    void executeLayerCommandSetLayerComposition(Display* display, Layer* layer,
+        CommandResultWriter& commandResults, Display& display, Layer* layer,
+        const std::vector<std::optional<common::Rect>>& damage);
+    void executeLayerCommandSetLayerBlendMode(CommandResultWriter& commandResults, Display& display,
+                                              Layer* layer, const ParcelableBlendMode& blendMode);
+    void executeLayerCommandSetLayerColor(CommandResultWriter& commandResults, Display& display,
+                                          Layer* layer, const Color& color);
+    void executeLayerCommandSetLayerComposition(CommandResultWriter& commandResults,
+                                                Display& display, Layer* layer,
                                                 const ParcelableComposition& composition);
-    void executeLayerCommandSetLayerDataspace(Display* display, Layer* layer,
-                                              const ParcelableDataspace& dataspace);
-    void executeLayerCommandSetLayerDisplayFrame(Display* display, Layer* layer,
+    void executeLayerCommandSetLayerDataspace(CommandResultWriter& commandResults, Display& display,
+                                              Layer* layer, const ParcelableDataspace& dataspace);
+    void executeLayerCommandSetLayerDisplayFrame(CommandResultWriter& commandResults,
+                                                 Display& display, Layer* layer,
                                                  const common::Rect& rect);
-    void executeLayerCommandSetLayerPlaneAlpha(Display* display, Layer* layer,
+    void executeLayerCommandSetLayerPlaneAlpha(CommandResultWriter& commandResults,
+                                               Display& display, Layer* layer,
                                                const PlaneAlpha& planeAlpha);
     void executeLayerCommandSetLayerSidebandStream(
-        Display* display, Layer* layer,
+        CommandResultWriter& commandResults, Display& display, Layer* layer,
         const aidl::android::hardware::common::NativeHandle& sidebandStream);
-    void executeLayerCommandSetLayerSourceCrop(Display* display, Layer* layer,
+    void executeLayerCommandSetLayerSourceCrop(CommandResultWriter& commandResults,
+                                               Display& display, Layer* layer,
                                                const common::FRect& sourceCrop);
-    void executeLayerCommandSetLayerTransform(Display* display, Layer* layer,
-                                              const ParcelableTransform& transform);
+    void executeLayerCommandSetLayerTransform(CommandResultWriter& commandResults, Display& display,
+                                              Layer* layer, const ParcelableTransform& transform);
     void executeLayerCommandSetLayerVisibleRegion(
-        Display* display, Layer* layer,
+        CommandResultWriter& commandResults, Display& display, Layer* layer,
         const std::vector<std::optional<common::Rect>>& visibleRegion);
-    void executeLayerCommandSetLayerZOrder(Display* display, Layer* layer, const ZOrder& zOrder);
+    void executeLayerCommandSetLayerZOrder(CommandResultWriter& commandResults, Display& display,
+                                           Layer* layer, const ZOrder& zOrder);
     void executeLayerCommandSetLayerPerFrameMetadata(
-        Display* display, Layer* layer,
+        CommandResultWriter& commandResults, Display& display, Layer* layer,
         const std::vector<std::optional<PerFrameMetadata>>& perFrameMetadata);
-    void executeLayerCommandSetLayerColorTransform(Display* display, Layer* layer,
+    void executeLayerCommandSetLayerColorTransform(CommandResultWriter& commandResults,
+                                                   Display& display, Layer* layer,
                                                    const std::vector<float>& colorTransform);
-    void executeLayerCommandSetLayerBrightness(Display* display, Layer* layer,
+    void executeLayerCommandSetLayerBrightness(CommandResultWriter& commandResults,
+                                               Display& display, Layer* layer,
                                                const LayerBrightness& brightness);
     void executeLayerCommandSetLayerPerFrameMetadataBlobs(
-        Display* display, Layer* layer,
+        CommandResultWriter& commandResults, Display& display, Layer* layer,
         const std::vector<std::optional<PerFrameMetadataBlob>>& perFrameMetadataBlob);
 
     // Returns the display with the given id or nullptr if not found.
-    Display* getDisplay(int64_t displayId);
+    std::shared_ptr<Display> getDisplay(int64_t displayId);
 
     // Finds the Cuttlefish/Goldfish specific configuration and initializes the
     // displays.
-    HWC3::Error createDisplaysLocked();
+    HWC3::Error createDisplaysLocked() EXCLUSIVE_LOCKS_REQUIRED(mDisplaysMutex);
 
     // Creates a display with the given properties.
     HWC3::Error createDisplayLocked(int64_t displayId, int32_t activeConfigId,
-                                    const std::vector<DisplayConfig>& configs);
+                                    const std::vector<DisplayConfig>& configs)
+        EXCLUSIVE_LOCKS_REQUIRED(mDisplaysMutex);
 
-    HWC3::Error destroyDisplaysLocked();
+    HWC3::Error destroyDisplaysLocked() EXCLUSIVE_LOCKS_REQUIRED(mDisplaysMutex);
 
-    HWC3::Error destroyDisplayLocked(int64_t displayId);
+    HWC3::Error destroyDisplayLocked(int64_t displayId) EXCLUSIVE_LOCKS_REQUIRED(mDisplaysMutex);
 
     HWC3::Error handleHotplug(bool connected,   //
                               uint32_t id,      //
@@ -200,9 +227,8 @@ class ComposerClient : public BnComposerClient {
                               uint32_t dpiY,    //
                               uint32_t refreshRate);
 
-    std::mutex mStateMutex;
-
-    std::map<int64_t, std::unique_ptr<Display>> mDisplays;
+    std::mutex mDisplaysMutex;
+    std::map<int64_t, std::shared_ptr<Display>> mDisplays GUARDED_BY(mDisplaysMutex);
 
     // The onHotplug(), onVsync(), etc callbacks registered by SurfaceFlinger.
     std::shared_ptr<IComposerCallback> mCallbacks;
@@ -212,10 +238,6 @@ class ComposerClient : public BnComposerClient {
     // Underlying interface for composing layers in the guest using libyuv or in
     // the host using opengl. Owned by Device.
     FrameComposer* mComposer = nullptr;
-
-    // For the duration of a executeCommands(), the helper used to collect
-    // individual command results.
-    std::unique_ptr<CommandResultWriter> mCommandResults;
 
     // Manages importing and caching gralloc buffers for displays and layers.
     std::unique_ptr<ComposerResources> mResources;

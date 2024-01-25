@@ -32,54 +32,53 @@ namespace aidl::android::hardware::graphics::composer3::impl {
 
 // Generates Vsync signals in software.
 class VsyncThread {
- public:
-  VsyncThread(int64_t id);
-  virtual ~VsyncThread();
+   public:
+    VsyncThread(int64_t id);
+    virtual ~VsyncThread();
 
-  VsyncThread(const VsyncThread&) = delete;
-  VsyncThread& operator=(const VsyncThread&) = delete;
+    VsyncThread(const VsyncThread&) = delete;
+    VsyncThread& operator=(const VsyncThread&) = delete;
 
-  VsyncThread(VsyncThread&&) = delete;
-  VsyncThread& operator=(VsyncThread&&) = delete;
+    VsyncThread(VsyncThread&&) = delete;
+    VsyncThread& operator=(VsyncThread&&) = delete;
 
-  HWC3::Error start(int32_t periodNanos);
+    HWC3::Error start(int32_t periodNanos);
 
-  HWC3::Error setCallbacks(const std::shared_ptr<IComposerCallback>& callback);
+    HWC3::Error setCallbacks(const std::shared_ptr<IComposerCallback>& callback);
 
-  HWC3::Error setVsyncEnabled(bool enabled);
+    HWC3::Error setVsyncEnabled(bool enabled);
 
-  HWC3::Error scheduleVsyncUpdate(
-      int32_t newVsyncPeriod,
-      const VsyncPeriodChangeConstraints& newVsyncPeriodChangeConstraints,
-      VsyncPeriodChangeTimeline* timeline);
+    HWC3::Error scheduleVsyncUpdate(
+        int32_t newVsyncPeriod, const VsyncPeriodChangeConstraints& newVsyncPeriodChangeConstraints,
+        VsyncPeriodChangeTimeline* timeline);
 
- private:
-  HWC3::Error stop();
+   private:
+    HWC3::Error stop();
 
-  void threadLoop();
+    void threadLoop();
 
-  std::chrono::nanoseconds updateVsyncPeriodLocked(
-      std::chrono::time_point<std::chrono::steady_clock> now);
+    std::chrono::nanoseconds updateVsyncPeriodLocked(
+        std::chrono::time_point<std::chrono::steady_clock> now);
 
-  const int64_t mDisplayId;
+    const int64_t mDisplayId;
 
-  std::thread mThread;
+    std::thread mThread;
 
-  std::mutex mStateMutex;
+    std::mutex mStateMutex;
 
-  std::atomic<bool> mShuttingDown{false};
+    std::atomic<bool> mShuttingDown{false};
 
-  std::shared_ptr<IComposerCallback> mCallbacks;
+    std::shared_ptr<IComposerCallback> mCallbacks;
 
-  bool mVsyncEnabled = false;
-  std::chrono::nanoseconds mVsyncPeriod;
-  std::chrono::time_point<std::chrono::steady_clock> mPreviousVsync;
+    bool mVsyncEnabled = false;
+    std::chrono::nanoseconds mVsyncPeriod;
+    std::chrono::time_point<std::chrono::steady_clock> mPreviousVsync;
 
-  struct PendingUpdate {
-    std::chrono::nanoseconds period;
-    std::chrono::time_point<std::chrono::steady_clock> updateAfter;
-  };
-  std::optional<PendingUpdate> mPendingUpdate;
+    struct PendingUpdate {
+        std::chrono::nanoseconds period;
+        std::chrono::time_point<std::chrono::steady_clock> updateAfter;
+    };
+    std::optional<PendingUpdate> mPendingUpdate;
 };
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl

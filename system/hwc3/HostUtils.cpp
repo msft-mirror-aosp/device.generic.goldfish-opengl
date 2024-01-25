@@ -21,12 +21,12 @@
 namespace aidl::android::hardware::graphics::composer3::impl {
 
 HostConnection* createOrGetHostConnection() {
-  static std::unique_ptr<HostConnection> sHostCon;
+    static std::unique_ptr<HostConnection> sHostCon;
 
-  if (!sHostCon) {
-    sHostCon = HostConnection::createUnique();
-  }
-  return sHostCon.get();
+    if (!sHostCon) {
+        sHostCon = HostConnection::createUnique();
+    }
+    return sHostCon.get();
 }
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl

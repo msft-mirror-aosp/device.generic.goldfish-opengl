@@ -34,134 +34,127 @@
 namespace aidl::android::hardware::graphics::composer3::impl {
 
 HWC3::Error ClientFrameComposer::init() {
-  DEBUG_LOG("%s", __FUNCTION__);
+    DEBUG_LOG("%s", __FUNCTION__);
 
-  HWC3::Error error = mDrmClient.init();
-  if (error != HWC3::Error::None) {
-    ALOGE("%s: failed to initialize DrmClient", __FUNCTION__);
-    return error;
-  }
+    HWC3::Error error = mDrmClient.init();
+    if (error != HWC3::Error::None) {
+        ALOGE("%s: failed to initialize DrmClient", __FUNCTION__);
+        return error;
+    }
 
-  return HWC3::Error::None;
+    return HWC3::Error::None;
 }
 
-HWC3::Error ClientFrameComposer::registerOnHotplugCallback(
-    const HotplugCallback& cb) {
-  return mDrmClient.registerOnHotplugCallback(cb);
-  return HWC3::Error::None;
+HWC3::Error ClientFrameComposer::registerOnHotplugCallback(const HotplugCallback& cb) {
+    return mDrmClient.registerOnHotplugCallback(cb);
+    return HWC3::Error::None;
 }
 
 HWC3::Error ClientFrameComposer::unregisterOnHotplugCallback() {
-  return mDrmClient.unregisterOnHotplugCallback();
+    return mDrmClient.unregisterOnHotplugCallback();
 }
 
 HWC3::Error ClientFrameComposer::onDisplayCreate(Display* display) {
-  const auto displayId = display->getId();
-  DEBUG_LOG("%s display:%" PRIu64, __FUNCTION__, displayId);
+    const auto displayId = display->getId();
+    DEBUG_LOG("%s display:%" PRIu64, __FUNCTION__, displayId);
 
-  // Ensure created.
-  mDisplayInfos.emplace(displayId, DisplayInfo{});
+    // Ensure created.
+    mDisplayInfos.emplace(displayId, DisplayInfo{});
 
-  return HWC3::Error::None;
+    return HWC3::Error::None;
 }
 
 HWC3::Error ClientFrameComposer::onDisplayDestroy(Display* display) {
-  const auto displayId = display->getId();
-  DEBUG_LOG("%s display:%" PRIu64, __FUNCTION__, displayId);
+    const auto displayId = display->getId();
+    DEBUG_LOG("%s display:%" PRIu64, __FUNCTION__, displayId);
 
-  auto it = mDisplayInfos.find(displayId);
-  if (it == mDisplayInfos.end()) {
-    ALOGE("%s: display:%" PRIu64 " missing display buffers?", __FUNCTION__,
-          displayId);
-    return HWC3::Error::BadDisplay;
-  }
+    auto it = mDisplayInfos.find(displayId);
+    if (it == mDisplayInfos.end()) {
+        ALOGE("%s: display:%" PRIu64 " missing display buffers?", __FUNCTION__, displayId);
+        return HWC3::Error::BadDisplay;
+    }
 
-  mDisplayInfos.erase(it);
+    mDisplayInfos.erase(it);
 
-  return HWC3::Error::None;
+    return HWC3::Error::None;
 }
 
 HWC3::Error ClientFrameComposer::onDisplayClientTargetSet(Display* display) {
-  const auto displayId = display->getId();
-  DEBUG_LOG("%s display:%" PRIu64, __FUNCTION__, displayId);
+    const auto displayId = display->getId();
+    DEBUG_LOG("%s display:%" PRIu64, __FUNCTION__, displayId);
 
-  auto it = mDisplayInfos.find(displayId);
-  if (it == mDisplayInfos.end()) {
-    ALOGE("%s: display:%" PRIu64 " missing display buffers?", __FUNCTION__,
-          displayId);
-    return HWC3::Error::BadDisplay;
-  }
+    auto it = mDisplayInfos.find(displayId);
+    if (it == mDisplayInfos.end()) {
+        ALOGE("%s: display:%" PRIu64 " missing display buffers?", __FUNCTION__, displayId);
+        return HWC3::Error::BadDisplay;
+    }
 
-  DisplayInfo& displayInfo = it->second;
+    DisplayInfo& displayInfo = it->second;
 
-  auto [drmBufferCreateError, drmBuffer] =
-    mDrmClient.create(display->getClientTarget().getBuffer());
-  if (drmBufferCreateError != HWC3::Error::None) {
-    ALOGE("%s: display:%" PRIu64 " failed to create client target drm buffer",
-          __FUNCTION__, displayId);
-    return HWC3::Error::NoResources;
-  }
-  displayInfo.clientTargetDrmBuffer = std::move(drmBuffer);
+    auto [drmBufferCreateError, drmBuffer] =
+        mDrmClient.create(display->getClientTarget().getBuffer());
+    if (drmBufferCreateError != HWC3::Error::None) {
+        ALOGE("%s: display:%" PRIu64 " failed to create client target drm buffer", __FUNCTION__,
+              displayId);
+        return HWC3::Error::NoResources;
+    }
+    displayInfo.clientTargetDrmBuffer = std::move(drmBuffer);
 
-  return HWC3::Error::None;
+    return HWC3::Error::None;
 }
 
 HWC3::Error ClientFrameComposer::onActiveConfigChange(Display* /*display*/) {
-  return HWC3::Error::None;
+    return HWC3::Error::None;
 };
 
-HWC3::Error ClientFrameComposer::validateDisplay(Display* display,
-                                                DisplayChanges* outChanges) {
-  const auto displayId = display->getId();
-  DEBUG_LOG("%s display:%" PRIu64, __FUNCTION__, displayId);
+HWC3::Error ClientFrameComposer::validateDisplay(Display* display, DisplayChanges* outChanges) {
+    const auto displayId = display->getId();
+    DEBUG_LOG("%s display:%" PRIu64, __FUNCTION__, displayId);
 
-  const std::vector<Layer*>& layers = display->getOrderedLayers();
+    const std::vector<Layer*>& layers = display->getOrderedLayers();
 
-  for (Layer* layer : layers) {
-    const auto layerId = layer->getId();
-    const auto layerCompositionType = layer->getCompositionType();
+    for (Layer* layer : layers) {
+        const auto layerId = layer->getId();
+        const auto layerCompositionType = layer->getCompositionType();
 
-    if (layerCompositionType != Composition::CLIENT) {
-      outChanges->addLayerCompositionChange(displayId, layerId, Composition::CLIENT);
-      continue;
+        if (layerCompositionType != Composition::CLIENT) {
+            outChanges->addLayerCompositionChange(displayId, layerId, Composition::CLIENT);
+            continue;
+        }
     }
-  }
 
-  return HWC3::Error::None;
+    return HWC3::Error::None;
 }
 
 HWC3::Error ClientFrameComposer::presentDisplay(
     Display* display, ::android::base::unique_fd* outDisplayFence,
-    std::unordered_map<int64_t,
-                       ::android::base::unique_fd>* /*outLayerFences*/) {
-  const auto displayId = display->getId();
-  DEBUG_LOG("%s display:%" PRIu64, __FUNCTION__, displayId);
+    std::unordered_map<int64_t, ::android::base::unique_fd>* /*outLayerFences*/) {
+    const auto displayId = display->getId();
+    DEBUG_LOG("%s display:%" PRIu64, __FUNCTION__, displayId);
 
-  auto displayInfoIt = mDisplayInfos.find(displayId);
-  if (displayInfoIt == mDisplayInfos.end()) {
-    ALOGE("%s: failed to find display buffers for display:%" PRIu64,
-          __FUNCTION__, displayId);
-    return HWC3::Error::BadDisplay;
-  }
+    auto displayInfoIt = mDisplayInfos.find(displayId);
+    if (displayInfoIt == mDisplayInfos.end()) {
+        ALOGE("%s: failed to find display buffers for display:%" PRIu64, __FUNCTION__, displayId);
+        return HWC3::Error::BadDisplay;
+    }
 
-  DisplayInfo& displayInfo = displayInfoIt->second;
-  if (!displayInfo.clientTargetDrmBuffer) {
-    ALOGW("%s: display:%" PRIu64 " no client target set, nothing to present.",
-          __FUNCTION__, displayId);
-    return HWC3::Error::None;
-  }
+    DisplayInfo& displayInfo = displayInfoIt->second;
+    if (!displayInfo.clientTargetDrmBuffer) {
+        ALOGW("%s: display:%" PRIu64 " no client target set, nothing to present.", __FUNCTION__,
+              displayId);
+        return HWC3::Error::None;
+    }
 
-  ::android::base::unique_fd fence = display->getClientTarget().getFence();
+    ::android::base::unique_fd fence = display->getClientTarget().getFence();
 
-  auto [flushError, flushCompleteFence] = mDrmClient.flushToDisplay(
-        displayId, displayInfo.clientTargetDrmBuffer, fence);
-  if (flushError != HWC3::Error::None) {
-    ALOGE("%s: display:%" PRIu64 " failed to flush drm buffer" PRIu64,
-          __FUNCTION__, displayId);
-  }
+    auto [flushError, flushCompleteFence] = mDrmClient.flushToDisplay(
+        static_cast<uint32_t>(displayId), displayInfo.clientTargetDrmBuffer, fence);
+    if (flushError != HWC3::Error::None) {
+        ALOGE("%s: display:%" PRIu64 " failed to flush drm buffer" PRIu64, __FUNCTION__, displayId);
+    }
 
-  *outDisplayFence = std::move(flushCompleteFence);
-  return flushError;
+    *outDisplayFence = std::move(flushCompleteFence);
+    return flushError;
 }
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl

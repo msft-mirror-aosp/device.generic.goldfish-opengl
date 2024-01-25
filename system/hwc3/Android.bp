@@ -86,6 +86,11 @@ cc_binary {
         "VsyncThread.cpp",
     ],
 
+    cflags: [
+        "-Wall",
+        "-Werror=conversion",
+    ],
+
     vintf_fragments: ["hwc3.xml"],
     init_rc: ["hwc3.rc"],
 

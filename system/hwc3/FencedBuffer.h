@@ -24,35 +24,34 @@
 namespace aidl::android::hardware::graphics::composer3::impl {
 
 class FencedBuffer {
- public:
-  FencedBuffer() : mBuffer(nullptr) {}
+   public:
+    FencedBuffer() : mBuffer(nullptr) {}
 
-  void set(buffer_handle_t buffer, const ndk::ScopedFileDescriptor& fence) {
-    mBuffer = buffer;
-    mFence = GetUniqueFd(fence);
-  }
-
-  buffer_handle_t getBuffer() const { return mBuffer; }
-
-  ::android::base::unique_fd getFence() const {
-    if (mFence.ok()) {
-      return ::android::base::unique_fd(dup(mFence.get()));
-    } else {
-      return ::android::base::unique_fd();
+    void set(buffer_handle_t buffer, const ndk::ScopedFileDescriptor& fence) {
+        mBuffer = buffer;
+        mFence = GetUniqueFd(fence);
     }
-  }
 
- private:
-  static ::android::base::unique_fd GetUniqueFd(
-      const ndk::ScopedFileDescriptor& in) {
-    auto& sfd = const_cast<ndk::ScopedFileDescriptor&>(in);
-    ::android::base::unique_fd ret(sfd.get());
-    *sfd.getR() = -1;
-    return ret;
-  }
+    buffer_handle_t getBuffer() const { return mBuffer; }
 
-  buffer_handle_t mBuffer;
-  ::android::base::unique_fd mFence;
+    ::android::base::unique_fd getFence() const {
+        if (mFence.ok()) {
+            return ::android::base::unique_fd(dup(mFence.get()));
+        } else {
+            return ::android::base::unique_fd();
+        }
+    }
+
+   private:
+    static ::android::base::unique_fd GetUniqueFd(const ndk::ScopedFileDescriptor& in) {
+        auto& sfd = const_cast<ndk::ScopedFileDescriptor&>(in);
+        ::android::base::unique_fd ret(sfd.get());
+        *sfd.getR() = -1;
+        return ret;
+    }
+
+    buffer_handle_t mBuffer;
+    ::android::base::unique_fd mFence;
 };
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl

@@ -18,6 +18,7 @@
 #define ANDROID_HWC_ALTERNATINGIMAGESTORAGE_H
 
 #include <stdint.h>
+
 #include <vector>
 
 #include "Common.h"
@@ -29,21 +30,21 @@ namespace aidl::android::hardware::graphics::composer3::impl {
 // the storage just needs to be 2x the needed image size and the returned buffers
 // can alternate back and forth.
 class AlternatingImageStorage {
- public:
-  AlternatingImageStorage() = default;
+   public:
+    AlternatingImageStorage() = default;
 
-  uint8_t* getRotatingScratchBuffer(std::size_t neededSize, std::uint32_t imageIndex);
+    uint8_t* getRotatingScratchBuffer(std::size_t neededSize, std::uint32_t imageIndex);
 
-  uint8_t* getSpecialScratchBuffer(std::size_t neededSize);
+    uint8_t* getSpecialScratchBuffer(std::size_t neededSize);
 
- private:
-  static constexpr const int kNumScratchBufferPieces = 2;
+   private:
+    static constexpr const int kNumScratchBufferPieces = 2;
 
-  // The main alternating storage.
-  std::vector<uint8_t> mScratchBuffer;
+    // The main alternating storage.
+    std::vector<uint8_t> mScratchBuffer;
 
-  // Extra additional storage for one-off operations (scaling).
-  std::vector<uint8_t> mSpecialScratchBuffer;
+    // Extra additional storage for one-off operations (scaling).
+    std::vector<uint8_t> mSpecialScratchBuffer;
 };
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl

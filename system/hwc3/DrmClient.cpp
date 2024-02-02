@@ -31,34 +31,33 @@ DrmClient::~DrmClient() {
 }
 
 ::android::base::unique_fd DrmClient::OpenVirtioGpuDrmFd() {
-  for (int i = 0; i < 10; i++) {
-    const std::string path = "/dev/dri/card" + std::to_string(i);
-    DEBUG_LOG("%s: trying to open DRM device at %s",
-              __FUNCTION__, path.c_str());
+    for (int i = 0; i < 10; i++) {
+        const std::string path = "/dev/dri/card" + std::to_string(i);
+        DEBUG_LOG("%s: trying to open DRM device at %s", __FUNCTION__, path.c_str());
 
-    ::android::base::unique_fd fd(open(path.c_str(), O_RDWR | O_CLOEXEC));
+        ::android::base::unique_fd fd(open(path.c_str(), O_RDWR | O_CLOEXEC));
 
-    if (fd < 0) {
-      ALOGE("%s: failed to open drm device %s: %s",
-            __FUNCTION__, path.c_str(), strerror(errno));
-        continue;
+        if (fd < 0) {
+            ALOGE("%s: failed to open drm device %s: %s", __FUNCTION__, path.c_str(),
+                  strerror(errno));
+            continue;
+        }
+
+        auto version = drmGetVersion(fd.get());
+        const std::string name = version->name;
+        drmFreeVersion(version);
+
+        DEBUG_LOG("%s: The DRM device at %s is \"%s\"", __FUNCTION__, path.c_str(), name.c_str());
+        if (name.find("virtio") != std::string::npos) {
+            return fd;
+        }
     }
 
-    auto version = drmGetVersion(fd.get());
-    const std::string name = version->name;
-    drmFreeVersion(version);
-
-    DEBUG_LOG("%s: The DRM device at %s is \"%s\"",
-              __FUNCTION__, path.c_str(), name.c_str());
-    if (name.find("virtio") != std::string::npos) {
-      return fd;
-    }
-  }
-
-  ALOGE("Failed to find virtio-gpu DRM node. Ranchu HWComposer "
+    ALOGE(
+        "Failed to find virtio-gpu DRM node. Ranchu HWComposer "
         "is only expected to be used with \"virtio_gpu\"");
 
-  return ::android::base::unique_fd(-1);
+    return ::android::base::unique_fd(-1);
 }
 
 HWC3::Error DrmClient::init() {
@@ -343,7 +342,7 @@ bool DrmClient::handleHotplug() {
 }
 
 std::tuple<HWC3::Error, ::android::base::unique_fd> DrmClient::flushToDisplay(
-    int displayId, const std::shared_ptr<DrmBuffer>& buffer,
+    uint32_t displayId, const std::shared_ptr<DrmBuffer>& buffer,
     ::android::base::borrowed_fd inSyncFd) {
     ATRACE_CALL();
 

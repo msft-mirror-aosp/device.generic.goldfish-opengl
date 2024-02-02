@@ -51,7 +51,7 @@ class DrmSwapchain {
    private:
     DrmSwapchain(std::vector<Image> images);
     std::vector<Image> mImages;
-    uint32_t mLastUsedIndex = 0;
+    std::size_t mLastUsedIndex = 0;
 };
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl

@@ -27,40 +27,38 @@
 namespace aidl::android::hardware::graphics::composer3::impl {
 
 class NoOpFrameComposer : public FrameComposer {
- public:
-  NoOpFrameComposer() = default;
+   public:
+    NoOpFrameComposer() = default;
 
-  NoOpFrameComposer(const NoOpFrameComposer&) = delete;
-  NoOpFrameComposer& operator=(const NoOpFrameComposer&) = delete;
+    NoOpFrameComposer(const NoOpFrameComposer&) = delete;
+    NoOpFrameComposer& operator=(const NoOpFrameComposer&) = delete;
 
-  NoOpFrameComposer(NoOpFrameComposer&&) = delete;
-  NoOpFrameComposer& operator=(NoOpFrameComposer&&) = delete;
+    NoOpFrameComposer(NoOpFrameComposer&&) = delete;
+    NoOpFrameComposer& operator=(NoOpFrameComposer&&) = delete;
 
-  HWC3::Error init() override;
+    HWC3::Error init() override;
 
-  HWC3::Error registerOnHotplugCallback(const HotplugCallback& cb) override;
+    HWC3::Error registerOnHotplugCallback(const HotplugCallback& cb) override;
 
-  HWC3::Error unregisterOnHotplugCallback() override;
+    HWC3::Error unregisterOnHotplugCallback() override;
 
-  HWC3::Error onDisplayCreate(Display*) override;
+    HWC3::Error onDisplayCreate(Display*) override;
 
-  HWC3::Error onDisplayDestroy(Display*) override;
+    HWC3::Error onDisplayDestroy(Display*) override;
 
-  HWC3::Error onDisplayClientTargetSet(Display*) override;
+    HWC3::Error onDisplayClientTargetSet(Display*) override;
 
-  // Determines if this composer can compose the given layers on the given
-  // display and requests changes for layers that can't not be composed.
-  HWC3::Error validateDisplay(Display* display,
-                              DisplayChanges* outChanges) override;
+    // Determines if this composer can compose the given layers on the given
+    // display and requests changes for layers that can't not be composed.
+    HWC3::Error validateDisplay(Display* display, DisplayChanges* outChanges) override;
 
-  // Performs the actual composition of layers and presents the composed result
-  // to the display.
-  HWC3::Error presentDisplay(
-      Display* display, ::android::base::unique_fd* outDisplayFence,
-      std::unordered_map<int64_t, ::android::base::unique_fd>* outLayerFences)
-      override;
+    // Performs the actual composition of layers and presents the composed result
+    // to the display.
+    HWC3::Error presentDisplay(
+        Display* display, ::android::base::unique_fd* outDisplayFence,
+        std::unordered_map<int64_t, ::android::base::unique_fd>* outLayerFences) override;
 
-  HWC3::Error onActiveConfigChange(Display* /*display*/) override;
+    HWC3::Error onActiveConfigChange(Display* /*display*/) override;
 };
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl

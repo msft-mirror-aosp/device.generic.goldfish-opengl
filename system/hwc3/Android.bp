@@ -34,8 +34,6 @@ cc_binary {
         "libbase",
         "libbinder_ndk",
         "libcutils",
-        "libcuttlefish_device_config",
-        "libcuttlefish_device_config_proto",
         "libdrm",
         "libgralloctypes",
         "libhidlbase",
@@ -86,6 +84,11 @@ cc_binary {
         "Main.cpp",
         "NoOpFrameComposer.cpp",
         "VsyncThread.cpp",
+    ],
+
+    cflags: [
+        "-Wall",
+        "-Werror=conversion",
     ],
 
     vintf_fragments: ["hwc3.xml"],

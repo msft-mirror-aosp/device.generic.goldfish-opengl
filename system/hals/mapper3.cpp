@@ -480,11 +480,6 @@ private:  // **** impl ****
                 }
             } else {
                 if (rcEnc->featureInfo()->hasReadColorBufferDma) {
-                    {
-                        AEMU_SCOPED_TRACE("bindDmaDirectly");
-                        rcEnc->bindDmaDirectly(bufferBits,
-                                getMmapedPhysAddr(cb.getMmapedOffset()));
-                    }
                     rcEnc->rcReadColorBufferDMA(rcEnc,
                         cb.hostHandle,
                         0, 0, cb.width, cb.height,
@@ -565,11 +560,6 @@ private:  // **** impl ****
             {
                 const HostConnectionSession conn = getHostConnectionSession();
                 ExtendedRCEncoderContext *const rcEnc = conn.getRcEncoder();
-                {
-                    AEMU_SCOPED_TRACE("bindDmaDirectly");
-                    rcEnc->bindDmaDirectly(bufferBits,
-                            getMmapedPhysAddr(cb.getMmapedOffset()));
-                }
                 {
                     AEMU_SCOPED_TRACE("updateColorBuffer");
                     rcEnc->rcUpdateColorBufferDMA(rcEnc, cb.hostHandle,

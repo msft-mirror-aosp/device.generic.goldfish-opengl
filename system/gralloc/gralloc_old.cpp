@@ -255,7 +255,7 @@ static gralloc_memregions_t* init_gralloc_memregions() {
 }
 
 static bool has_DMA_support(const ExtendedRCEncoderContext *rcEnc) {
-    return false;
+    return rcEnc->getDmaVersion() > 0 || rcEnc->hasDirectMem();
 }
 
 static gralloc_dmaregion_t* init_gralloc_dmaregion(ExtendedRCEncoderContext *rcEnc) {
@@ -541,6 +541,13 @@ static void updateHostColorBuffer(cb_handle_old_t* cb,
         case HAL_PIXEL_FORMAT_YCbCr_420_888:
             get_yuv420p_offsets(width, height, NULL, NULL, &send_buffer_size);
             break;
+        }
+
+        if (grdma->address_space_block.guestPtr()) {
+            rcEnc->bindDmaDirectly(grdma->address_space_block.guestPtr(),
+                                   grdma->address_space_block.physAddr());
+        } else {
+            ALOGE("%s: Unexpected DMA", __func__);
         }
 
         D("%s: call. dma update with sz=%u", __func__, send_buffer_size);

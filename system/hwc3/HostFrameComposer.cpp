@@ -524,10 +524,7 @@ HWC3::Error HostFrameComposer::presentDisplay(
 
                     *outDisplayFence = std::move(flushCompleteFence);
                 } else {
-                    rcEnc->rcSetDisplayColorBuffer(
-                        rcEnc, displayInfo.hostDisplayId,
-                        hostCon->grallocHelper()->getHostHandle(displayClientTarget.getBuffer()));
-                    post(hostCon, rcEnc, displayClientTarget.getBuffer());
+                    post(hostCon, rcEnc, displayInfo.hostDisplayId, displayClientTarget.getBuffer());
                     *outDisplayFence = std::move(fence);
                 }
             }
@@ -696,10 +693,7 @@ HWC3::Error HostFrameComposer::presentDisplay(
                 displayId, compositionResult->getDrmBuffer(), displayClientTargetFence);
             *outDisplayFence = std::move(flushFence);
         } else {
-            rcEnc->rcSetDisplayColorBuffer(
-                rcEnc, displayInfo.hostDisplayId,
-                hostCon->grallocHelper()->getHostHandle(displayClientTarget.getBuffer()));
-            post(hostCon, rcEnc, displayClientTarget.getBuffer());
+            post(hostCon, rcEnc, displayInfo.hostDisplayId, displayClientTarget.getBuffer());
             *outDisplayFence = std::move(displayClientTargetFence);
         }
         ALOGV("%s fallback to post, returns outRetireFence %d", __FUNCTION__,
@@ -712,10 +706,13 @@ HWC3::Error HostFrameComposer::presentDisplay(
 }
 
 void HostFrameComposer::post(HostConnection* hostCon, ExtendedRCEncoderContext* rcEnc,
-                             buffer_handle_t h) {
+                             uint32_t hostDisplayId, buffer_handle_t h) {
     assert(cb && "native_handle_t::from(h) failed");
 
     hostCon->lock();
+    rcEnc->rcSetDisplayColorBuffer(
+        rcEnc, hostDisplayId,
+        hostCon->grallocHelper()->getHostHandle(h));
     rcEnc->rcFBPost(rcEnc, hostCon->grallocHelper()->getHostHandle(h));
     hostCon->flush();
     hostCon->unlock();

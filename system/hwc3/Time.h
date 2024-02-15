@@ -29,22 +29,18 @@ using Nanoseconds = std::chrono::nanoseconds;
 
 using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
 
-inline TimePoint asTimePoint(int64_t nanos) {
-  return TimePoint(Nanoseconds(nanos));
-}
+inline TimePoint asTimePoint(int64_t nanos) { return TimePoint(Nanoseconds(nanos)); }
 
-inline TimePoint now() {
-  return asTimePoint(systemTime(SYSTEM_TIME_MONOTONIC));
-}
+inline TimePoint now() { return asTimePoint(systemTime(SYSTEM_TIME_MONOTONIC)); }
 
-inline int32_t asNanosDuration(Nanoseconds duration) {
-  return duration.count();
-}
+inline int64_t asNanosDuration(Nanoseconds duration) { return duration.count(); }
 
 inline int64_t asNanosTimePoint(TimePoint time) {
-  TimePoint zero(Nanoseconds(0));
-  return std::chrono::duration_cast<Nanoseconds>(time - zero).count();
+    TimePoint zero(Nanoseconds(0));
+    return static_cast<int64_t>(std::chrono::duration_cast<Nanoseconds>(time - zero).count());
 }
+
+constexpr int32_t HertzToPeriodNanos(uint32_t hertz) { return 1000 * 1000 * 1000 / hertz; }
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl
 

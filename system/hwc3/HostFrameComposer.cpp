@@ -410,21 +410,20 @@ HWC3::Error HostFrameComposer::validateDisplay(Display* display, DisplayChanges*
     if (!fallBackToClient) {
         for (const auto& layer : layers) {
             const auto& layerCompositionType = layer->getCompositionType();
-            const auto layerCompositionTypeString = toString(layerCompositionType);
 
             std::optional<Composition> layerFallBackTo = std::nullopt;
             switch (layerCompositionType) {
                 case Composition::CLIENT:
                 case Composition::SIDEBAND:
-                    ALOGV("%s: layer %" PRIu32 " CompositionType %s, fallback to client",
+                    ALOGV("%s: layer %" PRIu32 " CompositionType %d, fallback to client",
                           __FUNCTION__, static_cast<uint32_t>(layer->getId()),
-                          layerCompositionTypeString.c_str());
+                          layerCompositionType);
                     layerFallBackTo = Composition::CLIENT;
                     break;
                 case Composition::CURSOR:
-                    ALOGV("%s: layer %" PRIu32 " CompositionType %s, fallback to device",
+                    ALOGV("%s: layer %" PRIu32 " CompositionType %d, fallback to device",
                           __FUNCTION__, static_cast<uint32_t>(layer->getId()),
-                          layerCompositionTypeString.c_str());
+                          layerCompositionType);
                     layerFallBackTo = Composition::DEVICE;
                     break;
                 case Composition::INVALID:
@@ -433,8 +432,8 @@ HWC3::Error HostFrameComposer::validateDisplay(Display* display, DisplayChanges*
                     layerFallBackTo = std::nullopt;
                     break;
                 default:
-                    ALOGE("%s: layer %" PRIu32 " has an unknown composition type: %s", __FUNCTION__,
-                          static_cast<uint32_t>(layer->getId()), layerCompositionTypeString.c_str());
+                    ALOGE("%s: layer %" PRIu32 " has an unknown composition type: %d", __FUNCTION__,
+                          static_cast<uint32_t>(layer->getId()), layerCompositionType);
             }
             if (layerFallBackTo == Composition::CLIENT) {
                 fallBackToClient = true;
@@ -448,6 +447,7 @@ HWC3::Error HostFrameComposer::validateDisplay(Display* display, DisplayChanges*
     if (fallBackToClient) {
         changes.clear();
         for (auto& layer : layers) {
+            const auto& layerId = layer->getId();
             if (layer->getCompositionType() == Composition::INVALID) {
                 continue;
             }
@@ -524,7 +524,10 @@ HWC3::Error HostFrameComposer::presentDisplay(
 
                     *outDisplayFence = std::move(flushCompleteFence);
                 } else {
-                    post(hostCon, rcEnc, displayInfo.hostDisplayId, displayClientTarget.getBuffer());
+                    rcEnc->rcSetDisplayColorBuffer(
+                        rcEnc, displayInfo.hostDisplayId,
+                        hostCon->grallocHelper()->getHostHandle(displayClientTarget.getBuffer()));
+                    post(hostCon, rcEnc, displayClientTarget.getBuffer());
                     *outDisplayFence = std::move(fence);
                 }
             }
@@ -555,18 +558,15 @@ HWC3::Error HostFrameComposer::presentDisplay(
 
         std::vector<int64_t> releaseLayerIds;
         for (auto layer : layers) {
-            const auto& layerCompositionType = layer->getCompositionType();
-            const auto layerCompositionTypeString = toString(layerCompositionType);
-
             // TODO: use local var composisitonType to store getCompositionType()
-            if (layerCompositionType != Composition::DEVICE &&
-                layerCompositionType != Composition::SOLID_COLOR) {
-                ALOGE("%s: Unsupported composition type %s layer %u", __FUNCTION__,
-                      layerCompositionTypeString.c_str(), (uint32_t)layer->getId());
+            if (layer->getCompositionType() != Composition::DEVICE &&
+                layer->getCompositionType() != Composition::SOLID_COLOR) {
+                ALOGE("%s: Unsupported composition types %d layer %u", __FUNCTION__,
+                      layer->getCompositionType(), (uint32_t)layer->getId());
                 continue;
             }
             // send layer composition command to host
-            if (layerCompositionType == Composition::DEVICE) {
+            if (layer->getCompositionType() == Composition::DEVICE) {
                 releaseLayerIds.emplace_back(layer->getId());
 
                 ::android::base::unique_fd fence = layer->getBuffer().getFence();
@@ -589,7 +589,7 @@ HWC3::Error HostFrameComposer::presentDisplay(
                 // solidcolor has no buffer
                 l->cbHandle = 0;
             }
-            l->composeMode = (hwc2_composition_t)layerCompositionType;
+            l->composeMode = (hwc2_composition_t)layer->getCompositionType();
             l->displayFrame = AsHwcRect(layer->getDisplayFrame());
             l->crop = AsHwcFrect(layer->getSourceCrop());
             l->blendMode = static_cast<int32_t>(layer->getBlendMode());
@@ -696,7 +696,10 @@ HWC3::Error HostFrameComposer::presentDisplay(
                 displayId, compositionResult->getDrmBuffer(), displayClientTargetFence);
             *outDisplayFence = std::move(flushFence);
         } else {
-            post(hostCon, rcEnc, displayInfo.hostDisplayId, displayClientTarget.getBuffer());
+            rcEnc->rcSetDisplayColorBuffer(
+                rcEnc, displayInfo.hostDisplayId,
+                hostCon->grallocHelper()->getHostHandle(displayClientTarget.getBuffer()));
+            post(hostCon, rcEnc, displayClientTarget.getBuffer());
             *outDisplayFence = std::move(displayClientTargetFence);
         }
         ALOGV("%s fallback to post, returns outRetireFence %d", __FUNCTION__,
@@ -709,13 +712,10 @@ HWC3::Error HostFrameComposer::presentDisplay(
 }
 
 void HostFrameComposer::post(HostConnection* hostCon, ExtendedRCEncoderContext* rcEnc,
-                             uint32_t hostDisplayId, buffer_handle_t h) {
+                             buffer_handle_t h) {
     assert(cb && "native_handle_t::from(h) failed");
 
     hostCon->lock();
-    rcEnc->rcSetDisplayColorBuffer(
-        rcEnc, hostDisplayId,
-        hostCon->grallocHelper()->getHostHandle(h));
     rcEnc->rcFBPost(rcEnc, hostCon->grallocHelper()->getHostHandle(h));
     hostCon->flush();
     hostCon->unlock();

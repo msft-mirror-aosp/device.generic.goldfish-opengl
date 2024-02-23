@@ -74,8 +74,7 @@ class HostFrameComposer : public FrameComposer {
    private:
     HWC3::Error createHostComposerDisplayInfo(Display* display, uint32_t hostDisplayId);
 
-    void post(HostConnection* hostCon, ExtendedRCEncoderContext* rcEnc, uint32_t hostDisplayId,
-              buffer_handle_t h);
+    void post(HostConnection* hostCon, ExtendedRCEncoderContext* rcEnc, buffer_handle_t h);
 
     bool mIsMinigbm = false;
 

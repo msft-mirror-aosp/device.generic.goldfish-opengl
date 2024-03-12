@@ -70,13 +70,16 @@ bool DrmConnector::update(::android::base::borrowed_fd drmFd) {
 
     if (mStatus == DRM_MODE_CONNECTED) {
         std::optional<EdidInfo> maybeEdidInfo = loadEdid(drmFd);
-        if (!maybeEdidInfo) {
-            ALOGE("%s: failed to parse EDID info for display:%" PRIu32 ".", __FUNCTION__, mId);
-            return false;
+        if (maybeEdidInfo) {
+            const EdidInfo& edidInfo = maybeEdidInfo.value();
+            mWidthMillimeters = edidInfo.mWidthMillimeters;
+            mHeightMillimeters = edidInfo.mHeightMillimeters;
+        } else {
+            ALOGW("%s: Use fallback size from drmModeConnector. This can result inaccurate DPIs.",
+                  __FUNCTION__);
+            mWidthMillimeters = drmConnector->mmWidth;
+            mHeightMillimeters = drmConnector->mmHeight;
         }
-        const EdidInfo& edidInfo = maybeEdidInfo.value();
-        mWidthMillimeters = edidInfo.mWidthMillimeters;
-        mHeightMillimeters = edidInfo.mHeightMillimeters;
     }
 
     DEBUG_LOG("%s: connector:%" PRIu32 " widthMillimeters:%" PRIu32 " heightMillimeters:%" PRIu32,

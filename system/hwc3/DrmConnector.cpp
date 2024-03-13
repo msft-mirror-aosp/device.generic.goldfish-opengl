@@ -18,6 +18,8 @@
 
 #include <span>
 
+#include "EdidInfo.h"
+
 namespace aidl::android::hardware::graphics::composer3::impl {
 namespace {
 
@@ -67,8 +69,16 @@ bool DrmConnector::update(::android::base::borrowed_fd drmFd) {
     drmModeFreeConnector(drmConnector);
 
     if (mStatus == DRM_MODE_CONNECTED) {
-        if (!loadEdid(drmFd)) {
-            return false;
+        std::optional<EdidInfo> maybeEdidInfo = loadEdid(drmFd);
+        if (maybeEdidInfo) {
+            const EdidInfo& edidInfo = maybeEdidInfo.value();
+            mWidthMillimeters = edidInfo.mWidthMillimeters;
+            mHeightMillimeters = edidInfo.mHeightMillimeters;
+        } else {
+            ALOGW("%s: Use fallback size from drmModeConnector. This can result inaccurate DPIs.",
+                  __FUNCTION__);
+            mWidthMillimeters = drmConnector->mmWidth;
+            mHeightMillimeters = drmConnector->mmHeight;
         }
     }
 
@@ -79,20 +89,20 @@ bool DrmConnector::update(::android::base::borrowed_fd drmFd) {
     return true;
 }
 
-bool DrmConnector::loadEdid(::android::base::borrowed_fd drmFd) {
+std::optional<EdidInfo> DrmConnector::loadEdid(::android::base::borrowed_fd drmFd) {
     DEBUG_LOG("%s: display:%" PRIu32, __FUNCTION__, mId);
 
     const uint64_t edidBlobId = mEdidProp.getValue();
     if (edidBlobId == -1) {
         ALOGW("%s: display:%" PRIu32 " does not have EDID.", __FUNCTION__, mId);
-        return true;
+        return std::nullopt;
     }
 
     auto blob = drmModeGetPropertyBlob(drmFd.get(), static_cast<uint32_t>(edidBlobId));
     if (!blob) {
         ALOGE("%s: display:%" PRIu32 " failed to read EDID blob (%" PRIu64 "): %s", __FUNCTION__,
               mId, edidBlobId, strerror(errno));
-        return false;
+        return std::nullopt;
     }
 
     const uint8_t* blobStart = static_cast<uint8_t*>(blob->data);
@@ -101,28 +111,9 @@ bool DrmConnector::loadEdid(::android::base::borrowed_fd drmFd) {
     drmModeFreePropertyBlob(blob);
 
     using byte_view = std::span<const uint8_t>;
-
-    constexpr size_t kEdidDescriptorOffset = 54;
-    constexpr size_t kEdidDescriptorLength = 18;
-
     byte_view edid(*mEdid);
-    edid = edid.subspan(kEdidDescriptorOffset);
 
-    byte_view descriptor(edid.data(), kEdidDescriptorLength);
-    if (descriptor[0] == 0 && descriptor[1] == 0) {
-        ALOGE("%s: display:%" PRIu32 " is missing preferred detailed timing descriptor.",
-              __FUNCTION__, mId);
-        return -1;
-    }
-
-    const uint8_t w_mm_lsb = descriptor[12];
-    const uint8_t h_mm_lsb = descriptor[13];
-    const uint8_t w_and_h_mm_msb = descriptor[14];
-
-    mWidthMillimeters = w_mm_lsb | (w_and_h_mm_msb & 0xf0) << 4;
-    mHeightMillimeters = h_mm_lsb | (w_and_h_mm_msb & 0xf) << 8;
-
-    return true;
+    return EdidInfo::parse(edid);
 }
 
 uint32_t DrmConnector::getWidth() const {

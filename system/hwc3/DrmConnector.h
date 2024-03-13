@@ -30,6 +30,7 @@
 #include "Common.h"
 #include "DrmMode.h"
 #include "DrmProperty.h"
+#include "EdidInfo.h"
 
 namespace aidl::android::hardware::graphics::composer3::impl {
 
@@ -63,7 +64,7 @@ class DrmConnector {
    private:
     DrmConnector(uint32_t id) : mId(id) {}
 
-    bool loadEdid(::android::base::borrowed_fd drmFd);
+    std::optional<EdidInfo> loadEdid(::android::base::borrowed_fd drmFd);
 
     const uint32_t mId;
 

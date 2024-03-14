@@ -53,7 +53,10 @@ HWC3::Error VsyncThread::start(int32_t vsyncPeriodNanos) {
 
     mThread = std::thread([this]() { threadLoop(); });
 
-    const std::string name = "display_" + std::to_string(mDisplayId) + "_vsync_thread";
+    // Truncate to 16 chars (15 + null byte) to satisfy pthread_setname_np max name length
+    // requirement.
+    const std::string name =
+            std::string("display_" + std::to_string(mDisplayId) + "_vsync_thread").substr(15);
 
     int ret = pthread_setname_np(mThread.native_handle(), name.c_str());
     if (ret != 0) {

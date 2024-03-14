@@ -404,7 +404,7 @@ HWC3::Error HostFrameComposer::validateDisplay(Display* display, DisplayChanges*
     // If one layer requires a fall back to the client composition type, all
     // layers will fall back to the client composition type.
     bool fallBackToClient =
-        (!hostCompositionV1 && !hostCompositionV2) || display->hasColorTransform();
+        (!hostCompositionV1 && !hostCompositionV2);
     std::unordered_map<Layer*, Composition> changes;
 
     if (!fallBackToClient) {

@@ -78,7 +78,7 @@ static const bool isHidlGralloc = true;
 static const bool isHidlGralloc = false;
 #endif
 
-using android::base::guest::getCurrentThreadId;
+using gfxstream::guest::getCurrentThreadId;
 
 const uint32_t CB_HANDLE_MAGIC_OLD = CB_HANDLE_MAGIC_BASE | 0x1;
 const int kBufferFdIndex = 0;

@@ -31,12 +31,6 @@ std::unique_ptr<DrmConnector> DrmConnector::create(::android::base::borrowed_fd 
                                                    uint32_t connectorId) {
     std::unique_ptr<DrmConnector> connector(new DrmConnector(connectorId));
 
-    if (!LoadDrmProperties(drmFd, connectorId, DRM_MODE_OBJECT_CONNECTOR, GetPropertiesMap(),
-                           connector.get())) {
-        ALOGE("%s: Failed to load connector properties.", __FUNCTION__);
-        return nullptr;
-    }
-
     if (!connector->update(drmFd)) {
         return nullptr;
     }
@@ -46,6 +40,13 @@ std::unique_ptr<DrmConnector> DrmConnector::create(::android::base::borrowed_fd 
 
 bool DrmConnector::update(::android::base::borrowed_fd drmFd) {
     DEBUG_LOG("%s: Loading properties for connector:%" PRIu32, __FUNCTION__, mId);
+
+    if (!LoadDrmProperties(drmFd, mId, DRM_MODE_OBJECT_CONNECTOR, GetPropertiesMap(),
+                           this)) {
+        ALOGE("%s: Failed to load connector properties.", __FUNCTION__);
+        return false;
+    }
+
 
     drmModeConnector* drmConnector = drmModeGetConnector(drmFd.get(), mId);
     if (!drmConnector) {

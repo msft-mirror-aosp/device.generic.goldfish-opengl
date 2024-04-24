@@ -24,13 +24,16 @@ package {
 cc_binary {
     name: "android.hardware.graphics.composer3-service.ranchu",
 
+    defaults: [
+        "android.hardware.graphics.composer3-ndk_shared",
+    ],
+
     relative_install_path: "hw",
     vendor: true,
 
     shared_libs: [
         "android.hardware.graphics.composer@2.1-resources",
         "android.hardware.graphics.composer@2.2-resources",
-        "android.hardware.graphics.composer3-V3-ndk",
         "libbase",
         "libbinder_ndk",
         "libcutils",

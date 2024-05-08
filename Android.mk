@@ -143,14 +143,6 @@ ifneq (true,$(GOLDFISH_OPENGL_BUILD_FOR_HOST))
 include $(GOLDFISH_OPENGL_PATH)/system/hals/Android.mk
 endif
 
-ifeq ($(shell test $(PLATFORM_SDK_VERSION) -gt 28 -o $(IS_AT_LEAST_QPR1) = true && echo isApi29OrHigher),isApi29OrHigher)
-    # hardware codecs enabled after P
-    include $(GOLDFISH_OPENGL_PATH)/system/codecs/omx/common/Android.mk
-    include $(GOLDFISH_OPENGL_PATH)/system/codecs/omx/plugin/Android.mk
-    include $(GOLDFISH_OPENGL_PATH)/system/codecs/omx/avcdec/Android.mk
-    include $(GOLDFISH_OPENGL_PATH)/system/codecs/omx/vpxdec/Android.mk
-endif
-
 endif
 
 endif # ENABLE_GOLDFISH_OPENGL_FOLDER

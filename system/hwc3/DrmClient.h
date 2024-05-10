@@ -49,6 +49,8 @@ class DrmClient {
     DrmClient(DrmClient&&) = delete;
     DrmClient& operator=(DrmClient&&) = delete;
 
+    ::android::base::unique_fd OpenVirtioGpuDrmFd();
+
     HWC3::Error init();
 
     struct DisplayConfig {
@@ -78,10 +80,10 @@ class DrmClient {
     std::tuple<HWC3::Error, std::shared_ptr<DrmBuffer>> create(const native_handle_t* handle);
 
     std::tuple<HWC3::Error, ::android::base::unique_fd> flushToDisplay(
-        int display, const std::shared_ptr<DrmBuffer>& buffer,
+        uint32_t displayId, const std::shared_ptr<DrmBuffer>& buffer,
         ::android::base::borrowed_fd inWaitSyncFd);
 
-    std::optional<std::vector<uint8_t>> getEdid(uint32_t id);
+    std::optional<std::vector<uint8_t>> getEdid(uint32_t displayId);
 
    private:
     using DrmPrimeBufferHandle = uint32_t;
@@ -98,7 +100,7 @@ class DrmClient {
     // Drm device.
     ::android::base::unique_fd mFd;
 
-    mutable ::android::base::guest::ReadWriteLock mDisplaysMutex;
+    mutable ::gfxstream::guest::ReadWriteLock mDisplaysMutex;
     std::vector<std::unique_ptr<DrmDisplay>> mDisplays;
 
     std::optional<HotplugCallback> mHotplugCallback;

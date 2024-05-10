@@ -31,24 +31,24 @@ class FrameComposer;
 // Provides resources that are stable for the duration of the virtual
 // device.
 class Device : public ::android::Singleton<Device> {
- public:
-  virtual ~Device() = default;
+   public:
+    virtual ~Device() = default;
 
-  HWC3::Error getComposer(FrameComposer** outComposer);
+    HWC3::Error getComposer(FrameComposer** outComposer);
 
-  HWC3::Error getPersistentKeyValue(const std::string& key,
-                                    const std::string& defaultVal,
-                                    std::string* outValue);
+    bool persistentKeyValueEnabled() const;
 
-  HWC3::Error setPersistentKeyValue(const std::string& key,
-                                    const std::string& outValue);
+    HWC3::Error getPersistentKeyValue(const std::string& key, const std::string& defaultVal,
+                                      std::string* outValue);
 
- private:
-  friend class Singleton<Device>;
-  Device() = default;
+    HWC3::Error setPersistentKeyValue(const std::string& key, const std::string& outValue);
 
-  std::mutex mMutex;
-  std::unique_ptr<FrameComposer> mComposer;
+   private:
+    friend class Singleton<Device>;
+    Device() = default;
+
+    std::mutex mMutex;
+    std::unique_ptr<FrameComposer> mComposer;
 };
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl

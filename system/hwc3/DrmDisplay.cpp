@@ -83,7 +83,10 @@ std::tuple<HWC3::Error, ::android::base::unique_fd> DrmDisplay::flush(
     okay &=
         request->Set(mCrtc->getId(), mCrtc->getOutFenceProperty(), addressAsUint(&flushFenceFd));
     okay &= request->Set(mPlane->getId(), mPlane->getCrtcProperty(), mCrtc->getId());
-    okay &= request->Set(mPlane->getId(), mPlane->getInFenceProperty(), inSyncFd.get());
+    if (inSyncFd != -1) {
+        okay &= request->Set(mPlane->getId(), mPlane->getInFenceProperty(),
+                             static_cast<uint64_t>(inSyncFd.get()));
+    }
     okay &= request->Set(mPlane->getId(), mPlane->getFbProperty(), *buffer->mDrmFramebuffer);
     okay &= request->Set(mPlane->getId(), mPlane->getCrtcXProperty(), 0);
     okay &= request->Set(mPlane->getId(), mPlane->getCrtcYProperty(), 0);

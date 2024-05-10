@@ -32,7 +32,7 @@
 #include <utils/Trace.h>
 
 // Uncomment to enable additional debug logging.
-//#define DEBUG_RANCHU_HWC
+// #define DEBUG_RANCHU_HWC
 
 #if defined(DEBUG_RANCHU_HWC)
 #define DEBUG_LOG ALOGE
@@ -42,45 +42,39 @@
 
 namespace aidl::android::hardware::graphics::composer3::impl {
 
+bool IsAutoDevice();
 bool IsCuttlefish();
 bool IsCuttlefishFoldable();
 
 bool IsInNoOpCompositionMode();
 bool IsInClientCompositionMode();
 
+bool IsInGem5DisplayFinderMode();
 bool IsInNoOpDisplayFinderMode();
 bool IsInDrmDisplayFinderMode();
 
 namespace HWC3 {
 enum class Error : int32_t {
-  None = 0,
-  BadConfig = aidl::android::hardware::graphics::composer3::IComposerClient::
-      EX_BAD_CONFIG,
-  BadDisplay = aidl::android::hardware::graphics::composer3::IComposerClient::
-      EX_BAD_DISPLAY,
-  BadLayer = aidl::android::hardware::graphics::composer3::IComposerClient::
-      EX_BAD_LAYER,
-  BadParameter = aidl::android::hardware::graphics::composer3::IComposerClient::
-      EX_BAD_PARAMETER,
-  NoResources = aidl::android::hardware::graphics::composer3::IComposerClient::
-      EX_NO_RESOURCES,
-  NotValidated = aidl::android::hardware::graphics::composer3::IComposerClient::
-      EX_NOT_VALIDATED,
-  Unsupported = aidl::android::hardware::graphics::composer3::IComposerClient::
-      EX_UNSUPPORTED,
-  SeamlessNotAllowed = aidl::android::hardware::graphics::composer3::
-      IComposerClient::EX_SEAMLESS_NOT_ALLOWED,
+    None = 0,
+    BadConfig = aidl::android::hardware::graphics::composer3::IComposerClient::EX_BAD_CONFIG,
+    BadDisplay = aidl::android::hardware::graphics::composer3::IComposerClient::EX_BAD_DISPLAY,
+    BadLayer = aidl::android::hardware::graphics::composer3::IComposerClient::EX_BAD_LAYER,
+    BadParameter = aidl::android::hardware::graphics::composer3::IComposerClient::EX_BAD_PARAMETER,
+    NoResources = aidl::android::hardware::graphics::composer3::IComposerClient::EX_NO_RESOURCES,
+    NotValidated = aidl::android::hardware::graphics::composer3::IComposerClient::EX_NOT_VALIDATED,
+    Unsupported = aidl::android::hardware::graphics::composer3::IComposerClient::EX_UNSUPPORTED,
+    SeamlessNotAllowed =
+        aidl::android::hardware::graphics::composer3::IComposerClient::EX_SEAMLESS_NOT_ALLOWED,
 };
 }  // namespace HWC3
 
 std::string toString(HWC3::Error error);
 
 inline ndk::ScopedAStatus ToBinderStatus(HWC3::Error error) {
-  if (error != HWC3::Error::None) {
-    return ndk::ScopedAStatus::fromServiceSpecificError(
-        static_cast<int32_t>(error));
-  }
-  return ndk::ScopedAStatus::ok();
+    if (error != HWC3::Error::None) {
+        return ndk::ScopedAStatus::fromServiceSpecificError(static_cast<int32_t>(error));
+    }
+    return ndk::ScopedAStatus::ok();
 }
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl

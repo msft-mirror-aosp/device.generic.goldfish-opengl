@@ -133,8 +133,8 @@ class C2GoldfishAvcDec::IntfImpl : public SimpleInterface<void>::BaseParams {
             DefineParam(mSize, C2_PARAMKEY_PICTURE_SIZE)
                 .withDefault(new C2StreamPictureSizeInfo::output(0u, 320, 240))
                 .withFields({
-                    C2F(mSize, width).inRange(2, 4080, 2),
-                    C2F(mSize, height).inRange(2, 4080, 2),
+                    C2F(mSize, width).inRange(2, 4096, 2),
+                    C2F(mSize, height).inRange(2, 4096, 2),
                 })
                 .withSetter(SizeSetter)
                 .build());
@@ -143,8 +143,8 @@ class C2GoldfishAvcDec::IntfImpl : public SimpleInterface<void>::BaseParams {
                          .withDefault(new C2StreamMaxPictureSizeTuning::output(
                              0u, 320, 240))
                          .withFields({
-                             C2F(mSize, width).inRange(2, 4080, 2),
-                             C2F(mSize, height).inRange(2, 4080, 2),
+                             C2F(mSize, width).inRange(2, 4096, 2),
+                             C2F(mSize, height).inRange(2, 4096, 2),
                          })
                          .withSetter(MaxPictureSizeSetter, mSize)
                          .build());
@@ -280,10 +280,12 @@ class C2GoldfishAvcDec::IntfImpl : public SimpleInterface<void>::BaseParams {
 
         C2R res = C2R::Ok();
         if (!me.F(me.v.width).supportsAtAll(me.v.width)) {
+            ALOGW("w %d is not supported, using old one %d", me.v.width, oldMe.v.width);
             res = res.plus(C2SettingResultBuilder::BadValue(me.F(me.v.width)));
             me.set().width = oldMe.v.width;
         }
         if (!me.F(me.v.height).supportsAtAll(me.v.height)) {
+            ALOGW("h %d is not supported, using old one %d", me.v.height, oldMe.v.height);
             res = res.plus(C2SettingResultBuilder::BadValue(me.F(me.v.height)));
             me.set().height = oldMe.v.height;
         }
@@ -297,8 +299,8 @@ class C2GoldfishAvcDec::IntfImpl : public SimpleInterface<void>::BaseParams {
         (void)mayBlock;
         // TODO: get max width/height from the size's field helpers vs.
         // hardcoding
-        me.set().width = c2_min(c2_max(me.v.width, size.v.width), 4080u);
-        me.set().height = c2_min(c2_max(me.v.height, size.v.height), 4080u);
+        me.set().width = c2_min(c2_max(me.v.width, size.v.width), 4096u);
+        me.set().height = c2_min(c2_max(me.v.height, size.v.height), 4096u);
         return C2R::Ok();
     }
 
@@ -615,6 +617,9 @@ void C2GoldfishAvcDec::resetPlugin() {
     mSignalledOutputEos = false;
     gettimeofday(&mTimeStart, nullptr);
     gettimeofday(&mTimeEnd, nullptr);
+    if (mOutBlock) {
+        mOutBlock.reset();
+    }
 }
 
 void C2GoldfishAvcDec::deleteContext() {
@@ -715,13 +720,9 @@ C2GoldfishAvcDec::ensureDecoderState(const std::shared_ptr<C2BlockPool> &pool) {
         mOutBlock.reset();
     }
     if (!mOutBlock) {
-        uint32_t format = HAL_PIXEL_FORMAT_YCBCR_420_888;
-        C2MemoryUsage usage = {C2MemoryUsage::CPU_READ,
-                               C2MemoryUsage::CPU_WRITE};
-        usage.expected = (uint64_t)(BufferUsage::VIDEO_DECODER);
-        // C2MemoryUsage usage = {(unsigned
-        // int)(BufferUsage::GPU_DATA_BUFFER)};// { C2MemoryUsage::CPU_READ,
-        // C2MemoryUsage::CPU_WRITE };
+        const uint32_t format = HAL_PIXEL_FORMAT_YCBCR_420_888;
+        const C2MemoryUsage usage = {(uint64_t)(BufferUsage::VIDEO_DECODER),
+                                     C2MemoryUsage::CPU_WRITE | C2MemoryUsage::CPU_READ};
         c2_status_t err = pool->fetchGraphicBlock(ALIGN2(mWidth), mHeight,
                                                   format, usage, &mOutBlock);
         if (err != C2_OK) {
@@ -745,11 +746,19 @@ C2GoldfishAvcDec::ensureDecoderState(const std::shared_ptr<C2BlockPool> &pool) {
 void C2GoldfishAvcDec::checkMode(const std::shared_ptr<C2BlockPool> &pool) {
     mWidth = mIntf->width();
     mHeight = mIntf->height();
+    //const bool isGraphic = (pool->getLocalId() == C2PlatformAllocatorStore::GRALLOC);
     const bool isGraphic = (pool->getAllocatorId() & C2Allocator::GRAPHIC);
-    DDD("buffer id %d", (int)(pool->getAllocatorId()));
+    DDD("buffer pool allocator id %x",  (int)(pool->getAllocatorId()));
     if (isGraphic) {
-        DDD("decoding to host color buffer");
-        mEnableAndroidNativeBuffers = true;
+        uint64_t client_usage = getClientUsage(pool);
+        DDD("client has usage as 0x%llx", client_usage);
+        if (client_usage & BufferUsage::CPU_READ_MASK) {
+            DDD("decoding to guest byte buffer as client has read usage");
+            mEnableAndroidNativeBuffers = false;
+        } else {
+            DDD("decoding to host color buffer");
+            mEnableAndroidNativeBuffers = true;
+        }
     } else {
         DDD("decoding to guest byte buffer");
         mEnableAndroidNativeBuffers = false;
@@ -860,15 +869,15 @@ void C2GoldfishAvcDec::removePts(uint64_t pts) {
     if (!mOldPts2Index.empty()) {
         auto iter = mOldPts2Index.find(pts);
         if (iter != mOldPts2Index.end()) {
-            mOldPts2Index.erase(iter);
             index = iter->second;
+            mOldPts2Index.erase(iter);
             found = true;
         }
     } else {
         auto iter = mPts2Index.find(pts);
         if (iter != mPts2Index.end()) {
-            mPts2Index.erase(iter);
             index = iter->second;
+            mPts2Index.erase(iter);
             found = true;
         }
     }

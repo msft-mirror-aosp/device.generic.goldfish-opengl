@@ -33,6 +33,61 @@ cc_library_headers {
     ],
     export_header_lib_headers: [
         "libcutils_headers",
-        "libqemupipe-types.ranchu"
+        "libqemupipe-types.ranchu",
+    ],
+}
+
+cc_defaults {
+    name: "android.hardware.graphics_defaults",
+    relative_install_path: "hw",
+    vendor: true,
+    static_libs: [
+        "libqemupipe.ranchu",
+        "libGoldfishAddressSpace",
+    ],
+    shared_libs: [
+        "android.hardware.graphics.mapper@3.0",
+        "libbase",
+        "libcutils",
+        "libdrm",
+        "libhidlbase",
+        "liblog",
+        "libutils",
+        "libOpenglCodecCommon",
+        "libOpenglSystemCommon",
+    ],
+    header_libs: ["libgralloc_cb.ranchu"],
+    include_dirs: [
+        "external/libdrm",
+        "external/minigbm/cros_gralloc",
+        "hardware/google/gfxstream/guest/include",
+        // "hardware/google/gfxstream/guest/iostream/include/libOpenglRender" does not exist.
+        "hardware/google/gfxstream/guest/platform/include",
+        "hardware/google/gfxstream/guest/renderControl_enc",
+        "hardware/google/gfxstream/guest/GoldfishAddressSpace/include",
+        "hardware/google/gfxstream/guest/OpenglCodecCommon",
+        "hardware/google/gfxstream/guest/OpenglSystemCommon",
+    ],
+    cflags: ["-DVIRTIO_GPU"],
+}
+
+cc_binary {
+    name: "android.hardware.graphics.allocator@3.0-service.ranchu",
+    defaults: ["android.hardware.graphics_defaults"],
+    srcs: ["allocator3.cpp"],
+    init_rc: ["android.hardware.graphics.allocator@3.0-service.ranchu.rc"],
+    vintf_fragments: ["android.hardware.graphics.gralloc3.ranchu.xml"],
+    shared_libs: [
+        "android.hardware.graphics.allocator@3.0",
+    ],
+}
+
+cc_library_shared {
+    name: "android.hardware.graphics.mapper@3.0-impl-ranchu",
+    defaults: ["android.hardware.graphics_defaults"],
+    srcs: ["mapper3.cpp"],
+    shared_libs: [
+        "libsync",
+        "libandroidemu",
     ],
 }

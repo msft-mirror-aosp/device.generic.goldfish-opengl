@@ -139,10 +139,6 @@ ifeq (true,$(GOLDFISH_OPENGL_SHOULD_BUILD))
 # Note that the build system will complain if you try to import a
 # module that hasn't been declared yet anyway.
 #
-ifneq (true,$(GOLDFISH_OPENGL_BUILD_FOR_HOST))
-include $(GOLDFISH_OPENGL_PATH)/system/hals/Android.mk
-endif
-
 endif
 
 endif # ENABLE_GOLDFISH_OPENGL_FOLDER

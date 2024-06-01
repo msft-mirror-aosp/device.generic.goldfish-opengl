@@ -19,6 +19,7 @@
 #include <android/hardware/graphics/mapper/3.0/IMapper.h>
 #include <hidl/LegacySupport.h>
 #include <qemu_pipe_bp.h>
+#include <drm_fourcc.h>
 
 #include "glUtils.h"
 #include "cb_handle_30.h"
@@ -364,7 +365,7 @@ private:
                 RETURN_ERROR(Error3::NO_RESOURCES);
             }
         }
-
+        uint32_t drmFormat = resolve_drm_format(format);
         std::unique_ptr<cb_handle_30_t> handle =
             std::make_unique<cb_handle_30_t>(
                 cpuAlocatorFd.release(),
@@ -374,6 +375,7 @@ private:
                 width,
                 height,
                 static_cast<int>(format),
+                drmFormat,
                 glFormat,
                 glType,
                 bufferSize,
@@ -386,6 +388,25 @@ private:
         bufferBits.release();
         *cb = handle.release();
         RETURN(Error3::NONE);
+    }
+
+    uint32_t resolve_drm_format(const PixelFormat format) {
+        /**
+         * This aims to replicate the virtgpu format handling for YUV
+         * Moving to minigbm + virtgpu should offer the same behaviour
+         * https://cs.android.com/android/platform/superproject/main/+/main:external/minigbm/virtgpu_virgl.c;l=1206?q=virtgpu&ss=android%2Fplatform%2Fsuperproject%2Fmain
+        */
+        ALOGV("Resolving drm format from PixelFormat %d", static_cast<int>(format));
+        switch (format) {
+            case PixelFormat::YCBCR_420_888:
+                return DRM_FORMAT_YUV420;
+            default:
+                //TODO handle new formats if needed
+                ALOGV("Unknown DRM Format resolution. Proceeding with an "
+                      "invalid drm format. Later stages of the application "
+                      "should handle this.");
+                return DRM_FORMAT_INVALID;
+        }
     }
 
     void freeCb(std::unique_ptr<cb_handle_30_t> cb) {

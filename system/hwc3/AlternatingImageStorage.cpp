@@ -20,22 +20,22 @@ namespace aidl::android::hardware::graphics::composer3::impl {
 
 uint8_t* AlternatingImageStorage::getRotatingScratchBuffer(std::size_t neededSize,
                                                            std::uint32_t imageIndex) {
-  std::size_t totalNeededSize = neededSize * kNumScratchBufferPieces;
-  if (mScratchBuffer.size() < totalNeededSize) {
-    mScratchBuffer.resize(totalNeededSize);
-  }
+    std::size_t totalNeededSize = neededSize * kNumScratchBufferPieces;
+    if (mScratchBuffer.size() < totalNeededSize) {
+        mScratchBuffer.resize(totalNeededSize);
+    }
 
-  std::size_t bufferIndex = imageIndex % kNumScratchBufferPieces;
-  std::size_t bufferOffset = bufferIndex * neededSize;
-  return &mScratchBuffer[bufferOffset];
+    std::size_t bufferIndex = imageIndex % kNumScratchBufferPieces;
+    std::size_t bufferOffset = bufferIndex * neededSize;
+    return &mScratchBuffer[bufferOffset];
 }
 
 uint8_t* AlternatingImageStorage::getSpecialScratchBuffer(size_t neededSize) {
-  if (mSpecialScratchBuffer.size() < neededSize) {
-    mSpecialScratchBuffer.resize(neededSize);
-  }
+    if (mSpecialScratchBuffer.size() < neededSize) {
+        mSpecialScratchBuffer.resize(neededSize);
+    }
 
-  return &mSpecialScratchBuffer[0];
+    return &mSpecialScratchBuffer[0];
 }
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl

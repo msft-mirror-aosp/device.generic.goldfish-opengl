@@ -68,6 +68,9 @@ struct C2GoldfishVpxDec : public SimpleC2Component {
 
     void setup_ctx_parameters(vpx_codec_ctx_t *ctx, int hostColorBufferId = -1);
 
+    std::shared_ptr<C2StreamColorAspectsTuning::output> mColorAspects;
+
+
     std::shared_ptr<IntfImpl> mIntf;
     vpx_codec_ctx_t *mCtx;
     bool mFrameParallelMode; // Frame parallel is only supported by VP9 decoder.

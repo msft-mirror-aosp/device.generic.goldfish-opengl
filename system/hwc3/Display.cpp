@@ -244,6 +244,7 @@ HWC3::Error Display::getDisplayCapabilities(std::vector<DisplayCapability>* outC
 
     outCapabilities->clear();
     outCapabilities->push_back(DisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM);
+    outCapabilities->push_back(DisplayCapability::MULTI_THREADED_PRESENT);
 
     return HWC3::Error::None;
 }
@@ -263,27 +264,27 @@ HWC3::Error Display::getDisplayConfigs(std::vector<int32_t>* outConfigIds) {
 }
 
 HWC3::Error Display::getDisplayConfigurations(std::vector<DisplayConfiguration>* outConfigs) {
-  DEBUG_LOG("%s: display:%" PRId64, __FUNCTION__, mId);
+    DEBUG_LOG("%s: display:%" PRId64, __FUNCTION__, mId);
 
-  std::unique_lock<std::recursive_mutex> lock(mStateMutex);
+    std::unique_lock<std::recursive_mutex> lock(mStateMutex);
 
-  outConfigs->clear();
-  outConfigs->reserve(mConfigs.size());
+    outConfigs->clear();
+    outConfigs->reserve(mConfigs.size());
 
-  for (const auto& [configId, displayConfig] : mConfigs) {
-    DisplayConfiguration displayConfiguration;
-    displayConfiguration.configId = configId;
-    displayConfiguration.width = displayConfig.getWidth();
-    displayConfiguration.height = displayConfig.getHeight();
-    displayConfiguration.dpi = { static_cast<float>(displayConfig.getDpiX()),
-                                static_cast<float>(displayConfig.getDpiY()) };
-    displayConfiguration.vsyncPeriod = displayConfig.getVsyncPeriod();
-    displayConfiguration.configGroup = displayConfig.getConfigGroup();
+    for (const auto& [configId, displayConfig] : mConfigs) {
+        DisplayConfiguration displayConfiguration;
+        displayConfiguration.configId = configId;
+        displayConfiguration.width = displayConfig.getWidth();
+        displayConfiguration.height = displayConfig.getHeight();
+        displayConfiguration.dpi = {static_cast<float>(displayConfig.getDpiX()),
+                                    static_cast<float>(displayConfig.getDpiY())};
+        displayConfiguration.vsyncPeriod = displayConfig.getVsyncPeriod();
+        displayConfiguration.configGroup = displayConfig.getConfigGroup();
 
-    outConfigs->emplace_back(displayConfiguration);
-  }
+        outConfigs->emplace_back(displayConfiguration);
+    }
 
-  return HWC3::Error::None;
+    return HWC3::Error::None;
 }
 
 HWC3::Error Display::getDisplayConnectionType(DisplayConnectionType* outType) {

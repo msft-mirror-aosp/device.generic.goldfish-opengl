@@ -38,6 +38,10 @@ struct goldfish_dma_context;
 #include <optional>
 #include <cstring>
 
+extern "C" typedef struct AHardwareBuffer AHardwareBuffer;
+
+extern "C" native_handle_t const* AHardwareBuffer_getNativeHandle(const AHardwareBuffer* buffer);
+
 class GLEncoder;
 struct gl_client_context_t;
 class GL2Encoder;
@@ -151,6 +155,10 @@ public:
     }
     virtual size_t getAllocatedSize(native_handle_t const* handle) = 0;
     virtual bool treatBlobAsImage() { return false; };
+    virtual uint32_t getFormatDrmFourcc(const AHardwareBuffer* ahb) {
+        const native_handle_t* handle = AHardwareBuffer_getNativeHandle(ahb);
+        return getFormatDrmFourcc(handle);
+    }
     virtual ~Gralloc() {}
 };
 

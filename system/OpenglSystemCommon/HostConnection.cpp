@@ -219,6 +219,11 @@ public:
     {
         return static_cast<size_t>(cb_handle_t::from(handle)->allocatedSize());
     }
+
+    virtual uint32_t getFormatDrmFourcc(const native_handle_t* handle) override {
+        return cb_handle_t::from(handle)->drmformat;
+    }
+
     virtual bool treatBlobAsImage() { return true; }
 };
 

@@ -494,7 +494,8 @@ c2_status_t C2GoldfishAvcDec::onFlush_sm() {
 
     while (true) {
         mPts = 0;
-        setDecodeArgs(nullptr, nullptr, 0, 0, 0);
+        constexpr bool hasPicture = false;
+        setDecodeArgs(nullptr, nullptr, 0, 0, 0, hasPicture);
         mImg = mContext->getImage();
         if (mImg.data == nullptr) {
             resetPlugin();
@@ -563,7 +564,7 @@ status_t C2GoldfishAvcDec::initDecoder() {
 
 bool C2GoldfishAvcDec::setDecodeArgs(C2ReadView *inBuffer,
                                      C2GraphicView *outBuffer, size_t inOffset,
-                                     size_t inSize, uint32_t tsMarker) {
+                                     size_t inSize, uint32_t tsMarker, bool hasPicture) {
     uint32_t displayStride = mStride;
     (void)inBuffer;
     (void)inOffset;
@@ -580,7 +581,9 @@ bool C2GoldfishAvcDec::setDecodeArgs(C2ReadView *inBuffer,
         mInPBuffer = const_cast<uint8_t *>(inBuffer->data() + inOffset);
         mInPBufferSize = inSize;
         mInTsMarker = tsMarker;
-        insertPts(tsMarker, mPts);
+        if (hasPicture) {
+            insertPts(tsMarker, mPts);
+        }
     }
 
     // uint32_t displayHeight = mHeight;
@@ -952,8 +955,11 @@ void C2GoldfishAvcDec::process(const std::unique_ptr<C2Work> &work,
             //    work->result = wView.error();
             //    return;
             //}
+            if (work->input.flags & C2FrameData::FLAG_CODEC_CONFIG) {
+                hasPicture = false;
+            }
             if (!setDecodeArgs(&rView, nullptr, inOffset + inPos,
-                               inSize - inPos, workIndex)) {
+                               inSize - inPos, workIndex, hasPicture)) {
                 mSignalledError = true;
                 work->workletsProcessed = 1u;
                 work->result = C2_CORRUPTED;
@@ -962,7 +968,6 @@ void C2GoldfishAvcDec::process(const std::unique_ptr<C2Work> &work,
 
             DDD("flag is %x", work->input.flags);
             if (work->input.flags & C2FrameData::FLAG_CODEC_CONFIG) {
-                hasPicture = false;
                 if (mCsd0.empty()) {
                     mCsd0.assign(mInPBuffer, mInPBuffer + mInPBufferSize);
                     DDD("assign to csd0 with %d bytpes", mInPBufferSize);
@@ -970,8 +975,6 @@ void C2GoldfishAvcDec::process(const std::unique_ptr<C2Work> &work,
                     mCsd1.assign(mInPBuffer, mInPBuffer + mInPBufferSize);
                     DDD("assign to csd1 with %d bytpes", mInPBufferSize);
                 }
-                // this is not really a valid pts from config
-                removePts(mPts);
             }
 
             bool whChanged = false;
@@ -1023,7 +1026,7 @@ void C2GoldfishAvcDec::process(const std::unique_ptr<C2Work> &work,
             //(void) ivdec_api_function(mDecHandle, &s_decode_ip, &s_decode_op);
             DDD("decoding");
             h264_result_t h264Res =
-                mContext->decodeFrame(mInPBuffer, mInPBufferSize, mIndex2Pts[mInTsMarker]);
+                mContext->decodeFrame(mInPBuffer, mInPBufferSize, mPts);
             mConsumedBytes = h264Res.bytesProcessed;
             DDD("decoding consumed %d", (int)mConsumedBytes);
 

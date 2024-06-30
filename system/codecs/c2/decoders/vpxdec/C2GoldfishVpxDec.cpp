@@ -784,30 +784,24 @@ void C2GoldfishVpxDec::process(const std::unique_ptr<C2Work> &work,
     }
 }
 
-static void copyOutputBufferToYuvPlanarFrame(
-    uint8_t *dst, const uint8_t *srcY, const uint8_t *srcU, const uint8_t *srcV,
-    size_t srcYStride, size_t srcUStride, size_t srcVStride, size_t dstYStride,
-    size_t dstUVStride, uint32_t width, uint32_t height) {
-    uint8_t *dstStart = dst;
+static void copyOutputBufferToYuvPlanarFrame(C2GraphicView& writeView, const uint8_t* srcY,
+        const uint8_t* srcU, const uint8_t* srcV, uint32_t width, uint32_t height) {
 
-    for (size_t i = 0; i < height; ++i) {
-        memcpy(dst, srcY, width);
-        srcY += srcYStride;
-        dst += dstYStride;
+    size_t dstYStride = writeView.layout().planes[C2PlanarLayout::PLANE_Y].rowInc;
+    size_t dstUVStride = writeView.layout().planes[C2PlanarLayout::PLANE_U].rowInc;
+
+    uint8_t *pYBuffer = const_cast<uint8_t *>(writeView.data()[C2PlanarLayout::PLANE_Y]);
+    uint8_t *pUBuffer = const_cast<uint8_t *>(writeView.data()[C2PlanarLayout::PLANE_U]);
+    uint8_t *pVBuffer = const_cast<uint8_t *>(writeView.data()[C2PlanarLayout::PLANE_V]);
+
+    for (int i = 0; i < height; ++i) {
+        memcpy(pYBuffer + i * dstYStride, srcY + i * width, width);
     }
-
-    dst = dstStart + dstYStride * height;
-    for (size_t i = 0; i < height / 2; ++i) {
-        memcpy(dst, srcV, width / 2);
-        srcV += srcVStride;
-        dst += dstUVStride;
+    for (int i = 0; i < height / 2; ++i) {
+        memcpy(pUBuffer + i * dstUVStride, srcU + i * width / 2, width / 2);
     }
-
-    dst = dstStart + (dstYStride * height) + (dstUVStride * height / 2);
-    for (size_t i = 0; i < height / 2; ++i) {
-        memcpy(dst, srcU, width / 2);
-        srcU += srcUStride;
-        dst += dstUVStride;
+    for (int i = 0; i < height / 2; ++i) {
+        memcpy(pVBuffer + i * dstUVStride, srcV + i * width / 2, width / 2);
     }
 }
 
@@ -830,7 +824,7 @@ C2GoldfishVpxDec::outputBuffer(const std::shared_ptr<C2BlockPool> &pool,
 
     // now get the block
     std::shared_ptr<C2GraphicBlock> block;
-    uint32_t format = HAL_PIXEL_FORMAT_YCBCR_420_888;
+    uint32_t format = HAL_PIXEL_FORMAT_YV12;
     const C2MemoryUsage usage = {(uint64_t)(BufferUsage::VIDEO_DECODER),
                                  C2MemoryUsage::CPU_WRITE | C2MemoryUsage::CPU_READ};
 
@@ -944,13 +938,12 @@ C2GoldfishVpxDec::outputBuffer(const std::shared_ptr<C2BlockPool> &pool,
         if (img->fmt == VPX_IMG_FMT_I42016) {
             ALOGW("WARNING: not I42016 is not supported !!!");
         } else if (1) {
+            // the decoded frame is YUV420 from host
             const uint8_t *srcY = (const uint8_t *)mCtx->dst;
-            const uint8_t *srcV = srcY + mWidth * mHeight;
-            const uint8_t *srcU = srcV + mWidth * mHeight / 4;
+            const uint8_t *srcU = srcY + mWidth * mHeight;
+            const uint8_t *srcV = srcU + mWidth * mHeight / 4;
             // TODO: the following crashes
-            copyOutputBufferToYuvPlanarFrame(dst, srcY, srcU, srcV, srcYStride,
-                                             srcUStride, srcVStride, dstYStride,
-                                             dstUVStride, mWidth, mHeight);
+            copyOutputBufferToYuvPlanarFrame(wView, srcY, srcU, srcV, mWidth, mHeight);
             // memcpy(dst, srcY, mWidth * mHeight / 2);
         }
     }

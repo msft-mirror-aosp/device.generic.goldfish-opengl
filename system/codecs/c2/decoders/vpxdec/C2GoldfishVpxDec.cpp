@@ -231,6 +231,48 @@ class C2GoldfishVpxDec::IntfImpl : public SimpleInterface<void>::BaseParams {
                 .withSetter(DefaultColorAspectsSetter)
                 .build());
 
+        addParameter(
+            DefineParam(mCodedColorAspects, C2_PARAMKEY_VUI_COLOR_ASPECTS)
+                .withDefault(new C2StreamColorAspectsInfo::input(
+                    0u, C2Color::RANGE_LIMITED, C2Color::PRIMARIES_UNSPECIFIED,
+                    C2Color::TRANSFER_UNSPECIFIED, C2Color::MATRIX_UNSPECIFIED))
+                .withFields({C2F(mCodedColorAspects, range)
+                                 .inRange(C2Color::RANGE_UNSPECIFIED,
+                                          C2Color::RANGE_OTHER),
+                             C2F(mCodedColorAspects, primaries)
+                                 .inRange(C2Color::PRIMARIES_UNSPECIFIED,
+                                          C2Color::PRIMARIES_OTHER),
+                             C2F(mCodedColorAspects, transfer)
+                                 .inRange(C2Color::TRANSFER_UNSPECIFIED,
+                                          C2Color::TRANSFER_OTHER),
+                             C2F(mCodedColorAspects, matrix)
+                                 .inRange(C2Color::MATRIX_UNSPECIFIED,
+                                          C2Color::MATRIX_OTHER)})
+                .withSetter(CodedColorAspectsSetter)
+                .build());
+
+        addParameter(
+            DefineParam(mColorAspects, C2_PARAMKEY_COLOR_ASPECTS)
+                .withDefault(new C2StreamColorAspectsInfo::output(
+                    0u, C2Color::RANGE_UNSPECIFIED,
+                    C2Color::PRIMARIES_UNSPECIFIED,
+                    C2Color::TRANSFER_UNSPECIFIED, C2Color::MATRIX_UNSPECIFIED))
+                .withFields({C2F(mColorAspects, range)
+                                 .inRange(C2Color::RANGE_UNSPECIFIED,
+                                          C2Color::RANGE_OTHER),
+                             C2F(mColorAspects, primaries)
+                                 .inRange(C2Color::PRIMARIES_UNSPECIFIED,
+                                          C2Color::PRIMARIES_OTHER),
+                             C2F(mColorAspects, transfer)
+                                 .inRange(C2Color::TRANSFER_UNSPECIFIED,
+                                          C2Color::TRANSFER_OTHER),
+                             C2F(mColorAspects, matrix)
+                                 .inRange(C2Color::MATRIX_UNSPECIFIED,
+                                          C2Color::MATRIX_OTHER)})
+                .withSetter(ColorAspectsSetter, mDefaultColorAspects,
+                            mCodedColorAspects)
+                .build());
+
         // TODO: support more formats?
         addParameter(DefineParam(mPixelFormat, C2_PARAMKEY_PIXEL_FORMAT)
                          .withConstValue(new C2StreamPixelFormatInfo::output(
@@ -304,6 +346,48 @@ class C2GoldfishVpxDec::IntfImpl : public SimpleInterface<void>::BaseParams {
         if (me.v.matrix > C2Color::MATRIX_OTHER) {
             me.set().matrix = C2Color::MATRIX_OTHER;
         }
+        DDD("%s %d update range %d primaries/color %d transfer %d",
+                __func__, __LINE__,
+                (int)(me.v.range),
+                (int)(me.v.primaries),
+                (int)(me.v.transfer)
+                );
+        return C2R::Ok();
+    }
+
+    static C2R
+    CodedColorAspectsSetter(bool mayBlock,
+                            C2P<C2StreamColorAspectsInfo::input> &me) {
+        (void)mayBlock;
+        if (me.v.range > C2Color::RANGE_OTHER) {
+            me.set().range = C2Color::RANGE_OTHER;
+        }
+        if (me.v.primaries > C2Color::PRIMARIES_OTHER) {
+            me.set().primaries = C2Color::PRIMARIES_OTHER;
+        }
+        if (me.v.transfer > C2Color::TRANSFER_OTHER) {
+            me.set().transfer = C2Color::TRANSFER_OTHER;
+        }
+        if (me.v.matrix > C2Color::MATRIX_OTHER) {
+            me.set().matrix = C2Color::MATRIX_OTHER;
+        }
+        DDD("coded primaries %d coded range %d", me.set().primaries,
+            me.set().range);
+        return C2R::Ok();
+    }
+
+    static C2R
+    ColorAspectsSetter(bool mayBlock, C2P<C2StreamColorAspectsInfo::output> &me,
+                       const C2P<C2StreamColorAspectsTuning::output> &def,
+                       const C2P<C2StreamColorAspectsInfo::input> &coded) {
+        (void)mayBlock;
+        (void)coded;
+        // just take default values, because vpx does not have those information
+        // in the frame.
+        me.set().range = def.v.range;
+        me.set().primaries = def.v.primaries;
+        me.set().transfer = def.v.transfer;
+        me.set().matrix = def.v.matrix;
         return C2R::Ok();
     }
 
@@ -318,6 +402,10 @@ class C2GoldfishVpxDec::IntfImpl : public SimpleInterface<void>::BaseParams {
     std::shared_ptr<C2StreamColorAspectsTuning::output>
     getDefaultColorAspects_l() {
         return mDefaultColorAspects;
+    }
+
+    std::shared_ptr<C2StreamColorAspectsInfo::output> getColorAspects_l() {
+        return mColorAspects;
     }
 
     int width() const { return mSize->width; }
@@ -353,6 +441,8 @@ class C2GoldfishVpxDec::IntfImpl : public SimpleInterface<void>::BaseParams {
     std::shared_ptr<C2StreamColorInfo::output> mColorInfo;
     std::shared_ptr<C2StreamPixelFormatInfo::output> mPixelFormat;
     std::shared_ptr<C2StreamColorAspectsTuning::output> mDefaultColorAspects;
+    std::shared_ptr<C2StreamColorAspectsInfo::input> mCodedColorAspects;
+    std::shared_ptr<C2StreamColorAspectsInfo::output> mColorAspects;
 #ifdef VP9
 #if 0
     std::shared_ptr<C2StreamHdrStaticInfo::output> mHdrStaticInfo;
@@ -476,6 +566,10 @@ status_t C2GoldfishVpxDec::initDecoder() {
     mMode = MODE_VP8;
 #endif
 
+    {
+        IntfImpl::Lock lock = mIntf->lock();
+        mColorAspects = mIntf->getDefaultColorAspects_l();
+    }
     mWidth = 320;
     mHeight = 240;
     mFrameParallelMode = false;
@@ -551,6 +645,11 @@ void C2GoldfishVpxDec::finishWork(
     const std::shared_ptr<C2GraphicBlock> &block) {
     std::shared_ptr<C2Buffer> buffer =
         createGraphicBuffer(block, C2Rect(mWidth, mHeight));
+    {
+        IntfImpl::Lock lock = mIntf->lock();
+        buffer->setInfo(mIntf->getColorAspects_l());
+    }
+
     auto fillWork = [buffer, index,
                      intf = this->mIntf](const std::unique_ptr<C2Work> &work) {
         uint32_t flags = 0;
@@ -685,30 +784,24 @@ void C2GoldfishVpxDec::process(const std::unique_ptr<C2Work> &work,
     }
 }
 
-static void copyOutputBufferToYuvPlanarFrame(
-    uint8_t *dst, const uint8_t *srcY, const uint8_t *srcU, const uint8_t *srcV,
-    size_t srcYStride, size_t srcUStride, size_t srcVStride, size_t dstYStride,
-    size_t dstUVStride, uint32_t width, uint32_t height) {
-    uint8_t *dstStart = dst;
+static void copyOutputBufferToYuvPlanarFrame(C2GraphicView& writeView, const uint8_t* srcY,
+        const uint8_t* srcU, const uint8_t* srcV, uint32_t width, uint32_t height) {
 
-    for (size_t i = 0; i < height; ++i) {
-        memcpy(dst, srcY, width);
-        srcY += srcYStride;
-        dst += dstYStride;
+    size_t dstYStride = writeView.layout().planes[C2PlanarLayout::PLANE_Y].rowInc;
+    size_t dstUVStride = writeView.layout().planes[C2PlanarLayout::PLANE_U].rowInc;
+
+    uint8_t *pYBuffer = const_cast<uint8_t *>(writeView.data()[C2PlanarLayout::PLANE_Y]);
+    uint8_t *pUBuffer = const_cast<uint8_t *>(writeView.data()[C2PlanarLayout::PLANE_U]);
+    uint8_t *pVBuffer = const_cast<uint8_t *>(writeView.data()[C2PlanarLayout::PLANE_V]);
+
+    for (int i = 0; i < height; ++i) {
+        memcpy(pYBuffer + i * dstYStride, srcY + i * width, width);
     }
-
-    dst = dstStart + dstYStride * height;
-    for (size_t i = 0; i < height / 2; ++i) {
-        memcpy(dst, srcV, width / 2);
-        srcV += srcVStride;
-        dst += dstUVStride;
+    for (int i = 0; i < height / 2; ++i) {
+        memcpy(pUBuffer + i * dstUVStride, srcU + i * width / 2, width / 2);
     }
-
-    dst = dstStart + (dstYStride * height) + (dstUVStride * height / 2);
-    for (size_t i = 0; i < height / 2; ++i) {
-        memcpy(dst, srcU, width / 2);
-        srcU += srcUStride;
-        dst += dstUVStride;
+    for (int i = 0; i < height / 2; ++i) {
+        memcpy(pVBuffer + i * dstUVStride, srcV + i * width / 2, width / 2);
     }
 }
 
@@ -731,7 +824,7 @@ C2GoldfishVpxDec::outputBuffer(const std::shared_ptr<C2BlockPool> &pool,
 
     // now get the block
     std::shared_ptr<C2GraphicBlock> block;
-    uint32_t format = HAL_PIXEL_FORMAT_YCBCR_420_888;
+    uint32_t format = HAL_PIXEL_FORMAT_YV12;
     const C2MemoryUsage usage = {(uint64_t)(BufferUsage::VIDEO_DECODER),
                                  C2MemoryUsage::CPU_WRITE | C2MemoryUsage::CPU_READ};
 
@@ -845,13 +938,12 @@ C2GoldfishVpxDec::outputBuffer(const std::shared_ptr<C2BlockPool> &pool,
         if (img->fmt == VPX_IMG_FMT_I42016) {
             ALOGW("WARNING: not I42016 is not supported !!!");
         } else if (1) {
+            // the decoded frame is YUV420 from host
             const uint8_t *srcY = (const uint8_t *)mCtx->dst;
-            const uint8_t *srcV = srcY + mWidth * mHeight;
-            const uint8_t *srcU = srcV + mWidth * mHeight / 4;
+            const uint8_t *srcU = srcY + mWidth * mHeight;
+            const uint8_t *srcV = srcU + mWidth * mHeight / 4;
             // TODO: the following crashes
-            copyOutputBufferToYuvPlanarFrame(dst, srcY, srcU, srcV, srcYStride,
-                                             srcUStride, srcVStride, dstYStride,
-                                             dstUVStride, mWidth, mHeight);
+            copyOutputBufferToYuvPlanarFrame(wView, srcY, srcU, srcV, mWidth, mHeight);
             // memcpy(dst, srcY, mWidth * mHeight / 2);
         }
     }

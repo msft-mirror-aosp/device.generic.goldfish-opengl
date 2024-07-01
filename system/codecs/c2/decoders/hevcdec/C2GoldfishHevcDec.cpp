@@ -438,7 +438,8 @@ c2_status_t C2GoldfishHevcDec::onFlush_sm() {
 
     while (true) {
         mPts = 0;
-        setDecodeArgs(nullptr, nullptr, 0, 0, 0);
+        constexpr bool hasPicture = false;
+        setDecodeArgs(nullptr, nullptr, 0, 0, 0, hasPicture);
         mImg = mContext->getImage();
         if (mImg.data == nullptr) {
             resetPlugin();
@@ -509,7 +510,7 @@ status_t C2GoldfishHevcDec::initDecoder() {
 
 bool C2GoldfishHevcDec::setDecodeArgs(C2ReadView *inBuffer,
                                      C2GraphicView *outBuffer, size_t inOffset,
-                                     size_t inSize, uint32_t tsMarker) {
+                                     size_t inSize, uint32_t tsMarker, bool hasPicture) {
     uint32_t displayStride = mStride;
     (void)inBuffer;
     (void)inOffset;
@@ -526,7 +527,9 @@ bool C2GoldfishHevcDec::setDecodeArgs(C2ReadView *inBuffer,
         mInPBuffer = const_cast<uint8_t *>(inBuffer->data() + inOffset);
         mInPBufferSize = inSize;
         mInTsMarker = tsMarker;
-        insertPts(tsMarker, mPts);
+        if (hasPicture) {
+            insertPts(tsMarker, mPts);
+        }
     }
 
     // uint32_t displayHeight = mHeight;
@@ -666,7 +669,7 @@ C2GoldfishHevcDec::ensureDecoderState(const std::shared_ptr<C2BlockPool> &pool) 
         mOutBlock.reset();
     }
     if (!mOutBlock) {
-        const uint32_t format = HAL_PIXEL_FORMAT_YCBCR_420_888;
+        const uint32_t format = HAL_PIXEL_FORMAT_YV12;
         const C2MemoryUsage usage = {(uint64_t)(BufferUsage::VIDEO_DECODER),
                                      C2MemoryUsage::CPU_WRITE | C2MemoryUsage::CPU_READ};
         c2_status_t err = pool->fetchGraphicBlock(ALIGN2(mWidth), mHeight,
@@ -899,8 +902,12 @@ void C2GoldfishHevcDec::process(const std::unique_ptr<C2Work> &work,
             //    work->result = wView.error();
             //    return;
             //}
+            if (work->input.flags & C2FrameData::FLAG_CODEC_CONFIG) {
+                hasPicture = false;
+            }
+
             if (!setDecodeArgs(&rView, nullptr, inOffset + inPos,
-                               inSize - inPos, workIndex)) {
+                               inSize - inPos, workIndex, hasPicture)) {
                 mSignalledError = true;
                 work->workletsProcessed = 1u;
                 work->result = C2_CORRUPTED;
@@ -909,13 +916,10 @@ void C2GoldfishHevcDec::process(const std::unique_ptr<C2Work> &work,
 
             DDD("flag is %x", work->input.flags);
             if (work->input.flags & C2FrameData::FLAG_CODEC_CONFIG) {
-                hasPicture = false;
                 if (mCsd0.empty()) {
                     mCsd0.assign(mInPBuffer, mInPBuffer + mInPBufferSize);
                     DDD("assign to csd0 with %d bytpes", mInPBufferSize);
                 }
-                // this is not really a valid pts from config
-                removePts(mPts);
             }
 
             bool whChanged = false;
@@ -975,7 +979,7 @@ void C2GoldfishHevcDec::process(const std::unique_ptr<C2Work> &work,
             //(void) ivdec_api_function(mDecHandle, &s_decode_ip, &s_decode_op);
             DDD("decoding");
             hevc_result_t hevcRes =
-                mContext->decodeFrame(mInPBuffer, mInPBufferSize, mIndex2Pts[mInTsMarker]);
+                mContext->decodeFrame(mInPBuffer, mInPBufferSize, mPts);
             mConsumedBytes = hevcRes.bytesProcessed;
             DDD("decoding consumed %d", (int)mConsumedBytes);
 

@@ -66,6 +66,24 @@ public:
         }
     }
 
+    uint64_t getClientUsage(const std::shared_ptr<C2BlockPool> &pool) {
+        std::shared_ptr<C2GraphicBlock> myOutBlock;
+        const C2MemoryUsage usage = {0, 0};
+        const uint32_t format = HAL_PIXEL_FORMAT_YV12;
+        pool->fetchGraphicBlock(2, 2, format, usage, &myOutBlock);
+        auto myc2Handle = myOutBlock->handle();
+        native_handle_t *mygrallocHandle =
+        android::UnwrapNativeCodec2GrallocHandle(myc2Handle);
+        if (m_isMinigbm) {
+            cros_gralloc_handle const* cros_handle =
+                reinterpret_cast<cros_gralloc_handle const*>(mygrallocHandle);
+            return cros_handle->usage;
+        } else {
+            cb_handle_30_t* mycb = (cb_handle_30_t*)(mygrallocHandle);
+            return mycb->usage;
+        }
+    }
+
 private:
 
     bool getResInfo(native_handle_t const* handle,
@@ -119,15 +137,6 @@ uint32_t getColorBufferHandle(native_handle_t const* handle) {
 }
 
 uint64_t getClientUsage(const std::shared_ptr<C2BlockPool> &pool) {
-      std::shared_ptr<C2GraphicBlock> myOutBlock;
-      const C2MemoryUsage usage = {0, 0};
-      const uint32_t format = HAL_PIXEL_FORMAT_YV12;
-      pool->fetchGraphicBlock(2, 2, format, usage, &myOutBlock);
-      auto myc2Handle = myOutBlock->handle();
-      native_handle_t *mygrallocHandle =
-      android::UnwrapNativeCodec2GrallocHandle(myc2Handle);
-      cb_handle_30_t* mycb = (cb_handle_30_t*)(mygrallocHandle);
-      ALOGV("%s %s %d: client usage 0x%x", __FILE__, __func__, __LINE__, mycb->usage);
-      return mycb->usage;
+    return getGlobals()->getClientUsage(pool);
 }
 

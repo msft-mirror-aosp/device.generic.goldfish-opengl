@@ -332,7 +332,7 @@ public:
         VkMemoryRequirements baseRequirements;
 #ifdef VK_USE_PLATFORM_ANDROID_KHR
         bool hasExternalFormat = false;
-        unsigned androidFormat = 0;
+        unsigned externalFourccFormat = 0;
         std::vector<int> pendingQsriSyncFds;
 #endif
 #ifdef VK_USE_PLATFORM_FUCHSIA
@@ -4144,7 +4144,7 @@ public:
             // with the corresponding Vulkan format
             if (extFormatAndroidPtr->externalFormat) {
                 localCreateInfo.format =
-                    vk_format_from_android(extFormatAndroidPtr->externalFormat);
+                    vk_format_from_fourcc(extFormatAndroidPtr->externalFormat);
                 if (localCreateInfo.format == VK_FORMAT_UNDEFINED)
                     return VK_ERROR_VALIDATION_FAILED_EXT;
             }
@@ -4284,7 +4284,7 @@ public:
 #ifdef VK_USE_PLATFORM_ANDROID_KHR
         if (extFormatAndroidPtr && extFormatAndroidPtr->externalFormat) {
             info.hasExternalFormat = true;
-            info.androidFormat = extFormatAndroidPtr->externalFormat;
+            info.externalFourccFormat = extFormatAndroidPtr->externalFormat;
         }
 #endif  // VK_USE_PLATFORM_ANDROID_KHR
 
@@ -4337,7 +4337,7 @@ public:
         const VkExternalFormatANDROID* extFormatAndroidPtr =
             vk_find_struct<VkExternalFormatANDROID>(pCreateInfo);
         if (extFormatAndroidPtr) {
-            if (extFormatAndroidPtr->externalFormat == AHARDWAREBUFFER_FORMAT_R5G6B5_UNORM) {
+            if (extFormatAndroidPtr->externalFormat == DRM_FORMAT_RGB565) {
                 // We don't support external formats on host and it causes RGB565
                 // to fail in CtsGraphicsTestCases android.graphics.cts.BasicVulkanGpuTest
                 // when passed as an external format.
@@ -4347,7 +4347,7 @@ public:
                 return VK_SUCCESS;
             } else if (extFormatAndroidPtr->externalFormat) {
                 localCreateInfo.format =
-                    vk_format_from_android(extFormatAndroidPtr->externalFormat);
+                    vk_format_from_fourcc(extFormatAndroidPtr->externalFormat);
             }
         }
 #endif
@@ -4387,7 +4387,7 @@ public:
         const VkExternalFormatANDROID* extFormatAndroidPtr =
             vk_find_struct<VkExternalFormatANDROID>(pCreateInfo);
         if (extFormatAndroidPtr) {
-            if (extFormatAndroidPtr->externalFormat == AHARDWAREBUFFER_FORMAT_R5G6B5_UNORM) {
+            if (extFormatAndroidPtr->externalFormat == DRM_FORMAT_RGB565) {
                 // We don't support external formats on host and it causes RGB565
                 // to fail in CtsGraphicsTestCases android.graphics.cts.BasicVulkanGpuTest
                 // when passed as an external format.
@@ -4397,7 +4397,7 @@ public:
                 return VK_SUCCESS;
             } else if (extFormatAndroidPtr->externalFormat) {
                 localCreateInfo.format =
-                    vk_format_from_android(extFormatAndroidPtr->externalFormat);
+                    vk_format_from_fourcc(extFormatAndroidPtr->externalFormat);
             }
         }
 #endif
@@ -7133,7 +7133,7 @@ public:
 
             auto it = info_VkImage.find(pCreateInfo->image);
             if (it != info_VkImage.end() && it->second.hasExternalFormat) {
-                localCreateInfo.format = vk_format_from_android(it->second.androidFormat);
+                localCreateInfo.format = vk_format_from_fourcc(it->second.externalFourccFormat);
             }
         }
         VkSamplerYcbcrConversionInfo localVkSamplerYcbcrConversionInfo;

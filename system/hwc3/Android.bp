@@ -24,13 +24,16 @@ package {
 cc_binary {
     name: "android.hardware.graphics.composer3-service.ranchu",
 
+    defaults: [
+        "android.hardware.graphics.composer3-ndk_shared",
+    ],
+
     relative_install_path: "hw",
     vendor: true,
 
     shared_libs: [
         "android.hardware.graphics.composer@2.1-resources",
         "android.hardware.graphics.composer@2.2-resources",
-        "android.hardware.graphics.composer3-V2-ndk",
         "libbase",
         "libbinder_ndk",
         "libcutils",
@@ -56,6 +59,7 @@ cc_binary {
     ],
 
     srcs: [
+        "AlternatingImageStorage.cpp",
         "ClientFrameComposer.cpp",
         "Common.cpp",
         "Composer.cpp",
@@ -76,6 +80,7 @@ cc_binary {
         "DrmEventListener.cpp",
         "DrmMode.cpp",
         "DrmPlane.cpp",
+        "EdidInfo.cpp",
         "Gralloc.cpp",
         "GuestFrameComposer.cpp",
         "HostFrameComposer.cpp",
@@ -89,6 +94,7 @@ cc_binary {
     cflags: [
         "-Wall",
         "-Werror=conversion",
+        "-Wthread-safety",
     ],
 
     vintf_fragments: ["hwc3.xml"],

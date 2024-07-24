@@ -17,9 +17,11 @@
 #ifndef ANDROID_HWC_GUESTFRAMECOMPOSER_H
 #define ANDROID_HWC_GUESTFRAMECOMPOSER_H
 
+#include "AlternatingImageStorage.h"
 #include "Common.h"
 #include "Display.h"
 #include "DrmClient.h"
+#include "DrmSwapchain.h"
 #include "FrameComposer.h"
 #include "Gralloc.h"
 #include "Layer.h"
@@ -77,17 +79,19 @@ class GuestFrameComposer : public FrameComposer {
     bool canComposeLayer(Layer* layer);
 
     // Composes the given layer into the given destination buffer.
-    HWC3::Error composeLayerInto(Layer* layer, std::uint8_t* dstBuffer,
-                                 std::uint32_t dstBufferWidth, std::uint32_t dstBufferHeight,
-                                 std::uint32_t dstBufferStrideBytes,
+    HWC3::Error composeLayerInto(AlternatingImageStorage& storage, Layer* layer,
+                                 std::uint8_t* dstBuffer, std::uint32_t dstBufferWidth,
+                                 std::uint32_t dstBufferHeight, std::uint32_t dstBufferStrideBytes,
                                  std::uint32_t dstBufferBytesPerPixel);
 
     struct DisplayInfo {
-        // Additional per display buffer for the composition result.
-        buffer_handle_t compositionResultBuffer = nullptr;
+        // Additional per display buffers for the composition result.
+        std::unique_ptr<DrmSwapchain> swapchain = {};
 
-        std::shared_ptr<DrmBuffer> compositionResultDrmBuffer;
+        // Scratch storage space for intermediate images during composition.
+        AlternatingImageStorage compositionIntermediateStorage;
     };
+
 
     std::unordered_map<int64_t, DisplayInfo> mDisplayInfos;
 
@@ -99,17 +103,11 @@ class GuestFrameComposer : public FrameComposer {
     // spamming logcat with DRM commit failures.
     bool mPresentDisabled = false;
 
-    uint8_t* getRotatingScratchBuffer(std::size_t neededSize, std::uint32_t order);
-    uint8_t* getSpecialScratchBuffer(std::size_t neededSize);
-
     HWC3::Error applyColorTransformToRGBA(const std::array<float, 16>& colorTransform,  //
                                           std::uint8_t* buffer,                         //
                                           std::uint32_t bufferWidth,                    //
                                           std::uint32_t bufferHeight,                   //
                                           std::uint32_t bufferStrideBytes);
-
-    std::vector<uint8_t> mScratchBuffer;
-    std::vector<uint8_t> mSpecialScratchBuffer;
 };
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl

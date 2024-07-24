@@ -480,44 +480,25 @@ HWC3::Error GuestFrameComposer::onDisplayCreate(Display* display) {
 
     DisplayInfo& displayInfo = mDisplayInfos[displayId];
 
-    uint32_t bufferStride;
-    buffer_handle_t bufferHandle;
-
-    auto status = ::android::GraphicBufferAllocator::get().allocate(
-        static_cast<uint32_t>(displayWidth),   //
-        static_cast<uint32_t>(displayHeight),  //
-        ::android::PIXEL_FORMAT_RGBA_8888,     //
-        /*layerCount=*/1,                      //
-        ::android::GraphicBuffer::USAGE_HW_COMPOSER |
-            ::android::GraphicBuffer::USAGE_SW_READ_OFTEN |
-            ::android::GraphicBuffer::USAGE_SW_WRITE_OFTEN,  //
-        &bufferHandle,                                       //
-        &bufferStride,                                       //
-        "RanchuHwc");
-    if (status != ::android::OK) {
-        ALOGE("%s: failed to allocate composition buffer for display:%" PRIu32, __FUNCTION__,
-              displayId);
-        return HWC3::Error::NoResources;
-    }
-
-    displayInfo.compositionResultBuffer = bufferHandle;
-
-    auto [drmBufferCreateError, drmBuffer] = mDrmClient.create(bufferHandle);
-    if (drmBufferCreateError != HWC3::Error::None) {
-        ALOGE("%s: failed to create drm buffer for display:%" PRIu32, __FUNCTION__, displayId);
-        return drmBufferCreateError;
-    }
-    displayInfo.compositionResultDrmBuffer = std::move(drmBuffer);
+    displayInfo.swapchain = DrmSwapchain::create(static_cast<uint32_t>(displayWidth),
+                                                 static_cast<uint32_t>(displayHeight),
+                                                 ::android::GraphicBuffer::USAGE_HW_COMPOSER |
+                                                   ::android::GraphicBuffer::USAGE_SW_READ_OFTEN |
+                                                   ::android::GraphicBuffer::USAGE_SW_WRITE_OFTEN,
+                                                 &mDrmClient);
 
     if (displayId == 0) {
+        auto compositionResult = displayInfo.swapchain->getNextImage();
         auto [flushError, flushSyncFd] =
-            mDrmClient.flushToDisplay(displayId, displayInfo.compositionResultDrmBuffer, -1);
+                mDrmClient.flushToDisplay(displayId, compositionResult->getDrmBuffer(), -1);
         if (flushError != HWC3::Error::None) {
             ALOGW(
                 "%s: Initial display flush failed. HWComposer assuming that we are "
                 "running in QEMU without a display and disabling presenting.",
                 __FUNCTION__);
             mPresentDisabled = true;
+        } else {
+            compositionResult->markAsInUse(std::move(flushSyncFd));
         }
     }
 
@@ -534,14 +515,10 @@ HWC3::Error GuestFrameComposer::onDisplayDestroy(Display* display) {
 
     auto it = mDisplayInfos.find(displayId);
     if (it == mDisplayInfos.end()) {
-        ALOGE("%s: display:%" PRIu64 " missing display buffers?", __FUNCTION__, displayId);
+        ALOGE("%s: display:%" PRIu64 " missing display buffers?", __FUNCTION__,
+            displayId);
         return HWC3::Error::BadDisplay;
     }
-
-    DisplayInfo& displayInfo = mDisplayInfos[displayId];
-
-    ::android::GraphicBufferAllocator::get().free(displayInfo.compositionResultBuffer);
-
     mDisplayInfos.erase(it);
 
     return HWC3::Error::None;
@@ -686,19 +663,23 @@ HWC3::Error GuestFrameComposer::presentDisplay(
 
     DisplayInfo& displayInfo = it->second;
 
-    if (displayInfo.compositionResultBuffer == nullptr) {
-        ALOGE("%s: display:%" PRIu32 " missing composition result buffer", __FUNCTION__, displayId);
+    auto compositionResult = displayInfo.swapchain->getNextImage();
+    compositionResult->wait();
+
+    if (compositionResult->getBuffer() == nullptr) {
+        ALOGE("%s: display:%" PRIu32 " missing composition result buffer",
+            __FUNCTION__, displayId);
         return HWC3::Error::NoResources;
     }
 
-    if (displayInfo.compositionResultDrmBuffer == nullptr) {
-        ALOGE("%s: display:%" PRIu32 " missing composition result drm buffer", __FUNCTION__,
-              displayId);
+    if (compositionResult->getDrmBuffer() == nullptr) {
+        ALOGE("%s: display:%" PRIu32 " missing composition result drm buffer",
+            __FUNCTION__, displayId);
         return HWC3::Error::NoResources;
     }
 
     std::optional<GrallocBuffer> compositionResultBufferOpt =
-        mGralloc.Import(displayInfo.compositionResultBuffer);
+        mGralloc.Import(compositionResult->getBuffer());
     if (!compositionResultBufferOpt) {
         ALOGE("%s: display:%" PRIu32 " failed to import buffer", __FUNCTION__, displayId);
         return HWC3::Error::NoResources;
@@ -802,11 +783,12 @@ HWC3::Error GuestFrameComposer::presentDisplay(
                 continue;
             }
 
-            HWC3::Error error = composeLayerInto(layer,                          //
-                                                 compositionResultBufferData,    //
-                                                 compositionResultBufferWidth,   //
-                                                 compositionResultBufferHeight,  //
-                                                 compositionResultBufferStride,  //
+            HWC3::Error error = composeLayerInto(displayInfo.compositionIntermediateStorage,  //
+                                                 layer,                                       //
+                                                 compositionResultBufferData,                 //
+                                                 compositionResultBufferWidth,                //
+                                                 compositionResultBufferHeight,               //
+                                                 compositionResultBufferStride,               //
                                                  4);
             if (error != HWC3::Error::None) {
                 ALOGE("%s: display:%" PRIu32 " failed to compose layer:%" PRIu64, __FUNCTION__,
@@ -829,15 +811,19 @@ HWC3::Error GuestFrameComposer::presentDisplay(
         }
     }
 
-    DEBUG_LOG("%s display:%" PRIu32 " flushing drm buffer", __FUNCTION__, displayId);
+    DEBUG_LOG("%s display:%" PRIu32 " flushing drm buffer", __FUNCTION__,
+                displayId);
 
-    auto [error, fence] =
-        mDrmClient.flushToDisplay(displayId, displayInfo.compositionResultDrmBuffer, -1);
+    auto [error, fence] = mDrmClient.flushToDisplay(displayId, compositionResult->getDrmBuffer(), -1);
     if (error != HWC3::Error::None) {
-        ALOGE("%s: display:%" PRIu32 " failed to flush drm buffer" PRIu64, __FUNCTION__, displayId);
+        ALOGE("%s: display:%" PRIu32 " failed to flush drm buffer" PRIu64,
+            __FUNCTION__, displayId);
     }
 
     *outDisplayFence = std::move(fence);
+    compositionResult->markAsInUse(outDisplayFence->ok()
+                                        ? ::android::base::unique_fd(dup(*outDisplayFence))
+                                        : ::android::base::unique_fd());
     return error;
 }
 
@@ -878,12 +864,14 @@ bool GuestFrameComposer::canComposeLayer(Layer* layer) {
     return true;
 }
 
-HWC3::Error GuestFrameComposer::composeLayerInto(Layer* srcLayer,                     //
-                                                 std::uint8_t* dstBuffer,             //
-                                                 std::uint32_t dstBufferWidth,        //
-                                                 std::uint32_t dstBufferHeight,       //
-                                                 std::uint32_t dstBufferStrideBytes,  //
-                                                 std::uint32_t dstBufferBytesPerPixel) {
+HWC3::Error GuestFrameComposer::composeLayerInto(
+    AlternatingImageStorage& compositionIntermediateStorage,
+    Layer* srcLayer,                     //
+    std::uint8_t* dstBuffer,             //
+    std::uint32_t dstBufferWidth,        //
+    std::uint32_t dstBufferHeight,       //
+    std::uint32_t dstBufferStrideBytes,  //
+    std::uint32_t dstBufferBytesPerPixel) {
     ATRACE_CALL();
 
     libyuv::RotationMode rotation = GetRotationFromTransform(srcLayer->getTransform());
@@ -955,10 +943,10 @@ HWC3::Error GuestFrameComposer::composeLayerInto(Layer* srcLayer,               
     // framebuffer) is one of them, so only N-1 temporary buffers are needed.
     // Vertical flip is not taken into account because it can be done together
     // with any other operation.
-    int neededScratchBuffers = (needsFill ? 1 : 0) + (needsConversion ? 1 : 0) +
-                               (needsScaling ? 1 : 0) + (needsRotation ? 1 : 0) +
-                               (needsAttenuation ? 1 : 0) + (needsBlending ? 1 : 0) +
-                               (needsCopy ? 1 : 0) - 1;
+    int neededIntermediateImages = (needsFill ? 1 : 0) + (needsConversion ? 1 : 0) +
+                                   (needsScaling ? 1 : 0) + (needsRotation ? 1 : 0) +
+                                   (needsAttenuation ? 1 : 0) + (needsBlending ? 1 : 0) +
+                                   (needsCopy ? 1 : 0) - 1;
 
     uint32_t mScratchBufferWidth =
         static_cast<uint32_t>(srcLayerDisplayFrame.right - srcLayerDisplayFrame.left);
@@ -968,10 +956,10 @@ HWC3::Error GuestFrameComposer::composeLayerInto(Layer* srcLayer,               
         AlignToPower2(mScratchBufferWidth * dstBufferBytesPerPixel, 4);
     uint32_t mScratchBufferSizeBytes = mScratchBufferHeight * mScratchBufferStrideBytes;
 
-    for (uint32_t i = 0; i < neededScratchBuffers; i++) {
-        BufferSpec mScratchBufferspec(getRotatingScratchBuffer(mScratchBufferSizeBytes, i),
-                                      mScratchBufferWidth, mScratchBufferHeight,
-                                      mScratchBufferStrideBytes);
+    for (uint32_t i = 0; i < neededIntermediateImages; i++) {
+        BufferSpec mScratchBufferspec(
+            compositionIntermediateStorage.getRotatingScratchBuffer(mScratchBufferSizeBytes, i),
+            mScratchBufferWidth, mScratchBufferHeight, mScratchBufferStrideBytes);
         dstBufferStack.push_back(mScratchBufferspec);
     }
 
@@ -1004,7 +992,7 @@ HWC3::Error GuestFrameComposer::composeLayerInto(Layer* srcLayer,               
             uint32_t srcWidth = srcLayerSpec.cropWidth;
             uint32_t srcHeight = srcLayerSpec.cropHeight;
             uint32_t dst_stride_bytes = AlignToPower2(srcWidth * dstBufferBytesPerPixel, 4);
-            uint32_t needed_size = dst_stride_bytes * srcHeight;
+            uint32_t neededSize = dst_stride_bytes * srcHeight;
             dstBufferSpec.width = srcWidth;
             dstBufferSpec.height = srcHeight;
             // Adjust the stride accordingly
@@ -1016,7 +1004,8 @@ HWC3::Error GuestFrameComposer::composeLayerInto(Layer* srcLayer,               
 
             // In case of a scale, the source frame may be bigger than the default tmp
             // buffer size
-            dstBufferSpec.buffer = getSpecialScratchBuffer(needed_size);
+            dstBufferSpec.buffer =
+                compositionIntermediateStorage.getSpecialScratchBuffer(neededSize);
         }
 
         int retval = DoConversion(srcLayerSpec, dstBufferSpec, needsVFlip);
@@ -1134,27 +1123,6 @@ HWC3::Error GuestFrameComposer::applyColorTransformToRGBA(
                             static_cast<int>(bufferHeight));
 
     return HWC3::Error::None;
-}
-
-uint8_t* GuestFrameComposer::getRotatingScratchBuffer(std::size_t neededSize, std::uint32_t order) {
-    static constexpr const int kNumScratchBufferPieces = 2;
-
-    std::size_t totalNeededSize = neededSize * kNumScratchBufferPieces;
-    if (mScratchBuffer.size() < totalNeededSize) {
-        mScratchBuffer.resize(totalNeededSize);
-    }
-
-    std::size_t bufferIndex = order % kNumScratchBufferPieces;
-    std::size_t bufferOffset = bufferIndex * neededSize;
-    return &mScratchBuffer[bufferOffset];
-}
-
-uint8_t* GuestFrameComposer::getSpecialScratchBuffer(size_t neededSize) {
-    if (mSpecialScratchBuffer.size() < neededSize) {
-        mSpecialScratchBuffer.resize(neededSize);
-    }
-
-    return &mSpecialScratchBuffer[0];
 }
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl

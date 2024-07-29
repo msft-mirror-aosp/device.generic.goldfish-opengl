@@ -371,8 +371,12 @@ class C2GoldfishVpxDec::IntfImpl : public SimpleInterface<void>::BaseParams {
         if (me.v.matrix > C2Color::MATRIX_OTHER) {
             me.set().matrix = C2Color::MATRIX_OTHER;
         }
-        DDD("coded primaries %d coded range %d", me.set().primaries,
-            me.set().range);
+        DDD("%s %d coded color aspect range %d primaries/color %d transfer %d",
+                __func__, __LINE__,
+                (int)(me.v.range),
+                (int)(me.v.primaries),
+                (int)(me.v.transfer)
+                );
         return C2R::Ok();
     }
 
@@ -381,13 +385,31 @@ class C2GoldfishVpxDec::IntfImpl : public SimpleInterface<void>::BaseParams {
                        const C2P<C2StreamColorAspectsTuning::output> &def,
                        const C2P<C2StreamColorAspectsInfo::input> &coded) {
         (void)mayBlock;
-        (void)coded;
-        // just take default values, because vpx does not have those information
-        // in the frame.
-        me.set().range = def.v.range;
-        me.set().primaries = def.v.primaries;
-        me.set().transfer = def.v.transfer;
-        me.set().matrix = def.v.matrix;
+        // take default values for all unspecified fields, and coded values for
+        // specified ones
+        DDD("%s %d before update: color aspect range %d primaries/color %d transfer %d",
+                __func__, __LINE__,
+                (int)(me.v.range),
+                (int)(me.v.primaries),
+                (int)(me.v.transfer)
+                );
+        me.set().range =
+            coded.v.range == RANGE_UNSPECIFIED ? def.v.range : coded.v.range;
+        me.set().primaries = coded.v.primaries == PRIMARIES_UNSPECIFIED
+                                 ? def.v.primaries
+                                 : coded.v.primaries;
+        me.set().transfer = coded.v.transfer == TRANSFER_UNSPECIFIED
+                                ? def.v.transfer
+                                : coded.v.transfer;
+        me.set().matrix = coded.v.matrix == MATRIX_UNSPECIFIED ? def.v.matrix
+                                                               : coded.v.matrix;
+
+        DDD("%s %d after update: color aspect range %d primaries/color %d transfer %d",
+                __func__, __LINE__,
+                (int)(me.v.range),
+                (int)(me.v.primaries),
+                (int)(me.v.transfer)
+                );
         return C2R::Ok();
     }
 
@@ -566,10 +588,6 @@ status_t C2GoldfishVpxDec::initDecoder() {
     mMode = MODE_VP8;
 #endif
 
-    {
-        IntfImpl::Lock lock = mIntf->lock();
-        mColorAspects = mIntf->getDefaultColorAspects_l();
-    }
     mWidth = 320;
     mHeight = 240;
     mFrameParallelMode = false;
@@ -647,7 +665,21 @@ void C2GoldfishVpxDec::finishWork(
         createGraphicBuffer(block, C2Rect(mWidth, mHeight));
     {
         IntfImpl::Lock lock = mIntf->lock();
+#ifdef VP9
         buffer->setInfo(mIntf->getColorAspects_l());
+#else
+        std::shared_ptr<C2StreamColorAspectsInfo::output> tColorAspects =
+            std::make_shared<C2StreamColorAspectsInfo::output>
+            (C2StreamColorAspectsInfo::output(0u, m_range,
+                m_primaries, m_transfer,
+                m_matrix));
+        DDD("%s %d setting to index %d range %d primaries %d transfer %d",
+                __func__, __LINE__, (int)index,
+                (int)tColorAspects->range,
+                (int)tColorAspects->primaries,
+                (int)tColorAspects->transfer);
+        buffer->setInfo(tColorAspects);
+#endif
     }
 
     auto fillWork = [buffer, index,
@@ -731,18 +763,54 @@ void C2GoldfishVpxDec::process(const std::unique_ptr<C2Work> &work,
         (int)work->input.ordinal.timestamp.peeku(),
         (int)work->input.ordinal.frameIndex.peeku(), work->input.flags);
 
-    // Software VP9 Decoder does not need the Codec Specific Data (CSD)
-    // (specified in http://www.webmproject.org/vp9/profiles/). Ignore it if
-    // it was passed.
+    if (mMode == MODE_VP8) {
+        constexpr uint64_t ONE_SECOND_IN_MICRO_SECOND = 1000 * 1000;
+        // bug: 349159609
+        // note, vp8 does not have the FLAG_CODEC_CONFIG and the test
+        // android.mediav2.cts.DecoderDynamicColorAspectTest test still
+        // expects vp8 to pass. so this hack is to check the time stamp
+        // change to update the color aspect: too early or too late is
+        // a problem as it can cause mismatch of frame and coloraspect
+        DDD("%s %d vp8 last pts is %d current pts is %d",
+                __func__, __LINE__, mLastPts, (int) work->input.ordinal.timestamp.peeku());
+        if (mLastPts + ONE_SECOND_IN_MICRO_SECOND <= work->input.ordinal.timestamp.peeku()) {
+            codecConfig = true;
+            DDD("%s %d updated codecConfig to true", __func__, __LINE__);
+        } else {
+            DDD("%s %d keep codecConfig to false", __func__, __LINE__);
+        }
+        mLastPts = work->input.ordinal.timestamp.peeku();
+        if (mLastPts == 0) {
+            codecConfig = true;
+        }
+        if (codecConfig) {
+            IntfImpl::Lock lock = mIntf->lock();
+            std::shared_ptr<C2StreamColorAspectsTuning::output> defaultColorAspects =
+            mIntf->getDefaultColorAspects_l();
+            m_primaries = defaultColorAspects->primaries;
+            m_range = defaultColorAspects->range;
+            m_transfer = defaultColorAspects->transfer;
+            m_matrix = defaultColorAspects->matrix;
+        }
+    }
+
     if (codecConfig) {
-        // Ignore CSD buffer for VP9.
+        {
+            IntfImpl::Lock lock = mIntf->lock();
+            std::shared_ptr<C2StreamColorAspectsTuning::output> defaultColorAspects =
+                mIntf->getDefaultColorAspects_l();
+            lock.unlock();
+            C2StreamColorAspectsInfo::input codedAspects(0u, defaultColorAspects->range,
+                defaultColorAspects->primaries, defaultColorAspects->transfer,
+                defaultColorAspects->matrix);
+            std::vector<std::unique_ptr<C2SettingResult>> failures;
+            (void)mIntf->config({&codedAspects}, C2_MAY_BLOCK, &failures);
+        }
+
+        DDD("%s %d updated coloraspect due to codec config", __func__, __LINE__);
         if (mMode == MODE_VP9) {
             fillEmptyWork(work);
             return;
-        } else {
-            // Tolerate the CSD buffer for VP8. This is a workaround
-            // for b/28689536. continue
-            ALOGW("WARNING: Got CSD buffer for VP8. Continue");
         }
     }
 

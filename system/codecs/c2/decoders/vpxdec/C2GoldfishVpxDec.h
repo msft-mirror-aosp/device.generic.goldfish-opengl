@@ -68,6 +68,9 @@ struct C2GoldfishVpxDec : public SimpleC2Component {
 
     void setup_ctx_parameters(vpx_codec_ctx_t *ctx, int hostColorBufferId = -1);
 
+    std::shared_ptr<C2StreamColorAspectsTuning::output> mColorAspects;
+
+
     std::shared_ptr<IntfImpl> mIntf;
     vpx_codec_ctx_t *mCtx;
     bool mFrameParallelMode; // Frame parallel is only supported by VP9 decoder.
@@ -77,6 +80,14 @@ struct C2GoldfishVpxDec : public SimpleC2Component {
     uint32_t mHeight;
     bool mSignalledOutputEos;
     bool mSignalledError;
+
+    // this is VP8 only
+    uint64_t mLastPts { 0 };
+
+    C2Color::range_t m_range;
+    C2Color::primaries_t m_primaries;
+    C2Color::transfer_t m_transfer;
+    C2Color::matrix_t m_matrix;
 
     struct ConversionQueue {
         std::list<std::function<void()>> entries;

@@ -81,6 +81,14 @@ struct C2GoldfishVpxDec : public SimpleC2Component {
     bool mSignalledOutputEos;
     bool mSignalledError;
 
+    // this is VP8 only
+    uint64_t mLastPts { 0 };
+
+    C2Color::range_t m_range;
+    C2Color::primaries_t m_primaries;
+    C2Color::transfer_t m_transfer;
+    C2Color::matrix_t m_matrix;
+
     struct ConversionQueue {
         std::list<std::function<void()>> entries;
         Condition cond;

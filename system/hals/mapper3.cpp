@@ -96,19 +96,18 @@ constexpr uint64_t ones(int from, int to) {
 
 class GoldfishMapper : public IMapper3 {
 public:
-    GoldfishMapper() : m_hostConn(HostConnection::createUnique()) {
-        GoldfishAddressSpaceHostMemoryAllocator host_memory_allocator(false);
-        CRASH_IF(!host_memory_allocator.is_opened(),
-                 "GoldfishAddressSpaceHostMemoryAllocator failed to open");
+ GoldfishMapper() : m_hostConn(HostConnection::createUnique(kCapsetNone, INVALID_DESCRIPTOR)) {
+     GoldfishAddressSpaceHostMemoryAllocator host_memory_allocator(false);
+     CRASH_IF(!host_memory_allocator.is_opened(),
+              "GoldfishAddressSpaceHostMemoryAllocator failed to open");
 
-        GoldfishAddressSpaceBlock bufferBits;
-        CRASH_IF(host_memory_allocator.hostMalloc(&bufferBits, 256),
-                 "hostMalloc failed");
+     GoldfishAddressSpaceBlock bufferBits;
+     CRASH_IF(host_memory_allocator.hostMalloc(&bufferBits, 256), "hostMalloc failed");
 
-        m_physAddrToOffset = bufferBits.physAddr() - bufferBits.offset();
+     m_physAddrToOffset = bufferBits.physAddr() - bufferBits.offset();
 
-        host_memory_allocator.hostFree(&bufferBits);
-    }
+     host_memory_allocator.hostFree(&bufferBits);
+ }
 
     Return<void> importBuffer(const hidl_handle& hh,
                               importBuffer_cb hidl_cb) {

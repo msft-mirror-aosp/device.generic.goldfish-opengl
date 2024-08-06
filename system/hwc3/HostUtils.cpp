@@ -24,7 +24,7 @@ HostConnection* createOrGetHostConnection() {
     static std::unique_ptr<HostConnection> sHostCon;
 
     if (!sHostCon) {
-        sHostCon = HostConnection::createUnique();
+        sHostCon = HostConnection::createUnique(kCapsetNone, INVALID_DESCRIPTOR);
     }
     return sHostCon.get();
 }

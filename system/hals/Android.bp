@@ -57,17 +57,6 @@ cc_defaults {
         "libOpenglSystemCommon",
     ],
     header_libs: ["libgralloc_cb.ranchu"],
-    include_dirs: [
-        "external/libdrm",
-        "external/minigbm/cros_gralloc",
-        "hardware/google/gfxstream/guest/include",
-        // "hardware/google/gfxstream/guest/iostream/include/libOpenglRender" does not exist.
-        "hardware/google/gfxstream/guest/platform/include",
-        "hardware/google/gfxstream/guest/renderControl_enc",
-        "hardware/google/gfxstream/guest/GoldfishAddressSpace/include",
-        "hardware/google/gfxstream/guest/OpenglCodecCommon",
-        "hardware/google/gfxstream/guest/OpenglSystemCommon",
-    ],
     cflags: ["-DVIRTIO_GPU"],
 }
 

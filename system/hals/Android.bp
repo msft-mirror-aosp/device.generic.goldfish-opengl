@@ -23,20 +23,6 @@ package {
     default_applicable_licenses: ["device_generic_goldfish-opengl_license"],
 }
 
-cc_library_headers {
-    name: "libgralloc_cb3.ranchu",
-    vendor_available: true,
-    export_include_dirs: ["."],
-    header_libs: [
-        "libcutils_headers",
-        "libqemupipe-types.ranchu",
-    ],
-    export_header_lib_headers: [
-        "libcutils_headers",
-        "libqemupipe-types.ranchu",
-    ],
-}
-
 cc_defaults {
     name: "android.hardware.graphics_defaults",
     relative_install_path: "hw",

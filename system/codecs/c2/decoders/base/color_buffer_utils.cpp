@@ -19,7 +19,6 @@
 #include <android-base/strings.h>
 #include <log/log.h>
 #include <gralloc_cb_bp.h>
-#include <cb_handle_30.h>
 #include <xf86drm.h>
 
 #include <C2AllocatorGralloc.h>
@@ -79,7 +78,7 @@ public:
                 reinterpret_cast<cros_gralloc_handle const*>(mygrallocHandle);
             return cros_handle->usage;
         } else {
-            cb_handle_30_t* mycb = (cb_handle_30_t*)(mygrallocHandle);
+            cb_handle_t* mycb = (cb_handle_t*)(mygrallocHandle);
             return mycb->usage;
         }
     }

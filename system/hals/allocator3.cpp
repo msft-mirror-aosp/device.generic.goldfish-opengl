@@ -27,8 +27,6 @@
 #include "types.h"
 #include "debug.h"
 
-const int kOMX_COLOR_FormatYUV420Planar = 19;
-
 using ::android::hardware::hidl_handle;
 using ::android::hardware::hidl_vec;
 using ::android::hardware::hidl_bitfield;
@@ -101,6 +99,9 @@ private:
         if (!descriptor.width) { RETURN_ERROR(Error3::UNSUPPORTED); }
         if (!descriptor.height) { RETURN_ERROR(Error3::UNSUPPORTED); }
         if (descriptor.layerCount != 1) { RETURN_ERROR(Error3::UNSUPPORTED); }
+        if (descriptor.format == PixelFormat::IMPLEMENTATION_DEFINED) {
+            RETURN_ERROR(Error3::UNSUPPORTED);
+        }
 
         const uint32_t usage = descriptor.usage;
 
@@ -112,15 +113,7 @@ private:
         EmulatorFrameworkFormat emulatorFrameworkFormat =
             EmulatorFrameworkFormat::GL_COMPATIBLE;
 
-        PixelFormat format;
-        Error3 e = getBufferFormat(descriptor.format, usage, &format);
-        if (e != Error3::NONE) {
-            ALOGE("%s:%d Unsupported format: frameworkFormat=%d, usage=%x",
-                  __func__, __LINE__, descriptor.format, usage);
-            return e;
-        }
-
-        switch (format) {
+        switch (descriptor.format) {
         case PixelFormat::RGBA_8888:
         case PixelFormat::RGBX_8888:
         case PixelFormat::BGRA_8888:
@@ -207,8 +200,8 @@ private:
             break;
 
         default:
-            ALOGE("%s:%d Unsupported format: format=%d, frameworkFormat=%d, usage=%x",
-                  __func__, __LINE__, format, descriptor.format, usage);
+            ALOGE("%s:%d Unsupported format: format=0x%X,usage=%x",
+                  __func__, __LINE__, descriptor.format, usage);
             RETURN_ERROR(Error3::UNSUPPORTED);
         }
 
@@ -239,7 +232,7 @@ private:
 
         return allocateImpl2(usage,
                              width, height,
-                             format, emulatorFrameworkFormat,
+                             descriptor.format, emulatorFrameworkFormat,
                              glFormat, glType,
                              bufferSize,
                              bpp, stride,
@@ -288,24 +281,6 @@ private:
             RETURN(true);
         } else {
             RETURN_ERROR(false);
-        }
-    }
-
-    static Error3 getBufferFormat(const PixelFormat frameworkFormat,
-                                  const uint32_t usage,
-                                  PixelFormat* format) {
-        if (frameworkFormat == PixelFormat::IMPLEMENTATION_DEFINED) {
-            RETURN_ERROR(Error3::UNSUPPORTED);
-        } else if (static_cast<int>(frameworkFormat) == kOMX_COLOR_FormatYUV420Planar &&
-               (usage & BufferUsage::VIDEO_DECODER)) {
-            ALOGW("gralloc_alloc: Requested OMX_COLOR_FormatYUV420Planar, given "
-              "YCbCr_420_888, taking experimental path. "
-              "usage=%x", usage);
-            *format = PixelFormat::YCBCR_420_888;
-            RETURN(Error3::NONE);
-        } else  {
-            *format = frameworkFormat;
-            RETURN(Error3::NONE);
         }
     }
 

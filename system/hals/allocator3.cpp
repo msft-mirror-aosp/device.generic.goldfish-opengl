@@ -56,12 +56,12 @@ bool needGpuBuffer(const uint32_t usage) {
 
 class GoldfishAllocator : public IAllocator3 {
 public:
- GoldfishAllocator() : m_hostConn(HostConnection::createUnique(kCapsetNone, INVALID_DESCRIPTOR)) {}
+ GoldfishAllocator() : m_hostConn(HostConnection::createUnique(kCapsetNone)) {}
 
  Return<void> dumpDebugInfo(dumpDebugInfo_cb hidl_cb) {
      hidl_cb("GoldfishAllocator::dumpDebugInfo is not implemented");
      return {};
-    }
+ }
 
     Return<void> allocate(const hidl_vec<uint32_t>& rawDescriptor,
                           uint32_t count,

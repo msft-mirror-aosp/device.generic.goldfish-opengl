@@ -466,7 +466,7 @@ static HostConnection* sHostCon = NULL;
 
 static HostConnection* createOrGetHostConnection() {
     if (!sHostCon) {
-        sHostCon = HostConnection::createUnique(kCapsetNone, INVALID_DESCRIPTOR).release();
+        sHostCon = HostConnection::createUnique(kCapsetNone).release();
     }
     return sHostCon;
 }

@@ -94,7 +94,7 @@ constexpr uint64_t ones(int from, int to) {
 
 class GoldfishMapper : public IMapper3 {
 public:
- GoldfishMapper() : m_hostConn(HostConnection::createUnique(kCapsetNone, INVALID_DESCRIPTOR)) {
+ GoldfishMapper() : m_hostConn(HostConnection::createUnique(kCapsetNone)) {
      GoldfishAddressSpaceHostMemoryAllocator host_memory_allocator(false);
      CRASH_IF(!host_memory_allocator.is_opened(),
               "GoldfishAddressSpaceHostMemoryAllocator failed to open");

@@ -27,8 +27,6 @@
 
 #define ATRACE_TAG ATRACE_TAG_GRAPHICS
 
-const int kOMX_COLOR_FormatYUV420Planar = 19;
-
 using ::android::hardware::hidl_handle;
 using ::android::hardware::hidl_vec;
 using ::android::hardware::Return;
@@ -96,19 +94,18 @@ constexpr uint64_t ones(int from, int to) {
 
 class GoldfishMapper : public IMapper3 {
 public:
-    GoldfishMapper() : m_hostConn(HostConnection::createUnique()) {
-        GoldfishAddressSpaceHostMemoryAllocator host_memory_allocator(false);
-        CRASH_IF(!host_memory_allocator.is_opened(),
-                 "GoldfishAddressSpaceHostMemoryAllocator failed to open");
+ GoldfishMapper() : m_hostConn(HostConnection::createUnique(kCapsetNone)) {
+     GoldfishAddressSpaceHostMemoryAllocator host_memory_allocator(false);
+     CRASH_IF(!host_memory_allocator.is_opened(),
+              "GoldfishAddressSpaceHostMemoryAllocator failed to open");
 
-        GoldfishAddressSpaceBlock bufferBits;
-        CRASH_IF(host_memory_allocator.hostMalloc(&bufferBits, 256),
-                 "hostMalloc failed");
+     GoldfishAddressSpaceBlock bufferBits;
+     CRASH_IF(host_memory_allocator.hostMalloc(&bufferBits, 256), "hostMalloc failed");
 
-        m_physAddrToOffset = bufferBits.physAddr() - bufferBits.offset();
+     m_physAddrToOffset = bufferBits.physAddr() - bufferBits.offset();
 
-        host_memory_allocator.hostFree(&bufferBits);
-    }
+     host_memory_allocator.hostFree(&bufferBits);
+ }
 
     Return<void> importBuffer(const hidl_handle& hh,
                               importBuffer_cb hidl_cb) {
@@ -258,17 +255,10 @@ private:  // **** impl ****
 
     void setLocked(cb_handle_30_t* cb, const uint8_t checkedUsage,
                    const Rect& accessRegion) {
-        if (checkedUsage & BufferUsage::CPU_WRITE_MASK) {
-            cb->lockedLeft = accessRegion.left;
-            cb->lockedTop = accessRegion.top;
-            cb->lockedWidth = accessRegion.width;
-            cb->lockedHeight = accessRegion.height;
-        } else {
-            cb->lockedLeft = 0;
-            cb->lockedTop = 0;
-            cb->lockedWidth = cb->width;
-            cb->lockedHeight = cb->height;
-        }
+        cb->lockedLeft = accessRegion.left;
+        cb->lockedTop = accessRegion.top;
+        cb->lockedWidth = accessRegion.width;
+        cb->lockedHeight = accessRegion.height;
         cb->lockedUsage = checkedUsage;
     }
 
@@ -626,10 +616,6 @@ private:  // **** impl ****
             RETURN(!needGpuBuffer(usage));
 
         default:
-            if (static_cast<int>(descriptor.format) == kOMX_COLOR_FormatYUV420Planar) {
-                return (usage & BufferUsage::VIDEO_DECODER) != 0;
-            }
-
             RETURN(false);
         }
     }

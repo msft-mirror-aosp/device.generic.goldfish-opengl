@@ -68,7 +68,7 @@ class C2GoldfishAvcDec : public SimpleC2Component {
     status_t setParams(size_t stride);
     status_t initDecoder();
     bool setDecodeArgs(C2ReadView *inBuffer, C2GraphicView *outBuffer,
-                       size_t inOffset, size_t inSize, uint32_t tsMarker);
+                       size_t inOffset, size_t inSize, uint32_t tsMarker, bool hasPicture);
     c2_status_t ensureDecoderState(const std::shared_ptr<C2BlockPool> &pool);
     void finishWork(uint64_t index, const std::unique_ptr<C2Work> &work);
     status_t setFlushMode();

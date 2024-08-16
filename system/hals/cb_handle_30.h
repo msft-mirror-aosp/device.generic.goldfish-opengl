@@ -41,10 +41,8 @@ struct cb_handle_30_t : public cb_handle_t {
                    uint32_t p_stride)
             : cb_handle_t(CB_HANDLE_MAGIC_30,
                           p_hostHandle,
-                          p_format,
-                          p_drmformat,
-                          p_stride,
-                          p_bufSize,
+                          p_format, p_usage, p_drmformat,
+                          p_stride, p_bufSize,
                           p_mmapedOffset),
               usage(p_usage),
               width(p_width),

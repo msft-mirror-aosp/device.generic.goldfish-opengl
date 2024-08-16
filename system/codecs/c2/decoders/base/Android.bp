@@ -41,13 +41,12 @@ cc_library_shared {
     ],
 
     static_libs: [
-        "libplatform",
+        "libplatform_virtgpu",
         "libGoldfishAddressSpace",
     ],
 
     header_libs: [
         "libgralloc_cb.ranchu",
-        "libgralloc_cb3.ranchu",
     ],
 
     sanitize: {

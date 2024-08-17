@@ -22,9 +22,6 @@ cc_library_shared {
     name: "gralloc.goldfish",
     vendor: true,
     relative_install_path: "hw",
-    defaults: [
-        "libgfxstream_guest_cc_defaults",
-    ],
     shared_libs: [
         "libcutils",
         "libdl",
@@ -42,8 +39,9 @@ cc_library_shared {
     cflags: [
         "-DVIRTIO_GPU",
         "-DLOG_TAG=\"gralloc_goldfish\"",
+        "-Wno-gnu-designator",
         "-Wno-missing-field-initializers",
-        "-Wno-gnu-designator"
+        "-Wno-unused-parameter",
     ],
     srcs: [
         "gralloc_old.cpp",
@@ -54,9 +52,6 @@ cc_library_shared {
     name: "gralloc.ranchu",
     vendor: true,
     relative_install_path: "hw",
-    defaults: [
-        "libgfxstream_guest_cc_defaults",
-    ],
     shared_libs: [
         "libcutils",
         "libdl",
@@ -74,8 +69,8 @@ cc_library_shared {
     cflags: [
         "-DVIRTIO_GPU",
         "-DLOG_TAG=\"gralloc_ranchu\"",
-        "-Wno-missing-field-initializers",
-        "-Wno-gnu-designator"
+        "-Wno-gnu-designator",
+        "-Wno-unused-parameter",
     ],
     srcs: [
         "gralloc_old.cpp",

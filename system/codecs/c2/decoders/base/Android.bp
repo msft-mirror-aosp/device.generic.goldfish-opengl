@@ -43,6 +43,7 @@ cc_library_shared {
     static_libs: [
         "libplatform_virtgpu",
         "libGoldfishAddressSpace",
+        "libmesa_util_gfxstream",
     ],
 
     header_libs: [

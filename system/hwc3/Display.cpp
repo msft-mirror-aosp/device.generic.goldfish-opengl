@@ -141,7 +141,25 @@ HWC3::Error Display::updateParameters(uint32_t width, uint32_t height, uint32_t 
         return HWC3::Error::NoResources;
     }
     DisplayConfig& config = it->second;
-    config.setAttribute(DisplayAttribute::VSYNC_PERIOD, HertzToPeriodNanos(refreshRateHz));
+    int32_t oldVsyncPeriod = config.getAttribute(DisplayAttribute::VSYNC_PERIOD);
+    int32_t newVsyncPeriod = HertzToPeriodNanos(refreshRateHz);
+    if (oldVsyncPeriod != newVsyncPeriod) {
+        config.setAttribute(DisplayAttribute::VSYNC_PERIOD, newVsyncPeriod);
+
+        // Schedule a vsync update to propagate across system.
+        VsyncPeriodChangeConstraints constraints;
+        constraints.desiredTimeNanos = 0;
+
+        VsyncPeriodChangeTimeline timeline;
+
+        HWC3::Error error =
+            mVsyncThread.scheduleVsyncUpdate(newVsyncPeriod, constraints, &timeline);
+        if (error != HWC3::Error::None) {
+            ALOGE("%s: display:%" PRId64 " composer failed to schedule vsync update", __FUNCTION__,
+                  mId);
+            return error;
+        }
+    }
     config.setAttribute(DisplayAttribute::WIDTH, static_cast<int32_t>(width));
     config.setAttribute(DisplayAttribute::HEIGHT, static_cast<int32_t>(height));
     config.setAttribute(DisplayAttribute::DPI_X, static_cast<int32_t>(dpiX));

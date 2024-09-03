@@ -19,7 +19,6 @@
 #include <android-base/strings.h>
 #include <log/log.h>
 #include <gralloc_cb_bp.h>
-#include <cb_handle_30.h>
 #include <xf86drm.h>
 
 #include <C2AllocatorGralloc.h>
@@ -69,7 +68,7 @@ public:
     uint64_t getClientUsage(const std::shared_ptr<C2BlockPool> &pool) {
         std::shared_ptr<C2GraphicBlock> myOutBlock;
         const C2MemoryUsage usage = {0, 0};
-        const uint32_t format = HAL_PIXEL_FORMAT_YV12;
+        const uint32_t format = HAL_PIXEL_FORMAT_YCBCR_420_888;
         pool->fetchGraphicBlock(2, 2, format, usage, &myOutBlock);
         auto myc2Handle = myOutBlock->handle();
         native_handle_t *mygrallocHandle =
@@ -79,7 +78,7 @@ public:
                 reinterpret_cast<cros_gralloc_handle const*>(mygrallocHandle);
             return cros_handle->usage;
         } else {
-            cb_handle_30_t* mycb = (cb_handle_30_t*)(mygrallocHandle);
+            cb_handle_t* mycb = (cb_handle_t*)(mygrallocHandle);
             return mycb->usage;
         }
     }

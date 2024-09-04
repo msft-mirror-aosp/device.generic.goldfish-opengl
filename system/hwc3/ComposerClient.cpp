@@ -791,6 +791,8 @@ void ComposerClient::executeLayerCommand(CommandResultWriter& commandResults, Di
                            PerFrameMetadata);
     DISPATCH_LAYER_COMMAND(layerCommand, commandResults, display, layer, perFrameMetadataBlob,
                            PerFrameMetadataBlobs);
+    DISPATCH_LAYER_COMMAND(layerCommand, commandResults, display, layer, luts,
+                           Luts);
 }
 
 void ComposerClient::executeDisplayCommandSetColorTransform(CommandResultWriter& commandResults,
@@ -1192,6 +1194,13 @@ void ComposerClient::executeLayerCommandSetLayerPerFrameMetadataBlobs(
         LOG_LAYER_COMMAND_ERROR(display, layer, error);
         commandResults.addError(error);
     }
+}
+
+void ComposerClient::executeLayerCommandSetLayerLuts(CommandResultWriter& /*commandResults*/,
+                                                     Display& /*display*/, Layer* /*layer*/,
+                                                     const std::vector<std::optional<Lut>>& /*luts*/) {
+    DEBUG_LOG("%s", __FUNCTION__);
+    //TODO(b/358188835)
 }
 
 std::shared_ptr<Display> ComposerClient::getDisplay(int64_t displayId) {

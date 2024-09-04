@@ -56,7 +56,7 @@ cc_binary {
 
     header_libs: [
         "libminigbm_gralloc_headers",
-        "libgfxstream_guest_android_headers",
+        "mesa_gfxstream_guest_android_headers",
     ],
 
     srcs: [

@@ -791,6 +791,8 @@ void ComposerClient::executeLayerCommand(CommandResultWriter& commandResults, Di
                            PerFrameMetadata);
     DISPATCH_LAYER_COMMAND(layerCommand, commandResults, display, layer, perFrameMetadataBlob,
                            PerFrameMetadataBlobs);
+    DISPATCH_LAYER_COMMAND(layerCommand, commandResults, display, layer, luts,
+                           Luts);
 }
 
 void ComposerClient::executeDisplayCommandSetColorTransform(CommandResultWriter& commandResults,

@@ -30,7 +30,7 @@
 #include <optional>
 #include <tuple>
 
-#include "../egl/goldfish_sync.h"
+#include "gfxstream/guest/goldfish_sync.h"
 #include "Display.h"
 #include "HostUtils.h"
 #include "virtgpu_drm.h"

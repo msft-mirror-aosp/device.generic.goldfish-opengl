@@ -23,6 +23,7 @@
 #include "Device.h"
 #include "GuestFrameComposer.h"
 #include "HostFrameComposer.h"
+#include "Time.h"
 
 namespace aidl::android::hardware::graphics::composer3::impl {
 namespace {
@@ -790,6 +791,8 @@ void ComposerClient::executeLayerCommand(CommandResultWriter& commandResults, Di
                            PerFrameMetadata);
     DISPATCH_LAYER_COMMAND(layerCommand, commandResults, display, layer, perFrameMetadataBlob,
                            PerFrameMetadataBlobs);
+    DISPATCH_LAYER_COMMAND(layerCommand, commandResults, display, layer, luts,
+                           Luts);
 }
 
 void ComposerClient::executeDisplayCommandSetColorTransform(CommandResultWriter& commandResults,
@@ -1193,6 +1196,13 @@ void ComposerClient::executeLayerCommandSetLayerPerFrameMetadataBlobs(
     }
 }
 
+void ComposerClient::executeLayerCommandSetLayerLuts(CommandResultWriter& /*commandResults*/,
+                                                     Display& /*display*/, Layer* /*layer*/,
+                                                     const std::vector<std::optional<Lut>>& /*luts*/) {
+    DEBUG_LOG("%s", __FUNCTION__);
+    //TODO(b/358188835)
+}
+
 std::shared_ptr<Display> ComposerClient::getDisplay(int64_t displayId) {
     std::lock_guard<std::mutex> lock(mDisplaysMutex);
 
@@ -1317,7 +1327,7 @@ HWC3::Error ComposerClient::destroyDisplayLocked(int64_t displayId) {
 
 HWC3::Error ComposerClient::handleHotplug(bool connected, uint32_t id, uint32_t width,
                                           uint32_t height, uint32_t dpiX, uint32_t dpiY,
-                                          uint32_t refreshRate) {
+                                          uint32_t refreshRateHz) {
     if (!mCallbacks) {
         return HWC3::Error::None;
     }
@@ -1326,9 +1336,10 @@ HWC3::Error ComposerClient::handleHotplug(bool connected, uint32_t id, uint32_t 
 
     if (connected) {
         const int32_t configId = static_cast<int32_t>(id);
-        const std::vector<DisplayConfig> configs = {DisplayConfig(
-            configId, static_cast<int>(width), static_cast<int>(height), static_cast<int>(dpiX),
-            static_cast<int>(dpiY), static_cast<int>(refreshRate))};
+        int32_t vsyncPeriodNanos = HertzToPeriodNanos(refreshRateHz);
+        const std::vector<DisplayConfig> configs = {
+            DisplayConfig(configId, static_cast<int>(width), static_cast<int>(height),
+                          static_cast<int>(dpiX), static_cast<int>(dpiY), vsyncPeriodNanos)};
         {
             std::lock_guard<std::mutex> lock(mDisplaysMutex);
             createDisplayLocked(displayId, configId, configs);
@@ -1336,7 +1347,7 @@ HWC3::Error ComposerClient::handleHotplug(bool connected, uint32_t id, uint32_t 
 
         ALOGI("Hotplug connecting display:%" PRIu32 " w:%" PRIu32 " h:%" PRIu32 " dpiX:%" PRIu32
               " dpiY %" PRIu32 "fps %" PRIu32,
-              id, width, height, dpiX, dpiY, refreshRate);
+              id, width, height, dpiX, dpiY, refreshRateHz);
         mCallbacks->onHotplug(displayId, /*connected=*/true);
     } else {
         ALOGI("Hotplug disconnecting display:%" PRIu64, displayId);

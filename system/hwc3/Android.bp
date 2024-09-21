@@ -138,5 +138,5 @@ genrule {
     name: "gen-hwc3-apex.rc",
     srcs: ["hwc3.rc"],
     out: ["hwc3-apex.rc"],
-    cmd: "sed -e 's@/vendor/bin/@/apex/com.android.hardware.graphics.composer.ranchu/bin/@' $(in) > $(out)",
+    cmd: "sed -e 's@/vendor/bin/@/apex/com.android.hardware.graphics.composer/bin/@' $(in) > $(out)",
 }

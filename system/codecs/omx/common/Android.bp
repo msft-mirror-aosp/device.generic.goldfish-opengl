@@ -26,10 +26,10 @@ cc_library_static {
         "liblog",
     ],
     static_libs: [
-        "libGoldfishAddressSpace",
+        "mesa_goldfish_address_space",
     ],
     whole_static_libs: [
-        "libGoldfishAddressSpace",
+        "mesa_goldfish_address_space",
     ],
     export_include_dirs: [
         "include",

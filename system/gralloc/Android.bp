@@ -33,7 +33,7 @@ cc_library_shared {
         "libOpenglSystemCommon",
     ],
     static_libs: [
-        "libGoldfishAddressSpace",
+        "mesa_goldfish_address_space",
         "libqemupipe.ranchu",
     ],
     cflags: [
@@ -63,7 +63,7 @@ cc_library_shared {
         "libOpenglSystemCommon",
     ],
     static_libs: [
-        "libGoldfishAddressSpace",
+        "mesa_goldfish_address_space",
         "libqemupipe.ranchu",
     ],
     cflags: [

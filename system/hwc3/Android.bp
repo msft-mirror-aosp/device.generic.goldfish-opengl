@@ -56,6 +56,7 @@ cc_binary {
 
     header_libs: [
         "libminigbm_gralloc_headers",
+        "mesa_gfxstream_guest_android_headers",
     ],
 
     srcs: [
@@ -137,6 +138,5 @@ genrule {
     name: "gen-hwc3-apex.rc",
     srcs: ["hwc3.rc"],
     out: ["hwc3-apex.rc"],
-    cmd: "sed -e 's@/vendor/bin/@/apex/com.android.hardware.graphics.composer.ranchu/bin/@' $(in) > $(out)",
+    cmd: "sed -e 's@/vendor/bin/@/apex/com.android.hardware.graphics.composer/bin/@' $(in) > $(out)",
 }
-

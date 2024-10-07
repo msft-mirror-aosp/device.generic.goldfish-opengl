@@ -41,8 +41,9 @@ cc_library_shared {
     ],
 
     static_libs: [
-        "libplatform_virtgpu",
-        "libGoldfishAddressSpace",
+        "mesa_platform_virtgpu",
+        "mesa_goldfish_address_space",
+        "mesa_util",
     ],
 
     header_libs: [

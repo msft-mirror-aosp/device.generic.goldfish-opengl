@@ -88,6 +88,7 @@ class HostFrameComposer : public FrameComposer {
         std::shared_ptr<DrmBuffer> clientTargetDrmBuffer;
     };
 
+    std::unique_ptr<gfxstream::SyncHelper> mSyncHelper = nullptr;
     std::unordered_map<int64_t, HostComposerDisplayInfo> mDisplayInfos;
 
     std::optional<DrmClient> mDrmClient;

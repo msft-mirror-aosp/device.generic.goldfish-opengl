@@ -30,7 +30,8 @@
 #include <optional>
 #include <tuple>
 
-#include "../egl/goldfish_sync.h"
+#include "Sync.h"
+#include "gfxstream/guest/goldfish_sync.h"
 #include "Display.h"
 #include "HostUtils.h"
 #include "virtgpu_drm.h"
@@ -172,6 +173,8 @@ HWC3::Error HostFrameComposer::init() {
             ALOGE("%s: failed to initialize DrmClient", __FUNCTION__);
             return error;
         }
+
+	mSyncHelper.reset(gfxstream::createPlatformSyncHelper());
     } else {
         mSyncDeviceFd = goldfish_sync_open();
     }
@@ -575,6 +578,10 @@ HWC3::Error HostFrameComposer::presentDisplay(
                     if (err < 0 && errno == ETIME) {
                         ALOGE("%s waited on fence %d for 3000 ms", __FUNCTION__, fence.get());
                     }
+
+#if GOLDFISH_OPENGL_SYNC_DEBUG
+		    mSyncHelper->debugPrint(fence.get());
+#endif
                 } else {
                     ALOGV("%s: acquire fence not set for layer %u", __FUNCTION__,
                           (uint32_t)layer->getId());

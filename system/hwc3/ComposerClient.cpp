@@ -1198,7 +1198,7 @@ void ComposerClient::executeLayerCommandSetLayerPerFrameMetadataBlobs(
 
 void ComposerClient::executeLayerCommandSetLayerLuts(CommandResultWriter& /*commandResults*/,
                                                      Display& /*display*/, Layer* /*layer*/,
-                                                     const std::vector<std::optional<Lut>>& /*luts*/) {
+                                                     const Luts& /*luts*/) {
     DEBUG_LOG("%s", __FUNCTION__);
     //TODO(b/358188835)
 }

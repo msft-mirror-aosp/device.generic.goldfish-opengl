@@ -124,6 +124,8 @@ class ComposerClient : public BnComposerClient {
     ndk::ScopedAStatus notifyExpectedPresent(int64_t displayId,
                                              const ClockMonotonicTimestamp& expectedPresentTime,
                                              int32_t maxFrameIntervalNs) override;
+    ndk::ScopedAStatus getMaxLayerPictureProfiles(int64_t displayId, int32_t* outMaxProfiles)
+                                                  override;
 
    protected:
     ndk::SpAIBinder createBinder() override;

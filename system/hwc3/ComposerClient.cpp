@@ -691,6 +691,16 @@ ndk::ScopedAStatus ComposerClient::startHdcpNegotiation(int64_t displayId,
     return ToBinderStatus(HWC3::Error::Unsupported);
 }
 
+ndk::ScopedAStatus ComposerClient::getLuts(int64_t displayId,
+        const std::vector<Buffer>&,
+        std::vector<Luts>*) {
+    DEBUG_LOG("%s", __FUNCTION__);
+
+    GET_DISPLAY_OR_RETURN_ERROR();
+
+    return ToBinderStatus(HWC3::Error::Unsupported);
+}
+
 ndk::SpAIBinder ComposerClient::createBinder() {
     auto binder = BnComposerClient::createBinder();
     AIBinder_setInheritRt(binder.get(), true);

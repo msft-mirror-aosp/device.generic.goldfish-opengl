@@ -126,6 +126,8 @@ class ComposerClient : public BnComposerClient {
                                              int32_t maxFrameIntervalNs) override;
     ndk::ScopedAStatus getMaxLayerPictureProfiles(int64_t displayId, int32_t* outMaxProfiles)
                                                   override;
+    ndk::ScopedAStatus startHdcpNegotiation(
+        int64_t displayId, const aidl::android::hardware::drm::HdcpLevels& levels) override;
 
    protected:
     ndk::SpAIBinder createBinder() override;

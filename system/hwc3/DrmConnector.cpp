@@ -67,7 +67,6 @@ bool DrmConnector::update(::android::base::borrowed_fd drmFd) {
         mModes.push_back(std::move(mode));
     }
 
-    drmModeFreeConnector(drmConnector);
 
     if (mStatus == DRM_MODE_CONNECTED) {
         std::optional<EdidInfo> maybeEdidInfo = loadEdid(drmFd);
@@ -87,6 +86,7 @@ bool DrmConnector::update(::android::base::borrowed_fd drmFd) {
               __FUNCTION__, mId, (mWidthMillimeters ? *mWidthMillimeters : 0),
               (mHeightMillimeters ? *mHeightMillimeters : 0));
 
+    drmModeFreeConnector(drmConnector);
     return true;
 }
 

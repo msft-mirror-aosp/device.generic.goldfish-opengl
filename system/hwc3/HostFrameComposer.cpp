@@ -439,6 +439,9 @@ HWC3::Error HostFrameComposer::validateDisplay(Display* display, DisplayChanges*
                     ALOGE("%s: layer %" PRIu32 " has an unknown composition type: %s", __FUNCTION__,
                           static_cast<uint32_t>(layer->getId()), layerCompositionTypeString.c_str());
             }
+            if (layer->hasLuts()) {
+                layerFallBackTo = Composition::CLIENT;
+            }
             if (layerFallBackTo == Composition::CLIENT) {
                 fallBackToClient = true;
             }

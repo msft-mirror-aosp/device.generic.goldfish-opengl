@@ -1213,11 +1213,16 @@ void ComposerClient::executeLayerCommandSetLayerPerFrameMetadataBlobs(
     }
 }
 
-void ComposerClient::executeLayerCommandSetLayerLuts(CommandResultWriter& /*commandResults*/,
-                                                     Display& /*display*/, Layer* /*layer*/,
-                                                     const Luts& /*luts*/) {
+void ComposerClient::executeLayerCommandSetLayerLuts(CommandResultWriter& commandResults,
+                                                     Display& display, Layer* layer,
+                                                     const Luts& luts) {
     DEBUG_LOG("%s", __FUNCTION__);
-    //TODO(b/358188835)
+
+    auto error = layer->setLuts(luts);
+    if (error != HWC3::Error::None) {
+        LOG_LAYER_COMMAND_ERROR(display, layer, error);
+        commandResults.addError(error);
+    }
 }
 
 std::shared_ptr<Display> ComposerClient::getDisplay(int64_t displayId) {

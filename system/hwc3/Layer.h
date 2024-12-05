@@ -91,6 +91,9 @@ class Layer {
     HWC3::Error setPerFrameMetadataBlobs(
         const std::vector<std::optional<PerFrameMetadataBlob>>& perFrameMetadata);
 
+    HWC3::Error setLuts(const Luts& luts);
+    bool hasLuts() const;
+
     // For log use only.
     void logCompositionFallbackIfChanged(Composition to);
 
@@ -116,6 +119,7 @@ class Layer {
     int32_t mZOrder = 0;
     std::optional<std::array<float, 16>> mColorTransform;
     float mBrightness = 1.0f;
+    bool mHasLuts = false;
 };
 
 }  // namespace aidl::android::hardware::graphics::composer3::impl

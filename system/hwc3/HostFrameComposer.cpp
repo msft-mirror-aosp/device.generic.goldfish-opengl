@@ -30,10 +30,10 @@
 #include <optional>
 #include <tuple>
 
-#include "Sync.h"
-#include "gfxstream/guest/goldfish_sync.h"
 #include "Display.h"
 #include "HostUtils.h"
+#include "Sync.h"
+#include "gfxstream/guest/goldfish_sync.h"
 #include "virtgpu_drm.h"
 
 namespace aidl::android::hardware::graphics::composer3::impl {
@@ -174,7 +174,7 @@ HWC3::Error HostFrameComposer::init() {
             return error;
         }
 
-	mSyncHelper.reset(gfxstream::createPlatformSyncHelper());
+        mSyncHelper.reset(gfxstream::createPlatformSyncHelper());
     } else {
         mSyncDeviceFd = goldfish_sync_open();
     }
@@ -406,8 +406,7 @@ HWC3::Error HostFrameComposer::validateDisplay(Display* display, DisplayChanges*
 
     // If one layer requires a fall back to the client composition type, all
     // layers will fall back to the client composition type.
-    bool fallBackToClient =
-        (!hostCompositionV1 && !hostCompositionV2);
+    bool fallBackToClient = (!hostCompositionV1 && !hostCompositionV2);
     std::unordered_map<Layer*, Composition> changes;
 
     if (!fallBackToClient) {
@@ -437,7 +436,8 @@ HWC3::Error HostFrameComposer::validateDisplay(Display* display, DisplayChanges*
                     break;
                 default:
                     ALOGE("%s: layer %" PRIu32 " has an unknown composition type: %s", __FUNCTION__,
-                          static_cast<uint32_t>(layer->getId()), layerCompositionTypeString.c_str());
+                          static_cast<uint32_t>(layer->getId()),
+                          layerCompositionTypeString.c_str());
             }
             if (layer->hasLuts()) {
                 layerFallBackTo = Composition::CLIENT;
@@ -530,7 +530,8 @@ HWC3::Error HostFrameComposer::presentDisplay(
 
                     *outDisplayFence = std::move(flushCompleteFence);
                 } else {
-                    post(hostCon, rcEnc, displayInfo.hostDisplayId, displayClientTarget.getBuffer());
+                    post(hostCon, rcEnc, displayInfo.hostDisplayId,
+                         displayClientTarget.getBuffer());
                     *outDisplayFence = std::move(fence);
                 }
             }
@@ -583,7 +584,7 @@ HWC3::Error HostFrameComposer::presentDisplay(
                     }
 
 #if GOLDFISH_OPENGL_SYNC_DEBUG
-		    mSyncHelper->debugPrint(fence.get());
+                    mSyncHelper->debugPrint(fence.get());
 #endif
                 } else {
                     ALOGV("%s: acquire fence not set for layer %u", __FUNCTION__,
@@ -603,7 +604,20 @@ HWC3::Error HostFrameComposer::presentDisplay(
             l->displayFrame = AsHwcRect(layer->getDisplayFrame());
             l->crop = AsHwcFrect(layer->getSourceCrop());
             l->blendMode = static_cast<int32_t>(layer->getBlendMode());
-            l->alpha = layer->getPlaneAlpha();
+            float alpha = layer->getPlaneAlpha();
+            float brightness = layer->getBrightness();
+            // Apply brightness by modulating the layer's alpha.
+            //
+            // Due to limitations in the current implementation, per-layer brightness control
+            // is not supported. To simulate the desired visual effect, brightness is approximated
+            // by adjusting the alpha value of the layer.
+            //
+            // This approach, while not ideal, is sufficient enough for a virtual device (TV
+            // Cuttlefish) because virtual displays based on Virtio GPU do not have per-layer
+            // brightness control.
+
+            float mixFactor = 0.5f;
+            l->alpha = (alpha * (1.0f - mixFactor)) + (brightness * mixFactor);
             l->color = AsHwcColor(layer->getColor());
             l->transform = AsHwcTransform(layer->getTransform());
             ALOGV(
@@ -723,9 +737,8 @@ void HostFrameComposer::post(HostConnection* hostCon, ExtendedRCEncoderContext* 
     assert(cb && "native_handle_t::from(h) failed");
 
     hostCon->lock();
-    rcEnc->rcSetDisplayColorBuffer(
-        rcEnc, hostDisplayId,
-        hostCon->grallocHelper()->getHostHandle(h));
+    rcEnc->rcSetDisplayColorBuffer(rcEnc, hostDisplayId,
+                                   hostCon->grallocHelper()->getHostHandle(h));
     rcEnc->rcFBPost(rcEnc, hostCon->grallocHelper()->getHostHandle(h));
     hostCon->flush();
     hostCon->unlock();

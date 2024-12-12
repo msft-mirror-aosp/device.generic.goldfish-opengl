@@ -298,6 +298,7 @@ HWC3::Error Display::getDisplayConfigurations(std::vector<DisplayConfiguration>*
                                     static_cast<float>(displayConfig.getDpiY())};
         displayConfiguration.vsyncPeriod = displayConfig.getVsyncPeriod();
         displayConfiguration.configGroup = displayConfig.getConfigGroup();
+        displayConfiguration.hdrOutputType = OutputType::SYSTEM;
 
         outConfigs->emplace_back(displayConfiguration);
     }

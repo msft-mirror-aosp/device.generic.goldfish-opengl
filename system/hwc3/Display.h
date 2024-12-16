@@ -26,6 +26,7 @@
 #include <aidl/android/hardware/graphics/composer3/DisplayContentSample.h>
 #include <aidl/android/hardware/graphics/composer3/DisplayIdentification.h>
 #include <aidl/android/hardware/graphics/composer3/HdrCapabilities.h>
+#include <aidl/android/hardware/graphics/composer3/OutputType.h>
 #include <aidl/android/hardware/graphics/composer3/PerFrameMetadataKey.h>
 #include <aidl/android/hardware/graphics/composer3/PowerMode.h>
 #include <aidl/android/hardware/graphics/composer3/ReadbackBufferAttributes.h>

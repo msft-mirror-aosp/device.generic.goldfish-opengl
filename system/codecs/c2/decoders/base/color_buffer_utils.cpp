@@ -68,7 +68,7 @@ public:
     uint64_t getClientUsage(const std::shared_ptr<C2BlockPool> &pool) {
         std::shared_ptr<C2GraphicBlock> myOutBlock;
         const C2MemoryUsage usage = {0, 0};
-        const uint32_t format = HAL_PIXEL_FORMAT_YV12;
+        const uint32_t format = HAL_PIXEL_FORMAT_YCBCR_420_888;
         pool->fetchGraphicBlock(2, 2, format, usage, &myOutBlock);
         auto myc2Handle = myOutBlock->handle();
         native_handle_t *mygrallocHandle =

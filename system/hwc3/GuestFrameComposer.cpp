@@ -35,6 +35,39 @@
 namespace aidl::android::hardware::graphics::composer3::impl {
 namespace {
 
+// Returns a color matrix that can be used with libyuv by converting values
+// in -1 to 1 into -64 to 64 and converting row-major to column-major by transposing.
+std::array<std::int8_t, 16> ToLibyuvColorMatrix(const std::array<float, 16>& in) {
+    std::array<std::int8_t, 16> out;
+
+    for (int r = 0; r < 4; r++) {
+        for (int c = 0; c < 4; c++) {
+            int indexIn = (4 * r) + c;
+            int indexOut = (4 * c) + r;
+
+            float clampedValue = std::max(
+                -128.0f, std::min(127.0f, in[static_cast<size_t>(indexIn)] * 64.0f + 0.5f));
+            out[(size_t)indexOut] = static_cast<std::int8_t>(clampedValue);
+        }
+    }
+
+    return out;
+}
+
+std::uint8_t ToLibyuvColorChannel(float v) {
+    return static_cast<std::uint8_t>(std::min(255, static_cast<int>(v * 255.0f + 0.5f)));
+}
+
+std::uint32_t ToLibyuvColor(float r, float g, float b, float a) {
+    std::uint32_t out;
+    std::uint8_t* outChannels = reinterpret_cast<std::uint8_t*>(&out);
+    outChannels[0] = ToLibyuvColorChannel(r);
+    outChannels[1] = ToLibyuvColorChannel(g);
+    outChannels[2] = ToLibyuvColorChannel(b);
+    outChannels[3] = ToLibyuvColorChannel(a);
+    return out;
+}
+
 using ::android::hardware::graphics::common::V1_0::ColorTransform;
 
 uint32_t AlignToPower2(uint32_t val, uint8_t align_log) {
@@ -343,6 +376,22 @@ int DoAttenuation(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
                                  width, height);
 }
 
+int DoBrightnessShading(const BufferSpec& src, const BufferSpec& dst, float layerBrightness) {
+    ATRACE_CALL();
+
+    const float layerBrightnessGammaCorrected = std::pow(layerBrightness, 1.0f / 2.2f);
+
+    const std::uint32_t shade =
+        ToLibyuvColor(layerBrightnessGammaCorrected, layerBrightnessGammaCorrected,
+                      layerBrightnessGammaCorrected, 1.0f);
+
+    auto ret = libyuv::ARGBShade(src.buffer, static_cast<int>(src.strideBytes), dst.buffer,
+                                 static_cast<int>(dst.strideBytes), static_cast<int>(dst.width),
+                                 static_cast<int>(dst.height), shade);
+
+    return ret;
+}
+
 int DoBlending(const BufferSpec& src, const BufferSpec& dst, bool v_flip) {
     ATRACE_CALL();
 
@@ -483,14 +532,14 @@ HWC3::Error GuestFrameComposer::onDisplayCreate(Display* display) {
     displayInfo.swapchain = DrmSwapchain::create(static_cast<uint32_t>(displayWidth),
                                                  static_cast<uint32_t>(displayHeight),
                                                  ::android::GraphicBuffer::USAGE_HW_COMPOSER |
-                                                   ::android::GraphicBuffer::USAGE_SW_READ_OFTEN |
-                                                   ::android::GraphicBuffer::USAGE_SW_WRITE_OFTEN,
+                                                     ::android::GraphicBuffer::USAGE_SW_READ_OFTEN |
+                                                     ::android::GraphicBuffer::USAGE_SW_WRITE_OFTEN,
                                                  &mDrmClient);
 
     if (displayId == 0) {
         auto compositionResult = displayInfo.swapchain->getNextImage();
         auto [flushError, flushSyncFd] =
-                mDrmClient.flushToDisplay(displayId, compositionResult->getDrmBuffer(), -1);
+            mDrmClient.flushToDisplay(displayId, compositionResult->getDrmBuffer(), -1);
         if (flushError != HWC3::Error::None) {
             ALOGW(
                 "%s: Initial display flush failed. HWComposer assuming that we are "
@@ -515,8 +564,7 @@ HWC3::Error GuestFrameComposer::onDisplayDestroy(Display* display) {
 
     auto it = mDisplayInfos.find(displayId);
     if (it == mDisplayInfos.end()) {
-        ALOGE("%s: display:%" PRIu64 " missing display buffers?", __FUNCTION__,
-            displayId);
+        ALOGE("%s: display:%" PRIu64 " missing display buffers?", __FUNCTION__, displayId);
         return HWC3::Error::BadDisplay;
     }
     mDisplayInfos.erase(it);
@@ -667,14 +715,13 @@ HWC3::Error GuestFrameComposer::presentDisplay(
     compositionResult->wait();
 
     if (compositionResult->getBuffer() == nullptr) {
-        ALOGE("%s: display:%" PRIu32 " missing composition result buffer",
-            __FUNCTION__, displayId);
+        ALOGE("%s: display:%" PRIu32 " missing composition result buffer", __FUNCTION__, displayId);
         return HWC3::Error::NoResources;
     }
 
     if (compositionResult->getDrmBuffer() == nullptr) {
-        ALOGE("%s: display:%" PRIu32 " missing composition result drm buffer",
-            __FUNCTION__, displayId);
+        ALOGE("%s: display:%" PRIu32 " missing composition result drm buffer", __FUNCTION__,
+              displayId);
         return HWC3::Error::NoResources;
     }
 
@@ -778,6 +825,7 @@ HWC3::Error GuestFrameComposer::presentDisplay(
         for (Layer* layer : layers) {
             const auto layerId = layer->getId();
             const auto layerCompositionType = layer->getCompositionType();
+
             if (layerCompositionType != Composition::DEVICE &&
                 layerCompositionType != Composition::SOLID_COLOR) {
                 continue;
@@ -811,19 +859,18 @@ HWC3::Error GuestFrameComposer::presentDisplay(
         }
     }
 
-    DEBUG_LOG("%s display:%" PRIu32 " flushing drm buffer", __FUNCTION__,
-                displayId);
+    DEBUG_LOG("%s display:%" PRIu32 " flushing drm buffer", __FUNCTION__, displayId);
 
-    auto [error, fence] = mDrmClient.flushToDisplay(displayId, compositionResult->getDrmBuffer(), -1);
+    auto [error, fence] =
+        mDrmClient.flushToDisplay(displayId, compositionResult->getDrmBuffer(), -1);
     if (error != HWC3::Error::None) {
-        ALOGE("%s: display:%" PRIu32 " failed to flush drm buffer" PRIu64,
-            __FUNCTION__, displayId);
+        ALOGE("%s: display:%" PRIu32 " failed to flush drm buffer" PRIu64, __FUNCTION__, displayId);
     }
 
     *outDisplayFence = std::move(fence);
     compositionResult->markAsInUse(outDisplayFence->ok()
-                                        ? ::android::base::unique_fd(dup(*outDisplayFence))
-                                        : ::android::base::unique_fd());
+                                       ? ::android::base::unique_fd(dup(*outDisplayFence))
+                                       : ::android::base::unique_fd());
     return error;
 }
 
@@ -858,6 +905,10 @@ bool GuestFrameComposer::canComposeLayer(Layer* layer) {
     uint32_t bufferFormat = *bufferFormatOpt;
 
     if (!IsDrmFormatSupported(bufferFormat)) {
+        return false;
+    }
+
+    if (layer->hasLuts()) {
         return false;
     }
 
@@ -921,6 +972,7 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
     bool needsVFlip = GetVFlipFromTransform(srcLayer->getTransform());
     bool needsAttenuation = LayerNeedsAttenuation(*srcLayer);
     bool needsBlending = LayerNeedsBlending(*srcLayer);
+    bool needsBrightness = srcLayer->getBrightness() != 1.0f;
     bool needsCopy = !(needsConversion || needsScaling || needsRotation || needsVFlip ||
                        needsAttenuation || needsBlending);
 
@@ -946,7 +998,7 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
     int neededIntermediateImages = (needsFill ? 1 : 0) + (needsConversion ? 1 : 0) +
                                    (needsScaling ? 1 : 0) + (needsRotation ? 1 : 0) +
                                    (needsAttenuation ? 1 : 0) + (needsBlending ? 1 : 0) +
-                                   (needsCopy ? 1 : 0) - 1;
+                                   (needsCopy ? 1 : 0) + (needsBrightness ? 1 : 0) - 1;
 
     uint32_t mScratchBufferWidth =
         static_cast<uint32_t>(srcLayerDisplayFrame.right - srcLayerDisplayFrame.left);
@@ -1060,6 +1112,16 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
         dstBufferStack.pop_back();
     }
 
+    if (needsBrightness) {
+        int retval =
+            DoBrightnessShading(srcLayerSpec, dstBufferStack.back(), srcLayer->getBrightness());
+        if (retval) {
+            ALOGE("Got error code %d from DoBrightnessShading function", retval);
+        }
+        srcLayerSpec = dstBufferStack.back();
+        dstBufferStack.pop_back();
+    }
+
     if (needsCopy) {
         int retval = DoCopy(srcLayerSpec, dstBufferStack.back(), needsVFlip);
         needsVFlip = false;
@@ -1084,28 +1146,6 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
 
     return HWC3::Error::None;
 }
-
-namespace {
-
-// Returns a color matrix that can be used with libyuv by converting values
-// in -1 to 1 into -64 to 64 and transposing.
-std::array<std::int8_t, 16> ToLibyuvColorMatrix(const std::array<float, 16>& in) {
-    std::array<std::int8_t, 16> out;
-
-    for (size_t r = 0; r < 4; r++) {
-        for (size_t c = 0; c < 4; c++) {
-            size_t indexIn = (4 * r) + c;
-            size_t indexOut = (4 * c) + r;
-
-            out[indexOut] = static_cast<std::int8_t>(
-                std::max(-128, std::min(127, static_cast<int>(in[indexIn] * 64.0f + 0.5f))));
-        }
-    }
-
-    return out;
-}
-
-}  // namespace
 
 HWC3::Error GuestFrameComposer::applyColorTransformToRGBA(
     const std::array<float, 16>& transfromMatrix,  //

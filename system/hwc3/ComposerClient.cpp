@@ -674,6 +674,33 @@ ndk::ScopedAStatus ComposerClient::notifyExpectedPresent(
     return ToBinderStatus(HWC3::Error::Unsupported);
 }
 
+ndk::ScopedAStatus ComposerClient::getMaxLayerPictureProfiles(int64_t displayId, int32_t*) {
+    DEBUG_LOG("%s", __FUNCTION__);
+
+    GET_DISPLAY_OR_RETURN_ERROR();
+
+    return ToBinderStatus(HWC3::Error::Unsupported);
+}
+
+ndk::ScopedAStatus ComposerClient::startHdcpNegotiation(int64_t displayId,
+    const aidl::android::hardware::drm::HdcpLevels& /*levels*/) {
+    DEBUG_LOG("%s", __FUNCTION__);
+
+    GET_DISPLAY_OR_RETURN_ERROR();
+
+    return ToBinderStatus(HWC3::Error::Unsupported);
+}
+
+ndk::ScopedAStatus ComposerClient::getLuts(int64_t displayId,
+        const std::vector<Buffer>&,
+        std::vector<Luts>*) {
+    DEBUG_LOG("%s", __FUNCTION__);
+
+    GET_DISPLAY_OR_RETURN_ERROR();
+
+    return ToBinderStatus(HWC3::Error::Unsupported);
+}
+
 ndk::SpAIBinder ComposerClient::createBinder() {
     auto binder = BnComposerClient::createBinder();
     AIBinder_setInheritRt(binder.get(), true);
@@ -1196,11 +1223,16 @@ void ComposerClient::executeLayerCommandSetLayerPerFrameMetadataBlobs(
     }
 }
 
-void ComposerClient::executeLayerCommandSetLayerLuts(CommandResultWriter& /*commandResults*/,
-                                                     Display& /*display*/, Layer* /*layer*/,
-                                                     const Luts& /*luts*/) {
+void ComposerClient::executeLayerCommandSetLayerLuts(CommandResultWriter& commandResults,
+                                                     Display& display, Layer* layer,
+                                                     const Luts& luts) {
     DEBUG_LOG("%s", __FUNCTION__);
-    //TODO(b/358188835)
+
+    auto error = layer->setLuts(luts);
+    if (error != HWC3::Error::None) {
+        LOG_LAYER_COMMAND_ERROR(display, layer, error);
+        commandResults.addError(error);
+    }
 }
 
 std::shared_ptr<Display> ComposerClient::getDisplay(int64_t displayId) {

@@ -136,7 +136,7 @@ class C2GoldfishAvcDec : public SimpleC2Component {
         VuiColorAspects()
             : primaries(2), transfer(2), coeffs(2), fullRange(0) {}
 
-        bool operator==(const VuiColorAspects &o) {
+        bool operator==(const VuiColorAspects &o) const {
             return primaries == o.primaries && transfer == o.transfer &&
                    coeffs == o.coeffs && fullRange == o.fullRange;
         }

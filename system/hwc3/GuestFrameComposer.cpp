@@ -76,6 +76,10 @@ uint32_t AlignToPower2(uint32_t val, uint8_t align_log) {
 }
 
 bool LayerNeedsScaling(const Layer& layer) {
+    if (layer.getCompositionType() == Composition::SOLID_COLOR) {
+        return false;
+    }
+
     common::Rect crop = layer.getSourceCropInt();
     common::Rect frame = layer.getDisplayFrame();
 
@@ -196,6 +200,12 @@ struct BufferSpec {
 
 int DoFill(const BufferSpec& dst, const Color& color) {
     ATRACE_CALL();
+    DEBUG_LOG(
+        "%s with r:%f g:%f b:%f a:%f in dst.buffer:%p dst.width:%" PRIu32 " dst.height:%" PRIu32
+        " dst.cropX:%" PRIu32 " dst.cropY:%" PRIu32 " dst.cropWidth:%" PRIu32
+        " dst.cropHeight:%" PRIu32 " dst.strideBytes:%" PRIu32 " dst.sampleBytes:%" PRIu32,
+        __FUNCTION__, color.r, color.g, color.b, color.a, dst.buffer, dst.width, dst.height,
+        dst.cropX, dst.cropY, dst.cropWidth, dst.cropHeight, dst.strideBytes, dst.sampleBytes);
 
     const uint8_t r = static_cast<uint8_t>(color.r * 255.0f);
     const uint8_t g = static_cast<uint8_t>(color.g * 255.0f);
@@ -205,12 +215,18 @@ int DoFill(const BufferSpec& dst, const Color& color) {
     const uint32_t rgba = static_cast<uint32_t>(r) | static_cast<uint32_t>(g) << 8 |
                           static_cast<uint32_t>(b) << 16 | static_cast<uint32_t>(a) << 24;
 
-    // Point to the upper left corner of the crop rectangle.
-    uint8_t* dstBuffer = dst.buffer + dst.cropY * dst.strideBytes + dst.cropX * dst.sampleBytes;
+    if (dst.drmFormat != DRM_FORMAT_ABGR8888 && dst.drmFormat != DRM_FORMAT_XBGR8888) {
+        ALOGE("Failed to DoFill: unhandled drm format:%" PRIu32, dst.drmFormat);
+        return -1;
+    }
 
-    libyuv::SetPlane(dstBuffer, static_cast<int>(dst.strideBytes), static_cast<int>(dst.cropWidth),
-                     static_cast<int>(dst.cropHeight), rgba);
-    return 0;
+    return libyuv::ARGBRect(dst.buffer,                         //
+                            static_cast<int>(dst.strideBytes),  //
+                            static_cast<int>(dst.cropX),        //
+                            static_cast<int>(dst.cropY),        //
+                            static_cast<int>(dst.cropWidth),    //
+                            static_cast<int>(dst.cropHeight),   //
+                            rgba);
 }
 
 int ConvertFromRGB565(const BufferSpec& src, const BufferSpec& dst, bool vFlip) {
@@ -921,6 +937,11 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
     std::uint32_t dstBufferBytesPerPixel) {
     ATRACE_CALL();
 
+    DEBUG_LOG("%s dstBuffer:%p dstBufferWidth:%" PRIu32 " dstBufferHeight:%" PRIu32
+              " dstBufferStrideBytes:%" PRIu32 " dstBufferBytesPerPixel:%" PRIu32,
+              __FUNCTION__, dstBuffer, dstBufferWidth, dstBufferHeight, dstBufferStrideBytes,
+              dstBufferBytesPerPixel);
+
     libyuv::RotationMode rotation = GetRotationFromTransform(srcLayer->getTransform());
 
     common::Rect srcLayerCrop = srcLayer->getSourceCropInt();
@@ -969,8 +990,8 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
     bool needsAttenuation = LayerNeedsAttenuation(*srcLayer);
     bool needsBlending = LayerNeedsBlending(*srcLayer);
     bool needsBrightness = srcLayer->getBrightness() != 1.0f;
-    bool needsCopy = !(needsConversion || needsScaling || needsRotation || needsVFlip ||
-                       needsAttenuation || needsBlending);
+    bool needsCopy = !(needsFill || needsConversion || needsScaling || needsRotation ||
+                       needsVFlip || needsAttenuation || needsBlending);
 
     BufferSpec dstLayerSpec(
         dstBuffer,
@@ -1004,6 +1025,7 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
         AlignToPower2(mScratchBufferWidth * dstBufferBytesPerPixel, 4);
     uint32_t mScratchBufferSizeBytes = mScratchBufferHeight * mScratchBufferStrideBytes;
 
+    DEBUG_LOG("%s neededIntermediateImages:%d", __FUNCTION__, neededIntermediateImages);
     for (uint32_t i = 0; i < neededIntermediateImages; i++) {
         BufferSpec mScratchBufferspec(
             compositionIntermediateStorage.getRotatingScratchBuffer(mScratchBufferSizeBytes, i),
@@ -1016,6 +1038,8 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
     // in the scratch buffers) in a common format.
 
     if (needsFill) {
+        DEBUG_LOG("%s needs fill", __FUNCTION__);
+
         BufferSpec& dstBufferSpec = dstBufferStack.back();
 
         int retval = DoFill(dstBufferSpec, srcLayer->getColor());
@@ -1031,6 +1055,8 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
     // assumption that scaling ARGB is faster than scaling I420 (the most common).
     // This should be confirmed with testing.
     if (needsConversion) {
+        DEBUG_LOG("%s needs conversion", __FUNCTION__);
+
         BufferSpec& dstBufferSpec = dstBufferStack.back();
         if (needsScaling || needsTranspose) {
             // If a rotation or a scaling operation are needed the dimensions at the
@@ -1066,6 +1092,8 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
     }
 
     if (needsScaling) {
+        DEBUG_LOG("%s needs scaling", __FUNCTION__);
+
         BufferSpec& dstBufferSpec = dstBufferStack.back();
         if (needsTranspose) {
             // If a rotation is needed, the temporary buffer has the correct size but
@@ -1089,6 +1117,8 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
     }
 
     if (needsRotation) {
+        DEBUG_LOG("%s needs rotation", __FUNCTION__);
+
         int retval = DoRotation(srcLayerSpec, dstBufferStack.back(), rotation, needsVFlip);
         needsVFlip = false;
         if (retval) {
@@ -1099,6 +1129,8 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
     }
 
     if (needsAttenuation) {
+        DEBUG_LOG("%s needs attenuation", __FUNCTION__);
+
         int retval = DoAttenuation(srcLayerSpec, dstBufferStack.back(), needsVFlip);
         needsVFlip = false;
         if (retval) {
@@ -1109,6 +1141,8 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
     }
 
     if (needsBrightness) {
+        DEBUG_LOG("%s needs brightness", __FUNCTION__);
+
         int retval =
             DoBrightnessShading(srcLayerSpec, dstBufferStack.back(), srcLayer->getBrightness());
         if (retval) {
@@ -1119,6 +1153,8 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
     }
 
     if (needsCopy) {
+        DEBUG_LOG("%s needs copy", __FUNCTION__);
+
         int retval = DoCopy(srcLayerSpec, dstBufferStack.back(), needsVFlip);
         needsVFlip = false;
         if (retval) {
@@ -1131,6 +1167,8 @@ HWC3::Error GuestFrameComposer::composeLayerInto(
     // Blending (if needed) should always be the last operation, so that it reads
     // and writes in the destination layer and not some temporary buffer.
     if (needsBlending) {
+        DEBUG_LOG("%s needs blending", __FUNCTION__);
+
         int retval = DoBlending(srcLayerSpec, dstBufferStack.back(), needsVFlip);
         needsVFlip = false;
         if (retval) {
@@ -1150,6 +1188,7 @@ HWC3::Error GuestFrameComposer::applyColorTransformToRGBA(
     std::uint32_t bufferHeight,                    //
     std::uint32_t bufferStrideBytes) {
     ATRACE_CALL();
+    DEBUG_LOG("%s", __FUNCTION__);
 
     const auto transformMatrixLibyuv = ToLibyuvColorMatrix(transfromMatrix);
     libyuv::ARGBColorMatrix(buffer, static_cast<int>(bufferStrideBytes),  //

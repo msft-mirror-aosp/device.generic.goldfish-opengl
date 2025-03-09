@@ -316,6 +316,19 @@ HWC3::Error Layer::setPerFrameMetadataBlobs(
     return HWC3::Error::None;
 }
 
+HWC3::Error Layer::setLuts(const Luts& luts) {
+    DEBUG_LOG("%s: layer:%" PRId64, __FUNCTION__, mId);
+
+    mHasLuts = luts.pfd.get() >= 0;
+    return HWC3::Error::None;
+}
+
+bool Layer::hasLuts() const {
+    DEBUG_LOG("%s: layer:%" PRId64, __FUNCTION__, mId);
+
+    return mHasLuts;
+}
+
 void Layer::logCompositionFallbackIfChanged(Composition to) {
     Composition from = getCompositionType();
     if (mLastCompositionFallback && mLastCompositionFallback->from == from &&

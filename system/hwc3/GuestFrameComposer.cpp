@@ -924,6 +924,10 @@ bool GuestFrameComposer::canComposeLayer(Layer* layer) {
         return false;
     }
 
+    if (layer->hasLuts()) {
+        return false;
+    }
+
     return true;
 }
 

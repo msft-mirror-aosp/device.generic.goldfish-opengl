@@ -18,7 +18,7 @@
 #define ANDROID_HWC_COMPOSERCLIENT_H
 
 #include <aidl/android/hardware/graphics/composer3/BnComposerClient.h>
-#include <aidl/android/hardware/graphics/composer3/Lut.h>
+#include <aidl/android/hardware/graphics/composer3/Luts.h>
 #include <android-base/thread_annotations.h>
 
 #include <memory>
@@ -124,6 +124,13 @@ class ComposerClient : public BnComposerClient {
     ndk::ScopedAStatus notifyExpectedPresent(int64_t displayId,
                                              const ClockMonotonicTimestamp& expectedPresentTime,
                                              int32_t maxFrameIntervalNs) override;
+    ndk::ScopedAStatus getMaxLayerPictureProfiles(int64_t displayId, int32_t* outMaxProfiles)
+                                                  override;
+    ndk::ScopedAStatus startHdcpNegotiation(
+        int64_t displayId, const aidl::android::hardware::drm::HdcpLevels& levels) override;
+    ndk::ScopedAStatus getLuts(int64_t displayId,
+            const std::vector<Buffer>&,
+            std::vector<Luts>*) override;
 
    protected:
     ndk::SpAIBinder createBinder() override;
@@ -205,7 +212,7 @@ class ComposerClient : public BnComposerClient {
         const std::vector<std::optional<PerFrameMetadataBlob>>& perFrameMetadataBlob);
     void executeLayerCommandSetLayerLuts(
         CommandResultWriter& commandResults, Display& display, Layer* layer,
-        const std::vector<std::optional<Lut>>& luts);
+        const Luts& luts);
 
     // Returns the display with the given id or nullptr if not found.
     std::shared_ptr<Display> getDisplay(int64_t displayId);

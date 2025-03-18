@@ -798,7 +798,7 @@ HWC3::Error GuestFrameComposer::presentDisplay(
         [](const Layer* layer) { return layer->getCompositionType() == Composition::CLIENT; });
 
     if (noOpComposition) {
-        ALOGW("%s: display:%" PRIu32 " empty composition", __FUNCTION__, displayId);
+        DEBUG_LOG("%s: display:%" PRIu32 " empty composition", __FUNCTION__, displayId);
     } else if (allLayersClientComposed) {
         auto clientTargetBufferOpt = mGralloc.Import(display->waitAndGetClientTargetBuffer());
         if (!clientTargetBufferOpt) {
